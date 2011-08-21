@@ -25,7 +25,7 @@ class PhabricatorOAuthProviderGithub extends PhabricatorOAuthProvider {
   }
 
   public function getProviderName() {
-    return 'Github';
+    return PhabricatorEnv::getEnvConfig('github.provider-name');
   }
 
   public function isProviderEnabled() {
@@ -53,19 +53,19 @@ class PhabricatorOAuthProviderGithub extends PhabricatorOAuthProvider {
   }
 
   public function getAuthURI() {
-    return 'https://github.com/login/oauth/authorize';
+    return PhabricatorEnv::getEnvConfig('github.auth-uri');
   }
 
   public function getTokenURI() {
-    return 'https://github.com/login/oauth/access_token';
+    return PhabricatorEnv::getEnvConfig('github.token-uri');
   }
 
   public function getUserInfoURI() {
-    return 'https://github.com/api/v2/json/user/show';
+    return PhabricatorEnv::getEnvConfig('github.user-info-uri');
   }
 
   public function getMinimumScope() {
-    return null;
+    return PhabricatorEnv::getEnvConfig('github.min-scope');
   }
 
   public function setUserData($data) {
@@ -97,7 +97,7 @@ class PhabricatorOAuthProviderGithub extends PhabricatorOAuthProvider {
   public function retrieveUserAccountURI() {
     $username = $this->retrieveUserAccountName();
     if ($username) {
-      return 'https://github.com/'.$username;
+      return PhabricatorEnv::getEnvConfig('github.user-account-uri').$username;
     }
     return null;
   }
