@@ -52,26 +52,20 @@ class PhabricatorLoginController extends PhabricatorAuthController {
       $username_or_email = $request->getCookie('phusr');
       if ($request->isFormPost()) {
         $username_or_email = $request->getStr('username_or_email');
-        $user = null;
-        $okay = true;
-        $auth_callback = PhabricatorEnv::getEnvConfig('auth.callback');
-        if ($auth_callback) {
-          $user = call_user_func_array($auth_callback, array($username_or_email, $request->getStr('password')));
-        }
+
+        $user = id(new PhabricatorUser())->loadOneWhere(
+          'username = %s',
+          $username_or_email);
+
         if (!$user) {
           $user = id(new PhabricatorUser())->loadOneWhere(
-            'username = %s',
+            'email = %s',
             $username_or_email);
-
-          if (!$user) {
-            $user = id(new PhabricatorUser())->loadOneWhere(
-              'email = %s',
-              $username_or_email);
-          }
-          $okay = false;
         }
+
+        $okay = false;
         if ($user) {
-          if ($okay || $user->comparePassword($request->getStr('password'))) {
+          if ($user->comparePassword($request->getStr('password'))) {
 
             $session_key = $user->establishSession('web');
 
