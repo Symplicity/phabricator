@@ -283,6 +283,11 @@ class AphrontDefaultApplicationConfiguration
         'view/(?P<class>[^/]+)/$' => 'PhabricatorUIExampleRenderController',
       ),
 
+      '/shine/' => array(
+        '$' => 'PhabricatorShineBadgeController',
+        'view/(?P<view>[^/]+)/$' => 'PhabricatorShineBadgeController',
+      ),
+
       '/owners/' => array(
         '$' => 'PhabricatorOwnersListController',
         'view/(?P<view>[^/]+)/$' => 'PhabricatorOwnersListController',

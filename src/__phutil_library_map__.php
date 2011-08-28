@@ -80,6 +80,7 @@ phutil_register_library_map(array(
     'AphrontView' => 'view/base',
     'AphrontWebpageResponse' => 'aphront/response/webpage',
     'AphrontWriteGuard' => 'aphront/writeguard',
+    'BadgeConfig' => 'applications/shine/constants/badge',
     'CelerityAPI' => 'infrastructure/celerity/api',
     'CelerityResourceController' => 'infrastructure/celerity/controller',
     'CelerityResourceMap' => 'infrastructure/celerity/map',
@@ -592,6 +593,8 @@ phutil_register_library_map(array(
     'PhabricatorSearchSelectController' => 'applications/search/controller/select',
     'PhabricatorSearchUserIndexer' => 'applications/search/index/indexer/user',
     'PhabricatorSetup' => 'infrastructure/setup',
+    'PhabricatorShineBadgeController' => 'applications/shine/controller/badge',
+    'PhabricatorShineController' => 'applications/shine/controller/base',
     'PhabricatorSlowvoteChoice' => 'applications/slowvote/storage/choice',
     'PhabricatorSlowvoteComment' => 'applications/slowvote/storage/comment',
     'PhabricatorSlowvoteController' => 'applications/slowvote/controller/base',
@@ -669,6 +672,8 @@ phutil_register_library_map(array(
     'PhrictionEditController' => 'applications/phriction/controller/edit',
     'PhrictionHistoryController' => 'applications/phriction/controller/history',
     'PhrictionListController' => 'applications/phriction/controller/list',
+    'ShineBadge' => 'applications/shine/storage/badge',
+    'ShineDAO' => 'applications/shine/storage/base',
   ),
   'function' =>
   array(
@@ -1162,6 +1167,8 @@ phutil_register_library_map(array(
     'PhabricatorSearchResultView' => 'AphrontView',
     'PhabricatorSearchSelectController' => 'PhabricatorSearchController',
     'PhabricatorSearchUserIndexer' => 'PhabricatorSearchDocumentIndexer',
+    'PhabricatorShineBadgeController' => 'PhabricatorShineController',
+    'PhabricatorShineController' => 'PhabricatorController',
     'PhabricatorSlowvoteChoice' => 'PhabricatorSlowvoteDAO',
     'PhabricatorSlowvoteComment' => 'PhabricatorSlowvoteDAO',
     'PhabricatorSlowvoteController' => 'PhabricatorController',
@@ -1234,6 +1241,8 @@ phutil_register_library_map(array(
     'PhrictionEditController' => 'PhrictionController',
     'PhrictionHistoryController' => 'PhrictionController',
     'PhrictionListController' => 'PhrictionController',
+    'ShineBadge' => 'ShineDAO',
+    'ShineDAO' => 'PhabricatorLiskDAO',
   ),
   'requires_interface' =>
   array(
