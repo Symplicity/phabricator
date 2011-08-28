@@ -1,0 +1,25 @@
+/**
+ * @provides phabricator-shine-css
+ */
+
+.phabricator-shine-facepile {
+    width: 50px;
+    height: 50px;
+    overflow: hidden;
+    position: relative;
+    float: left;
+    margin: 0px 4px 6px 0px;
+}
+
+.phabricator-shine-badge {
+    padding: .3em .5em;
+    margin: 5px;
+    background: #D8DFEA;
+    border: 1px solid #D8DFEA;
+    border-radius: 0.7em;
+    width: 6em;
+    font-size: 1.1em;
+    -moz-box-shadow: 2px 2px 1px #888;
+    -webkit-box-shadow: 2px 2px 1px #888;
+    box-shadow: 2px 2px 1px #888;
+}
