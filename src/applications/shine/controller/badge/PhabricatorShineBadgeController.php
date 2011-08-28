@@ -119,7 +119,7 @@ class PhabricatorShineBadgeController
     return phutil_render_tag(
       'div',
       array(
-           'class' => 'phabricator-shine-badge',
+        'class' => 'phabricator-shine-badge',
       ),
       $title);
   }
@@ -162,7 +162,8 @@ class PhabricatorShineBadgeController
         $user_markup = 'This option has failed to appeal to anyone.';
       }
       $rows[] = array(
-        $this->renderBadge($row['title']),
+        $this->renderBadge($row['title'])
+          . BadgeConfig::getDescription($row['title']),
         $user_markup,
       );
 

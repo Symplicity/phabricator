@@ -13,7 +13,7 @@
 
 .phabricator-shine-badge {
     padding: .3em .5em;
-    margin: 5px;
+    margin: 0 1px 5px -1px;
     background: #D8DFEA;
     border: 1px solid #D8DFEA;
     border-radius: 0.7em;
