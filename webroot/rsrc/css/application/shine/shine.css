@@ -3,15 +3,28 @@
  */
 
 .phabricator-shine-facepile {
+    clear: both;
+    margin: .5em .5em 1em .5em;
+    border-top: 1px solid #D8DFEA;
+    min-height: 60px;
+}
+
+.phabricator-shine-facepile a {
     width: 50px;
     height: 50px;
     overflow: hidden;
+    margin: 2px 4px 6px 0px;
     position: relative;
     float: left;
-    margin: 0px 4px 6px 0px;
+    display: block;
+}
+
+.phabricator-shine-facepile img {
+    border-radius: 8px;
 }
 
 .phabricator-shine-badge {
+    clear: left;
     padding: .3em .5em;
     margin: 0 1px 5px -1px;
     background: #D8DFEA;
@@ -22,4 +35,12 @@
     -moz-box-shadow: 2px 2px 1px #888;
     -webkit-box-shadow: 2px 2px 1px #888;
     box-shadow: 2px 2px 1px #888;
+    position: relative;
+    float: left;
+}
+
+.phabricator-shine-desc {
+    float: left;
+    margin: .9em 0 0 .5em;
+    width: 50em;
 }

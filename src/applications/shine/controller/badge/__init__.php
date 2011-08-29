@@ -14,6 +14,7 @@ phutil_require_module('phabricator', 'applications/shine/storage/badge');
 phutil_require_module('phabricator', 'infrastructure/celerity/api');
 phutil_require_module('phabricator', 'storage/queryfx');
 phutil_require_module('phabricator', 'view/control/table');
+phutil_require_module('phabricator', 'view/form/layout');
 phutil_require_module('phabricator', 'view/layout/panel');
 phutil_require_module('phabricator', 'view/layout/sidenav');
 phutil_require_module('phabricator', 'view/utils');

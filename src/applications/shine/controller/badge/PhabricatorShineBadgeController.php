@@ -58,26 +58,20 @@ class PhabricatorShineBadgeController
 
     require_celerity_resource('phabricator-shine-css');
 
-    $badge = new ShineBadge();
     switch ($this->view) {
       case 'my':
-        $data = $badge->loadAllWhere('userPHID = %s', $this->user->getPHID());
-        $table = $this->renderMyTable($data);
+        $content = $this->renderMyTable();
         break;
       case 'all':
-        $data = queryfx_all(
-          $badge->establishConnection('r'),
-          'SELECT title, GROUP_CONCAT(UserPHID) AS users FROM %T GROUP BY title ORDER BY COUNT(*)',
-          $badge->getTableName());
-        $table = $this->renderAllTable($data);
+        $content = $this->renderAllTable();
         break;
       default:
-        $table = null;
+        $content = null;
     }
 
     $panel = new AphrontPanelView();
     $panel->setHeader($this->view_names[$this->view]);
-    $panel->appendChild($table);
+    $panel->appendChild($content);
     $nav->appendChild($panel);
 
     return $this->buildStandardPageResponse(
@@ -87,14 +81,23 @@ class PhabricatorShineBadgeController
       ));
   }
 
-  private function renderMyTable(array $data)
+  private function renderMyTable()
   {
+    $badge = new ShineBadge();
+    $data = $badge->loadAllWhere('userPHID = %s', $this->user->getPHID());
+    $stats = queryfx_all(
+      $badge->establishConnection('r'),
+      'SELECT title, count(*) as cnt FROM %T GROUP BY title',
+      $badge->getTableName());
+    $stats = ipull($stats, 'cnt', 'title');
+
     $rows = array();
     foreach ($data as $row) {
       $rows[] = array(
         $this->renderBadge($row->getTitle()),
         BadgeConfig::getDescription($row->getTitle()),
         phabricator_datetime($row->getDateEarned(), $this->user),
+        $stats[$row->getTitle()] - 1 ?: 'You are the only one!',
       );
     }
 
@@ -103,10 +106,12 @@ class PhabricatorShineBadgeController
       array(
            'Badge',
            'Achievement',
-           'Earned',
+           'Earned On',
+           'Co-Badgers',
       ));
     $table->setColumnClasses(
       array(
+           null,
            null,
            null,
            'wide',
@@ -115,21 +120,21 @@ class PhabricatorShineBadgeController
     return $table;
   }
 
-  private function renderBadge($title) {
-    return phutil_render_tag(
-      'div',
-      array(
-        'class' => 'phabricator-shine-badge',
-      ),
-      $title);
-  }
-
-  private function renderAllTable(array $data)
+  private function renderAllTable()
   {
     static $avatars;
 
-    $rows = array();
+    $badge = new ShineBadge();
+    $data = queryfx_all(
+      $badge->establishConnection('r'),
+      'SELECT title, GROUP_CONCAT(UserPHID) AS users FROM %T GROUP BY title ORDER BY COUNT(*)',
+      $badge->getTableName());
+
+    $result_markup = id(new AphrontFormLayoutView());
+
     foreach ($data as $row) {
+      $result_markup->appendChild($this->renderBadge($row['title']));
+      $result_markup->appendChild($this->renderBadgeDescription($row['title']));
       if ($row['users']) {
         $user_markup = array();
         $users = explode(',', $row['users']);
@@ -147,7 +152,6 @@ class PhabricatorShineBadgeController
               'a',
               array(
                    'href' => '/p/' . $object->getUserName() . '/',
-                   'class' => 'phabricator-shine-facepile',
               ),
               phutil_render_tag(
                 'img',
@@ -159,29 +163,43 @@ class PhabricatorShineBadgeController
         }
         $user_markup = implode('', $user_markup);
       } else {
-        $user_markup = 'This option has failed to appeal to anyone.';
+        $user_markup = 'This badge still evades conquest.';
       }
-      $rows[] = array(
-        $this->renderBadge($row['title'])
-          . BadgeConfig::getDescription($row['title']),
-        $user_markup,
-      );
-
+      $result_markup->appendChild(phutil_render_tag(
+        'div',
+        array(
+             'class' => 'phabricator-shine-facepile',
+        ),
+        $user_markup));
     }
-
-    $table = new AphrontTableView($rows);
-    $table->setHeaders(
+    $result_markup->appendChild(phutil_render_tag(
+      'div',
       array(
-           'Badge',
-           'Badgers',
-      ));
-    $table->setColumnClasses(
-      array(
-           null,
-           'wide wrap',
-      ));
+           'class' => 'phabricator-shine-facepile',
+      ),
+      '&nbsp;'));
 
-    return $table;
+    return $result_markup;
+  }
+
+  private function renderBadge($title)
+  {
+    return phutil_render_tag(
+      'div',
+      array(
+           'class' => 'phabricator-shine-badge',
+      ),
+      $title);
+  }
+
+  private function renderBadgeDescription($title)
+  {
+    return phutil_render_tag(
+      'div',
+      array(
+           'class' => 'phabricator-shine-desc',
+      ),
+      BadgeConfig::getDescription($title));
   }
 
 }
