@@ -1169,6 +1169,15 @@ celerity_register_resource_map(array(
     ),
     'disk' => '/rsrc/js/application/herald/PathTypeahead.js',
   ),
+  'phabricator-content-source-view-css' =>
+  array(
+    'uri' => '/res/7147f14c/rsrc/css/application/contentsource/content-source-view.css',
+    'type' => 'css',
+    'requires' =>
+    array(
+    ),
+    'disk' => '/rsrc/css/application/contentsource/content-source-view.css',
+  ),
   'phabricator-core-buttons-css' =>
   array(
     'uri' => '/res/3059cf79/rsrc/css/core/buttons.css',

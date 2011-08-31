@@ -19,7 +19,8 @@
 /**
  * @group conduit
  */
-class ConduitAPI_user_whoami_Method extends ConduitAPIMethod {
+final class ConduitAPI_user_whoami_Method
+  extends ConduitAPI_user_Method {
 
   public function getMethodDescription() {
     return "Retrieve information about the logged-in user.";
@@ -40,12 +41,7 @@ class ConduitAPI_user_whoami_Method extends ConduitAPIMethod {
   }
 
   protected function execute(ConduitAPIRequest $request) {
-    $user = $request->getUser();
-    return array(
-      'phid'      => $user->getPHID(),
-      'userName'  => $user->getUserName(),
-      'realName'  => $user->getRealName(),
-    );
+    return $this->buildUserInformationDictionary($request->getUser());
   }
 
 }
