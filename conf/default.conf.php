@@ -352,6 +352,24 @@ return array(
   // Github (or compatible) OAuth minimum scope.
   'github.min-scope'        => null,
 
+// -- Google ---------------------------------------------------------------- //
+
+  // Can users use Google credentials to login to Phabricator?
+  'google.auth-enabled'         => false,
+
+  // Can users use Google credentials to create new Phabricator accounts?
+  'google.registration-enabled' => true,
+
+  // Are Google accounts permanently linked to Phabricator accounts, or can
+  // the user unlink them?
+  'google.auth-permanent'       => false,
+
+  // The Google "Client ID" to use for Google API access.
+  'google.application-id'       => null,
+
+  // The Google "Client Secret" to use for Google API access.
+  'google.application-secret'   => null,
+
 // -- Recaptcha ------------------------------------------------------------- //
 
   // Is Recaptcha enabled? If disabled, captchas will not appear.
@@ -520,6 +538,13 @@ return array(
   ),
 
   'differential.field-selector' => 'DifferentialDefaultFieldSelector',
+
+  // If you set this to true, users can "!accept" revisions via email (normally,
+  // they can take other actions but can not "!accept"). This action is disabled
+  // by default because email authentication can be configured to be very weak,
+  // and, socially, email "!accept" is kind of sketchy and implies revisions may
+  // not actually be receiving thorough review.
+  'differential.enable-email-accept' => false,
 
 
 // -- Maniphest ------------------------------------------------------------- //

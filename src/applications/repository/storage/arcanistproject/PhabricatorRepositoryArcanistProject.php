@@ -34,4 +34,11 @@ class PhabricatorRepositoryArcanistProject
     return PhabricatorPHID::generateNewPHID('APRJ');
   }
 
+  public function loadRepository() {
+    if (!$this->getRepositoryID()) {
+      return null;
+    }
+    return id(new PhabricatorRepository())->load($this->getRepositoryID());
+  }
+
 }

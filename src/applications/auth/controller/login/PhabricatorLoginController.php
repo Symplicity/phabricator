@@ -127,13 +127,8 @@ class PhabricatorLoginController extends PhabricatorAuthController {
       $forms['Phabricator Login'] = $form;
     }
 
-    $providers = array(
-      PhabricatorOAuthProvider::PROVIDER_FACEBOOK,
-      PhabricatorOAuthProvider::PROVIDER_GITHUB,
-    );
-    foreach ($providers as $provider_key) {
-      $provider = PhabricatorOAuthProvider::newProvider($provider_key);
-
+    $providers = PhabricatorOAuthProvider::getAllProviders();
+    foreach ($providers as $provider) {
       $enabled = $provider->isProviderEnabled();
       if (!$enabled) {
         continue;
@@ -144,6 +139,7 @@ class PhabricatorLoginController extends PhabricatorAuthController {
       $client_id      = $provider->getClientID();
       $provider_name  = $provider->getProviderName();
       $minimum_scope  = $provider->getMinimumScope();
+      $extra_auth     = $provider->getExtraAuthParameters();
 
       // TODO: In theory we should use 'state' to prevent CSRF, but the total
       // effect of the CSRF attack is that an attacker can cause a user to login
@@ -169,7 +165,13 @@ class PhabricatorLoginController extends PhabricatorAuthController {
         ->setAction($auth_uri)
         ->addHiddenInput('client_id', $client_id)
         ->addHiddenInput('redirect_uri', $redirect_uri)
-        ->addHiddenInput('scope', $minimum_scope)
+        ->addHiddenInput('scope', $minimum_scope);
+
+      foreach ($extra_auth as $key => $value) {
+        $auth_form->addHiddenInput($key, $value);
+      }
+
+      $auth_form
         ->setUser($request->getUser())
         ->setMethod('GET')
         ->appendChild(

@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-final class DiffusionGitPathIDQuery {
+final class DiffusionPathIDQuery {
 
   public function __construct(array $paths) {
     $this->paths = $paths;
@@ -51,6 +51,11 @@ final class DiffusionGitPathIDQuery {
 
   public static function normalizePath($path) {
     return '/'.trim($path, '/');
+  }
+
+  public static function getParentPath($path) {
+    $path = self::normalizePath($path);
+    return dirname($path);
   }
 
 }

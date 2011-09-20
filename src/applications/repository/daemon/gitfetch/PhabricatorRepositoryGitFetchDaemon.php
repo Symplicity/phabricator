@@ -16,40 +16,19 @@
  * limitations under the License.
  */
 
-class PhabricatorRepositoryGitFetchDaemon
-  extends PhabricatorRepositoryDaemon {
+final class PhabricatorRepositoryGitFetchDaemon
+  extends PhabricatorRepositoryPullLocalDaemon {
 
-  public function run() {
-    $repository = $this->loadRepository();
+  protected function getSupportedRepositoryType() {
+    return PhabricatorRepositoryType::REPOSITORY_TYPE_GIT;
+  }
 
-    if ($repository->getVersionControlSystem() != 'git') {
-      throw new Exception("Not a git repository!");
-    }
+  protected function executeCreate($remote_uri, $local_path) {
+    execx('git clone %s %s', $remote_uri, rtrim($local_path, '/'));
+  }
 
-    $tracked = $repository->getDetail('tracking-enabled');
-    if (!$tracked) {
-      throw new Exception("Tracking is not enabled for this repository.");
-    }
-
-    $local_path = $repository->getDetail('local-path');
-    $remote_uri = $repository->getDetail('remote-uri');
-
-    if (!$local_path) {
-      throw new Exception("No local path is available for this repository.");
-    }
-
-    while (true) {
-      if (!Filesystem::pathExists($local_path)) {
-        if (!$remote_uri) {
-          throw new Exception("No remote URI is available.");
-        }
-        execx('mkdir -p %s', dirname($local_path));
-        execx('git clone %s %s', $remote_uri, rtrim($local_path, '/'));
-      } else {
-        execx('(cd %s && git fetch --all)', $local_path);
-      }
-      $this->sleep($repository->getDetail('pull-frequency', 15));
-    }
+  protected function executeUpdate($remote_uri, $local_path) {
+    execx('(cd %s && git fetch --all)', $local_path);
   }
 
 }
