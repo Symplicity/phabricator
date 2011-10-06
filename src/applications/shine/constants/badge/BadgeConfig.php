@@ -22,39 +22,63 @@ final class BadgeConfig {
     'Writer' => array(
       'class' => 'PhrictionContent',
       'desc' => 'Edited a wiki article',
+      'href' => '/w/',
     ),
     'Questor' => array(
       'class' => 'DifferentialRevision',
       'desc' => 'Requested a code review',
+      'href' => '/differential/',
     ),
     'Accepted' => array(
       'class' => 'DifferentialRevision',
       'desc' => 'Received code review approval',
+      'href' => '/differential/',
     ),
     'Prover' => array(
       'class' => 'DifferentialComment',
       'where' => "action = 'accept'",
       'desc' => 'Approved a code review',
+      'href' => '/differential/',
     ),
     'Pollster' => array(
       'class' => 'PhabricatorSlowvotePoll',
       'desc' => 'Created a poll',
+      'href' => '/vote/create/',
     ),
     'Voter' => array(
       'class' => 'PhabricatorSlowvoteChoice',
       'desc' => 'Voted in a poll',
+      'href' => '/vote/',
     ),
     'Profiller' => array(
       'class' => 'PhabricatorUserProfile',
       'phid_field' => 'userPHID',
       'date_field' => 'dateModified',
       'desc' => 'Completed the user profile',
+      'href' => '/settings/page/profile/',
+    ),
+    'Pastafarian' => array(
+      'class' => 'PhabricatorPaste',
+      'desc' => 'Shared code with Paste',
+      'href' => '/paste/',
+    ),
+    'Taskerizer' => array(
+      'class' => 'ManiphestTask',
+      'desc' => 'Created a task',
+      'href' => '/maniphest/',
     ),
   );
 
-  public static function getDescription($title) {
-    return self::$data[$title]['desc'];
-  }
+  public static function getDescription($title)
+  {
+    return phutil_render_tag(
+      'a',
+      array(
+        'href' => self::$data[$title]['href'],
+      ),
+      phutil_escape_html(self::$data[$title]['desc'])
+    );
+   }
 
   public static function getWhere($title) {
     if (isset(self::$data[$title]['where'])) {
