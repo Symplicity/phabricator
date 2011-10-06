@@ -327,7 +327,7 @@ class PhabricatorRepositoryEditController
       $error_view->appendChild(
         'Tracking changes were saved. You may need to restart the daemon '.
         'before changes will take effect.');
-    } else if (!$repository->getDetail('tracking-enabled')) {
+    } else if (!$repository->isTracked()) {
       $error_view = new AphrontErrorView();
       $error_view->setSeverity(AphrontErrorView::SEVERITY_WARNING);
       $error_view->setTitle('Repository Not Tracked');
@@ -381,7 +381,7 @@ class PhabricatorRepositoryEditController
             'enabled'   => 'Enabled',
           ))
           ->setValue(
-            $repository->getDetail('tracking-enabled')
+            $repository->isTracked()
               ? 'enabled'
               : 'disabled'))
       ->appendChild('</div>');
@@ -405,7 +405,7 @@ class PhabricatorRepositoryEditController
       if ($is_git) {
         $instructions =
           'Enter the URI to clone this repository from. It should look like '.
-          '<tt>git@github.com:example/example.git</tt>, <tt> '.
+          '<tt>git@github.com:example/example.git</tt> or '.
           '<tt>ssh://user@host.com/git/example.git</tt>';
       } else if ($is_mercurial) {
         $instructions =

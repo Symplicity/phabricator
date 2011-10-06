@@ -19,7 +19,6 @@
 
 $root = dirname(dirname(dirname(__FILE__)));
 require_once $root.'/scripts/__init_script__.php';
-require_once $root.'/scripts/__init_env__.php';
 
 phutil_require_module('phabricator', 'infrastructure/daemon/control');
 $control = new PhabricatorDaemonControl();
@@ -45,7 +44,8 @@ switch (isset($argv[1]) ? $argv[1] : 'help') {
     exit($err);
 
   case 'stop':
-    $err = $control->executeStopCommand();
+    $pass_argv = array_slice($argv, 2);
+    $err = $control->executeStopCommand($pass_argv);
     exit($err);
 
   case 'repository-launch-readonly':
@@ -243,7 +243,7 @@ function phd_load_tracked_repositories() {
 
   $repositories = id(new PhabricatorRepository())->loadAll();
   foreach ($repositories as $key => $repository) {
-    if (!$repository->getDetail('tracking-enabled')) {
+    if (!$repository->isTracked()) {
       unset($repositories[$key]);
     }
   }
