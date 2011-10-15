@@ -87,7 +87,7 @@ foreach ($files as $file) {
 
       $doc->addField(
         PhabricatorSearchField::FIELD_BODY,
-        $content);
+        "$path\n$content");
 
       $doc->addRelationship(
         PhabricatorSearchRelationship::RELATIONSHIP_REPOSITORY,
