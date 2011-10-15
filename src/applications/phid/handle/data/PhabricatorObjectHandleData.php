@@ -372,6 +372,29 @@ class PhabricatorObjectHandleData {
             $handles[$phid] = $handle;
           }
           break;
+        case PhabricatorPHIDConstants::PHID_TYPE_REPO:
+          $class = 'PhabricatorRepository';
+          PhutilSymbolLoader::loadClass($class);
+          $object = newv($class, array());
+
+          $repositories = $object->loadAllWhere('phid in (%Ls)', $phids);
+          $repositories = mpull($repositories, null, 'getPHID');
+
+          foreach ($phids as $phid) {
+            $handle = new PhabricatorObjectHandle();
+            $handle->setPHID($phid);
+            $handle->setType($type);
+            if (empty($repositories[$phid])) {
+              $handle->setName('Unknown Repository');
+            } else {
+              $repository = $repositories[$phid];
+              $handle->setName($repository->getCallsign());
+              $handle->setURI('/diffusion/' . $repository->getCallsign() . '/');
+              $handle->setComplete(true);
+            }
+            $handles[$phid] = $handle;
+          }
+          break;
         case PhabricatorPHIDConstants::PHID_TYPE_OPKG:
           $class = 'PhabricatorOwnersPackage';
           PhutilSymbolLoader::loadClass($class);
@@ -444,6 +467,43 @@ class PhabricatorObjectHandleData {
               $handle->setComplete(true);
             }
             $handles[$phid] = $handle;
+          }
+          break;
+        case PhabricatorPHIDConstants::PHID_TYPE_SOURCE:
+          $class = 'PhabricatorSearchDocument';
+          PhutilSymbolLoader::loadClass($class);
+          $object = newv($class, array());
+
+          $files = $object->loadAllWhere('phid in (%Ls)', $phids);
+
+          $repo_rels = id(new PhabricatorSearchDocumentRelationship())->loadAllWhere(
+            'phid in (%Ls)', $phids);
+          $repo_rels = mpull($repo_rels, 'getRelatedPHID', 'getPHID');
+
+          $repositories = id(new PhabricatorRepository())->loadAllWhere(
+            'phid in (%Ls)', array_unique($repo_rels));
+          $repositories = mpull($repositories, null, 'getPHID');
+
+          foreach ($files as $file) {
+            $path = $file->getDocumentTitle();
+            $handle = new PhabricatorObjectHandle();
+            $handle->setPHID($file->getPHID());
+            $handle->setType($type);
+            $handle->setName($path);
+            $handle->setTimestamp($file->getDocumentModified());
+            $handle->setComplete(true);
+
+            $repo = $repositories[$repo_rels[$file->getPHID()]];
+            $callsign = $repo->getCallsign();
+            $uri = "/diffusion/$callsign/browse/";
+            $details = $repo->getDetails();
+            if ($details['svn-subpath']) {
+              $uri .= $details['svn-subpath'];
+            }
+            $handle->setURI($uri . $path);
+            $handle->setFullName($repo->getName() . ': ' . $path);
+
+            $handles[$file->getPHID()] = $handle;
           }
           break;
         default:

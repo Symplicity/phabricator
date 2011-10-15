@@ -534,6 +534,11 @@ return array(
   // support.
   'search.engine-selector'  => 'PhabricatorDefaultSearchEngineSelector',
 
+  // Regular expression that matches repository folders to skip
+  'search.source_skip_regexp' => '#/(compile|cache|tmp)/#',
+
+  // File extensions to include when indexing source code
+  'search.source_extensions' => array('php', 'js'),
 
 // -- Differential ---------------------------------------------------------- //
 
