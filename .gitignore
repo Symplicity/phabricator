@@ -10,4 +10,7 @@
 *.swp
 
 # NetBeans project files
-/nbproject/ 
+/nbproject/
+
+# phpStorm project files
+.idea
