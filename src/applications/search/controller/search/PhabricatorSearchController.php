@@ -62,6 +62,10 @@ class PhabricatorSearchController extends PhabricatorSearchBaseController {
           $query->setParameter('project', $request->getArr('project'));
         }
 
+        if ($request->getArr('repository')) {
+          $query->setParameter('repository', $request->getArr('repository'));
+        }
+
         $query->save();
         return id(new AphrontRedirectResponse())
           ->setURI('/search/'.$query->getID().'/');
@@ -88,7 +92,8 @@ class PhabricatorSearchController extends PhabricatorSearchBaseController {
     $phids = array_merge(
       $query->getParameter('author', array()),
       $query->getParameter('owner', array()),
-      $query->getParameter('project', array())
+      $query->getParameter('project', array()),
+      $query->getParameter('repository', array())
     );
 
     $handles = id(new PhabricatorObjectHandleData($phids))
@@ -108,6 +113,11 @@ class PhabricatorSearchController extends PhabricatorSearchBaseController {
       $handles,
       $query->getParameter('project', array()));
     $project_value = mpull($project_value, 'getFullName', 'getPHID');
+
+    $repository_value = array_select_keys(
+      $handles,
+      $query->getParameter('repository', array()));
+    $repository_value = mpull($repository_value, 'getName', 'getPHID');
 
     $search_form = new AphrontFormView();
     $search_form
@@ -150,6 +160,12 @@ class PhabricatorSearchController extends PhabricatorSearchBaseController {
           ->setLabel('Project')
           ->setDatasource('/typeahead/common/projects/')
           ->setValue($project_value))
+      ->appendChild(
+        id(new AphrontFormTokenizerControl())
+          ->setName('repository')
+          ->setLabel('Repository')
+          ->setDatasource('/typeahead/common/repositories/')
+          ->setValue($repository_value))
       ->appendChild(
         id(new AphrontFormSubmitControl())
           ->setValue('Search'));
