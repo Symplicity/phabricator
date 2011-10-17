@@ -57,6 +57,13 @@ final class BadgeConfig {
       'desc' => 'Completed the user profile',
       'href' => '/settings/page/profile/',
     ),
+    'Photogenic' => array(
+      'class' => 'PhabricatorUserProfile',
+      'phid_field' => 'userPHID',
+      'date_field' => 'dateModified',
+      'desc' => 'Uploaded a profile photo',
+      'href' => '/settings/page/profile/',
+    ),
     'Pastafarian' => array(
       'class' => 'PhabricatorPaste',
       'desc' => 'Shared code with Paste',
@@ -89,6 +96,9 @@ final class BadgeConfig {
         DifferentialRevisionStatus::COMMITTED);
     } elseif ($title == 'Profiller') {
       $where = sprintf("title != '' AND blurb != '' AND profileImagePHID != '%s'",
+        PhabricatorEnv::getEnvConfig('user.default-profile-image-phid'));
+    } elseif ($title == 'Photogenic') {
+      $where = sprintf("profileImagePHID != '%s'",
         PhabricatorEnv::getEnvConfig('user.default-profile-image-phid'));
     }
     if (empty($where)) {
