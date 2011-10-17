@@ -115,8 +115,9 @@ foreach ($files as $file) {
       if ($path_id) {
         $data = queryfx_all(
           $commit_conn,
-                'SELECT DISTINCT authorName FROM repository_commitdata rcd'
-                        . ' INNER JOIN repository_pathchange rpc ON rcd.commitID=rpc.commitID and pathID=%d',
+          'SELECT authorName FROM repository_commitdata rcd'
+          .' INNER JOIN repository_pathchange rpc ON rcd.commitID=rpc.commitID and pathID=%d'
+          .' ORDER BY rcd.id DESC LIMIT 1',
           $path_id);
         $authors = ipull($data, 'authorName');
         if (is_array($authors)) {
