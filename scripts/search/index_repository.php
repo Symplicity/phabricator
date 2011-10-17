@@ -106,29 +106,27 @@ foreach ($files as $file) {
         PhabricatorPHIDConstants::PHID_TYPE_REPO,
         $ctime);
 
-      $path_id = (int) queryfx_one(
+      $path_id = queryfx_one(
         $commit_conn,
         'SELECT id FROM repository_path INNER JOIN repository_pathchange'
-          .' ON id=pathID and repositoryID=%d WHERE path=%s LIMIT 1',
+          .' ON id=pathID and repositoryID=%d AND path=%s LIMIT 1',
         $repo->getID(),
         "/$subpath$path");
       if ($path_id) {
-        $data = queryfx_all(
+        $author = queryfx_one(
           $commit_conn,
           'SELECT authorName FROM repository_commitdata rcd'
-          .' INNER JOIN repository_pathchange rpc ON rcd.commitID=rpc.commitID and pathID=%d'
-          .' ORDER BY rcd.id DESC LIMIT 1',
-          $path_id);
-        $authors = ipull($data, 'authorName');
-        if (is_array($authors)) {
-          foreach ($authors as $author) {
-            if (isset($user_phids[$author])) {
-              $doc->addRelationship(
-                PhabricatorSearchRelationship::RELATIONSHIP_AUTHOR,
-                $user_phids[$author],
-                PhabricatorPHIDConstants::PHID_TYPE_USER,
-                $mtime);
-            }
+            .' INNER JOIN repository_pathchange rpc ON rcd.commitID=rpc.commitID and pathID=%d'
+            .' ORDER BY rcd.id DESC LIMIT 1',
+          $path_id['id']);
+        if ($author) {
+          $author = $author['authorName'];
+          if (isset($user_phids[$author])) {
+            $doc->addRelationship(
+              PhabricatorSearchRelationship::RELATIONSHIP_AUTHOR,
+              $user_phids[$author],
+              PhabricatorPHIDConstants::PHID_TYPE_USER,
+              $mtime);
           }
         }
       }
