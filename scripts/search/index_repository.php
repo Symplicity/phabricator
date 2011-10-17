@@ -43,6 +43,17 @@ if (substr($repo_path, -1) != DIRECTORY_SEPARATOR) {
   $repo_path .= DIRECTORY_SEPARATOR;
 }
 
+$details = $repo->getDetails();
+if ($details['svn-subpath']) {
+  $subpath = $details['svn-subpath'];
+}
+
+$users = id(new PhabricatorUser())->loadAll();
+$user_phids = mpull($users, 'getPHID', 'getUserName');
+
+$commit_object = new PhabricatorRepositoryCommit();
+$commit_conn = $commit_object->establishConnection('r');
+
 $search_type = PhabricatorPHIDConstants::PHID_TYPE_SOURCE;
 PhutilSymbolLoader::loadClass('PhabricatorSearchDocument');
 $search_object = newv('PhabricatorSearchDocument', array());
@@ -94,6 +105,32 @@ foreach ($files as $file) {
         $repo->getPHID(),
         PhabricatorPHIDConstants::PHID_TYPE_REPO,
         $ctime);
+
+      $path_id = (int) queryfx_one(
+        $commit_conn,
+        'SELECT id FROM repository_path INNER JOIN repository_pathchange'
+          .' ON id=pathID and repositoryID=%d WHERE path=%s LIMIT 1',
+        $repo->getID(),
+        "/$subpath$path");
+      if ($path_id) {
+        $data = queryfx_all(
+          $commit_conn,
+                'SELECT DISTINCT authorName FROM repository_commitdata rcd'
+                        . ' INNER JOIN repository_pathchange rpc ON rcd.commitID=rpc.commitID and pathID=%d',
+          $path_id);
+        $authors = ipull($data, 'authorName');
+        if (is_array($authors)) {
+          foreach ($authors as $author) {
+            if (isset($user_phids[$author])) {
+              $doc->addRelationship(
+                PhabricatorSearchRelationship::RELATIONSHIP_AUTHOR,
+                $user_phids[$author],
+                PhabricatorPHIDConstants::PHID_TYPE_USER,
+                $mtime);
+            }
+          }
+        }
+      }
 
       $engine->reindexAbstractDocument($doc);
     }

@@ -477,7 +477,7 @@ class PhabricatorObjectHandleData {
           $files = $object->loadAllWhere('phid in (%Ls)', $phids);
 
           $repo_rels = id(new PhabricatorSearchDocumentRelationship())->loadAllWhere(
-            'phid in (%Ls)', $phids);
+            'phid IN (%Ls) AND relatedType=%s', $phids, PhabricatorPHIDConstants::PHID_TYPE_REPO);
           $repo_rels = mpull($repo_rels, 'getRelatedPHID', 'getPHID');
 
           $repositories = id(new PhabricatorRepository())->loadAllWhere(
