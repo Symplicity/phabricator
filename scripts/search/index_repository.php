@@ -58,6 +58,20 @@ $search_type = PhabricatorPHIDConstants::PHID_TYPE_SOURCE;
 PhutilSymbolLoader::loadClass('PhabricatorSearchDocument');
 $search_object = newv('PhabricatorSearchDocument', array());
 
+if ($reindex) {
+  $last_index = 0;
+} else {
+  $last_index = queryfx_one(
+    $search_object->establishConnection('r'),
+          'SELECT max(relatedTime) FROM search_documentrelationship'
+                  . ' WHERE relation=%s AND relatedPHID=%s',
+    PhabricatorSearchRelationship::RELATIONSHIP_REPOSITORY,
+    $repo->getPHID());
+  if ($last_index) {
+    $last_index = array_pop($last_index);
+  }
+}
+
 $engine = PhabricatorSearchEngineSelector::newSelector()->newEngine();
 
 echo ($reindex ? 'Reindexing ' : 'Indexing ').$repo->getName()." files:\n";
@@ -66,6 +80,10 @@ $dir_iterator = new RecursiveDirectoryIterator($repo_path);
 $files = new RecursiveIteratorIterator($dir_iterator, RecursiveIteratorIterator::SELF_FIRST);
 foreach ($files as $file) {
   if ($file->isFile()) {
+    $mtime = $file->getMTime();
+    if ($last_index >= $file->getMTime()) {
+      continue;
+    }
     $full_path = $file->getPathname();
 
     $ext = substr($full_path, strrpos($full_path, '.') + 1);
@@ -82,7 +100,6 @@ foreach ($files as $file) {
 
     $phid = "PHID-$search_type-" . md5($repo_code . ':' . $path);
     $indexed_file = $search_object->loadOneWhere('phid = %s', $phid);
-    $mtime = $file->getMTime();
 
     if ($reindex || !$indexed_file || ($mtime != $indexed_file->getDocumentModified())) {
       $ctime = $file->getCTime();
@@ -104,7 +121,7 @@ foreach ($files as $file) {
         PhabricatorSearchRelationship::RELATIONSHIP_REPOSITORY,
         $repo->getPHID(),
         PhabricatorPHIDConstants::PHID_TYPE_REPO,
-        $ctime);
+        $mtime);
 
       $path_id = queryfx_one(
         $commit_conn,
