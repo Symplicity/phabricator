@@ -19,6 +19,7 @@
 class PhabricatorUser extends PhabricatorUserDAO {
 
   const SESSION_TABLE = 'phabricator_session';
+  const NAMETOKEN_TABLE = 'user_nametoken';
 
   protected $phid;
   protected $userName;
@@ -85,22 +86,24 @@ class PhabricatorUser extends PhabricatorUserDAO {
     return $this;
   }
 
+  public function isLoggedIn() {
+    return !($this->getPHID() === null);
+  }
+
   public function save() {
     if (!$this->getConduitCertificate()) {
       $this->setConduitCertificate($this->generateConduitCertificate());
     }
     $result = parent::save();
 
+    $this->updateNameTokens();
     PhabricatorSearchUserIndexer::indexUser($this);
 
     return $result;
   }
 
   private function generateConduitCertificate() {
-    $entropy = Filesystem::readRandomBytes(256);
-    $entropy = base64_encode($entropy);
-    $entropy = substr($entropy, 0, 255);
-    return $entropy;
+    return Filesystem::readRandomCharacters(255);
   }
 
   public function comparePassword($password) {
@@ -259,8 +262,7 @@ class PhabricatorUser extends PhabricatorUserDAO {
 
     // Consume entropy to generate a new session key, forestalling the eventual
     // heat death of the universe.
-    $entropy = Filesystem::readRandomBytes(20);
-    $session_key = sha1($entropy);
+    $session_key = Filesystem::readRandomCharacters(40);
 
     // UNGUARDED WRITES: Logging-in users don't have CSRF stuff yet.
     $unguarded = AphrontWriteGuard::beginScopedUnguardedWrites();
@@ -351,6 +353,55 @@ class PhabricatorUser extends PhabricatorUserDAO {
 
     $this->preferences = $preferences;
     return $preferences;
+  }
+
+  private static function tokenizeName($name) {
+    if (function_exists('mb_strtolower')) {
+      $name = mb_strtolower($name, 'UTF-8');
+    } else {
+      $name = strtolower($name);
+    }
+    $name = trim($name);
+    if (!strlen($name)) {
+      return array();
+    }
+    return preg_split('/\s+/', $name);
+  }
+
+  /**
+   * Populate the nametoken table, which used to fetch typeahead results. When
+   * a user types "linc", we want to match "Abraham Lincoln" from on-demand
+   * typeahead sources. To do this, we need a separate table of name fragments.
+   */
+  public function updateNameTokens() {
+    $tokens = array_merge(
+      self::tokenizeName($this->getRealName()),
+      self::tokenizeName($this->getUserName()));
+    $tokens = array_unique($tokens);
+    $table  = self::NAMETOKEN_TABLE;
+    $conn_w = $this->establishConnection('w');
+
+    $sql = array();
+    foreach ($tokens as $token) {
+      $sql[] = qsprintf(
+        $conn_w,
+        '(%d, %s)',
+        $this->getID(),
+        $token);
+    }
+
+    queryfx(
+      $conn_w,
+      'DELETE FROM %T WHERE userID = %d',
+      $table,
+      $this->getID());
+    if ($sql) {
+      queryfx(
+        $conn_w,
+        'INSERT INTO %T (userID, token) VALUES %Q',
+        $table,
+        implode(', ', $sql));
+    }
   }
 
 }

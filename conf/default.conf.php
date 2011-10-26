@@ -268,6 +268,26 @@ return array(
   // still **COMPLETELY INSECURE**.
   'metamta.insecure-auth-with-reply-to' => false,
 
+  // If you enable 'metamta.maniphest.public-create-email' and create an
+  // email address like "bugs@phabricator.example.com", it will default to
+  // rejecting mail which doesn't come from a known user. However, you might
+  // want to let anyone send email to this address; to do so, set a default
+  // author here (a Phabricator username). A typical use of this might be to
+  // create a "System Agent" user called "bugs" and use that name here. If you
+  // specify a valid username, mail will always be accepted and used to create
+  // a task, even if the sender is not a system user. The original email
+  // address will be stored in an 'From Email' field on the task.
+  'metamta.maniphest.default-public-author' => null,
+
+  // If this option is enabled, Phabricator will add a "Precedence: bulk"
+  // header to transactional mail (e.g., Differential, Maniphest and Herald
+  // notifications). This may improve the behavior of some auto-responder
+  // software and prevent it from replying. However, it may also cause
+  // deliverability issues -- notably, you currently can not send this header
+  // via Amazon SES, and enabling this option with SES will prevent delivery
+  // of any affected mail.
+  'metamta.precedence-bulk' => false,
+
 
 // -- Auth ------------------------------------------------------------------ //
 
@@ -402,12 +422,6 @@ return array(
   // mail somewhere you shouldn't have, to invalidate all old reply-to
   // addresses.
   'phabricator.mail-key'        => '5ce3e7e8787f6e40dfae861da315a5cdf1018f12',
-
-
-  // This is hashed with other inputs to generate file secret keys. Changing
-  // it will invalidate all file URIs if you have an alternate file domain
-  // configured (see 'security.alternate-file-domain').
-  'phabricator.file-key'        => 'ade8dadc8b4382067069a4d4798112191af8a190',
 
   // Version string displayed in the footer. You probably should leave this
   // alone.
@@ -577,6 +591,11 @@ return array(
   // and, socially, email "!accept" is kind of sketchy and implies revisions may
   // not actually be receiving thorough review.
   'differential.enable-email-accept' => false,
+
+  // If you set this to true, users won't need to login to view differential
+  // revisions.  Anonymous users will have read-only access and won't be able to
+  // interact with the revisions.
+  'differential.anonymous-access' => false,
 
 
 // -- Maniphest ------------------------------------------------------------- //

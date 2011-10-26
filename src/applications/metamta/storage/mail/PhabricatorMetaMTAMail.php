@@ -152,6 +152,20 @@ class PhabricatorMetaMTAMail extends PhabricatorMetaMTADAO {
   }
 
   /**
+   * Flag that this is an auto-generated bulk message and should have bulk
+   * headers added to it if appropriate. Broadly, this means some flavor of
+   * "Precedence: bulk" or similar, but is implementation and configuration
+   * dependent.
+   *
+   * @param bool  True if the mail is automated bulk mail.
+   * @return this
+   */
+  public function setIsBulk($is_bulk) {
+    $this->setParam('is-bulk', $is_bulk);
+    return $this;
+  }
+
+  /**
    * Use this method to set an ID used for message threading. MetaMTA will
    * set appropriate headers (Message-ID, In-Reply-To, References and
    * Thread-Index) based on the capabilities of the underlying mailer.
@@ -178,10 +192,12 @@ class PhabricatorMetaMTAMail extends PhabricatorMetaMTADAO {
    * @return this
    */
   public function saveAndSend() {
-    $ret = $this->save();
+    $ret = null;
 
     if (PhabricatorEnv::getEnvConfig('metamta.send-immediately')) {
-      $this->sendNow();
+      $ret = $this->sendNow();
+    } else {
+      $ret = $this->save();
     }
 
     return $ret;
@@ -313,6 +329,13 @@ class PhabricatorMetaMTAMail extends PhabricatorMetaMTADAO {
               $mailer->setIsHTML(true);
             }
             break;
+          case 'is-bulk':
+            if ($value) {
+              if (PhabricatorEnv::getEnvConfig('metamta.precedence-bulk')) {
+                $mailer->addHeader('Precedence', 'bulk');
+              }
+            }
+            break;
           case 'thread-id':
             if ($is_first && $mailer->supportsMessageIDHeader()) {
               $mailer->addHeader('Message-ID',  $value);
@@ -343,8 +366,7 @@ class PhabricatorMetaMTAMail extends PhabricatorMetaMTADAO {
     } catch (Exception $ex) {
       $this->setStatus(self::STATUS_FAIL);
       $this->setMessage($ex->getMessage());
-      $this->save();
-      return;
+      return $this->save();
     }
 
     if ($this->getRetryCount() < $this->getSimulatedFailureCount()) {
@@ -373,7 +395,7 @@ class PhabricatorMetaMTAMail extends PhabricatorMetaMTADAO {
       $this->setStatus(self::STATUS_SENT);
     }
 
-    $this->save();
+    return $this->save();
   }
 
   public static function getReadableStatus($status_code) {
