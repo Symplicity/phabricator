@@ -71,7 +71,7 @@ class PhabricatorMetaMTAReceivedMail extends PhabricatorMetaMTADAO {
         $this->setAuthorPHID($user->getPHID());
       } else {
         $default_author = PhabricatorEnv::getEnvConfig(
-          'metamta.manipest.default-public-author');
+          'metamta.maniphest.default-public-author');
 
         if ($default_author) {
           $user = id(new PhabricatorUser())->loadOneWhere(
@@ -82,7 +82,7 @@ class PhabricatorMetaMTAReceivedMail extends PhabricatorMetaMTADAO {
           } else {
             throw new Exception(
               "Phabricator is misconfigured, the configuration key ".
-              "'metamta.manipest.default-public-author' is set to user ".
+              "'metamta.maniphest.default-public-author' is set to user ".
               "'{$default_author}' but that user does not exist.");
           }
         } else {
