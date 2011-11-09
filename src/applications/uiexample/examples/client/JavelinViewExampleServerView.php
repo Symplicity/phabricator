@@ -16,10 +16,12 @@
  * limitations under the License.
  */
 
-final class PhabricatorEventType extends PhabricatorEventConstants {
-
-  const TYPE_ALL                    = '*';
-  const TYPE_MANIPHEST_WILLEDITTASK = 'maniphest.willEditTask';
-  const TYPE_DIFFERENTIAL_WILLSENDMAIL = 'differential.willSendMail';
-
+class JavelinViewExampleServerView extends AphrontView {
+  public function render() {
+    return phutil_render_tag(
+      'div',
+      array('class' => 'server-view'),
+      $this->renderChildren()
+    );
+  }
 }
