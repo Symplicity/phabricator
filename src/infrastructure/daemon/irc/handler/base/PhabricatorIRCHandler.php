@@ -1,7 +1,7 @@
 <?php
 
 /*
- * Copyright 2011 Facebook, Inc.
+ * Copyright 2012 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -43,6 +43,18 @@ abstract class PhabricatorIRCHandler {
     return $this->bot->getConfig($key, $default);
   }
 
+  final protected function getURI($path) {
+    return $this->bot->getConfig('conduit.uri').$path;
+  }
+
+  final protected function isChannelName($name) {
+    return (strpos($name, '#') === 0);
+  }
+
   abstract public function receiveMessage(PhabricatorIRCMessage $message);
+
+  public function runBackgroundTasks() {
+    return;
+  }
 
 }

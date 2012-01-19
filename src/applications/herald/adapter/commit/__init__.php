@@ -6,17 +6,17 @@
 
 
 
-phutil_require_module('phabricator', 'applications/differential/constants/changetype');
+phutil_require_module('phabricator', 'applications/audit/constants/status');
 phutil_require_module('phabricator', 'applications/differential/storage/revision');
-phutil_require_module('phabricator', 'applications/diffusion/query/pathchange/base');
-phutil_require_module('phabricator', 'applications/diffusion/request/base');
 phutil_require_module('phabricator', 'applications/herald/adapter/base');
 phutil_require_module('phabricator', 'applications/herald/config/action');
 phutil_require_module('phabricator', 'applications/herald/config/contenttype');
 phutil_require_module('phabricator', 'applications/herald/config/field');
 phutil_require_module('phabricator', 'applications/herald/storage/transcript/apply');
+phutil_require_module('phabricator', 'applications/owners/query/path');
 phutil_require_module('phabricator', 'applications/owners/storage/owner');
 phutil_require_module('phabricator', 'applications/owners/storage/package');
+phutil_require_module('phabricator', 'applications/owners/storage/packagecommitrelationship');
 
 phutil_require_module('phutil', 'utils');
 

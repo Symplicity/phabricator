@@ -13,6 +13,7 @@ phutil_require_module('phabricator', 'aphront/response/file');
 phutil_require_module('phabricator', 'applications/differential/controller/base');
 phutil_require_module('phabricator', 'applications/differential/parser/changeset');
 phutil_require_module('phabricator', 'applications/differential/storage/changeset');
+phutil_require_module('phabricator', 'applications/differential/storage/diffproperty');
 phutil_require_module('phabricator', 'applications/differential/storage/inlinecomment');
 phutil_require_module('phabricator', 'applications/differential/view/changesetdetailview');
 phutil_require_module('phabricator', 'applications/differential/view/primarypane');
@@ -21,7 +22,6 @@ phutil_require_module('phabricator', 'applications/phid/handle/data');
 phutil_require_module('phabricator', 'infrastructure/diff/engine');
 phutil_require_module('phabricator', 'infrastructure/javelin/api');
 
-phutil_require_module('phutil', 'markup');
 phutil_require_module('phutil', 'utils');
 
 

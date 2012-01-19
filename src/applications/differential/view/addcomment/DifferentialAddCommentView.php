@@ -1,7 +1,7 @@
 <?php
 
 /*
- * Copyright 2011 Facebook, Inc.
+ * Copyright 2012 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -73,6 +73,7 @@ final class DifferentialAddCommentView extends AphrontView {
 
     $form = new AphrontFormView();
     $form
+      ->setWorkflow(true)
       ->setUser($this->user)
       ->setAction($this->actionURI)
       ->addHiddenInput('revision_id', $revision->getID())
@@ -104,7 +105,16 @@ final class DifferentialAddCommentView extends AphrontView {
           ->setID('comment-content')
           ->setLabel('Comment')
           ->setEnableDragAndDropFileUploads(true)
-          ->setValue($this->draft))
+          ->setValue($this->draft)
+          ->setCaption(phutil_render_tag(
+            'a',
+            array(
+              'href' => PhabricatorEnv::getDoclink(
+                'article/Remarkup_Reference.html'),
+              'tabindex' => '-1',
+              'target' => '_blank',
+            ),
+            'Formatting Reference')))
       ->appendChild(
         id(new AphrontFormSubmitControl())
           ->setValue($is_serious ? 'Submit' : 'Clowncopterize'));
@@ -191,6 +201,10 @@ final class DifferentialAddCommentView extends AphrontView {
         'preview'   => 'comment-preview',
         'action'    => 'comment-action',
         'content'   => 'comment-content',
+        'previewTokenizers' => array(
+          'reviewers' => 'add-reviewers-tokenizer',
+          'ccs'       => 'add-ccs-tokenizer',
+        ),
 
         'inlineuri' => '/differential/comment/inline/preview/'.$rev_id.'/',
         'inline'    => 'inline-comment-preview',

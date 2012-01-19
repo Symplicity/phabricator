@@ -28,7 +28,7 @@ final class PhabricatorRepositoryGitFetchDaemon
     $local_path) {
 
     $repository->execxRemoteCommand(
-      'clone %s %s',
+      'clone --origin origin %s %s',
       $repository->getRemoteURI(),
       rtrim($local_path, '/'));
   }
@@ -37,8 +37,10 @@ final class PhabricatorRepositoryGitFetchDaemon
     PhabricatorRepository $repository,
     $local_path) {
 
-    $repository->execxLocalCommand(
-      'fetch --all');
+    // This is a local command, but needs credentials.
+    $future = $repository->getRemoteCommandFuture('fetch --all');
+    $future->setCWD($local_path);
+    $future->resolvex();
   }
 
 }

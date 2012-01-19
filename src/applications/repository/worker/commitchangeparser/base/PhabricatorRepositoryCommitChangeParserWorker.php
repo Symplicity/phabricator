@@ -1,7 +1,7 @@
 <?php
 
 /*
- * Copyright 2011 Facebook, Inc.
+ * Copyright 2012 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -76,13 +76,13 @@ abstract class PhabricatorRepositoryCommitChangeParserWorker
     PhabricatorSearchCommitIndexer::indexCommit($commit);
 
     if ($this->shouldQueueFollowupTasks()) {
-      $task = new PhabricatorWorkerTask();
-      $task->setTaskClass('PhabricatorRepositoryCommitHeraldWorker');
-      $task->setData(
+      $owner_task = new PhabricatorWorkerTask();
+      $owner_task->setTaskClass('PhabricatorRepositoryCommitOwnersWorker');
+      $owner_task->setData(
         array(
           'commitID' => $commit->getID(),
         ));
-      $task->save();
+      $owner_task->save();
     }
   }
 

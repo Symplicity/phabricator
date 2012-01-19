@@ -1,7 +1,7 @@
 <?php
 
 /*
- * Copyright 2011 Facebook, Inc.
+ * Copyright 2012 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,6 +29,10 @@ final class DifferentialRevisionIDFieldSpecification
     return true;
   }
 
+  public function shouldAppearOnCommitMessageTemplate() {
+    return false;
+  }
+
   public function getCommitMessageKey() {
     return 'revisionID';
   }
@@ -43,11 +47,49 @@ final class DifferentialRevisionIDFieldSpecification
   }
 
   public function renderValueForCommitMessage($is_edit) {
-    return $this->id;
+    if ($is_edit || !$this->id) {
+      return null;
+    }
+    return PhabricatorEnv::getProductionURI('/D'.$this->id);
   }
 
   public function parseValueFromCommitMessage($value) {
-    return $value;
+    $rev = trim($value);
+
+    if (!strlen($rev)) {
+      return null;
+    }
+
+    if (is_numeric($rev)) {
+      // TODO: Eventually, remove support for bare revision numbers.
+      return (int)$rev;
+    }
+
+    $rev = self::parseRevisionIDFromURI($rev);
+    if ($rev !== null) {
+      return $rev;
+    }
+
+    $example_uri = PhabricatorEnv::getProductionURI('/D123');
+    throw new DifferentialFieldParseException(
+      "Commit references invalid 'Differential Revision'. Expected a ".
+      "Phabricator URI like '{$example_uri}', got '{$value}'.");
+  }
+
+  public static function parseRevisionIDFromURI($uri) {
+    $path = id(new PhutilURI($uri))->getPath();
+
+    $matches = null;
+    if (preg_match('#^/D(\d+)$#', $path, $matches)) {
+      $id = (int)$matches[1];
+      // Make sure the URI is the same as our URI. Basically, we want to ignore
+      // commits from other Phabricator installs.
+      if ($uri == PhabricatorEnv::getProductionURI('/D'.$id)) {
+        return $id;
+      }
+    }
+
+    return null;
   }
 
 }

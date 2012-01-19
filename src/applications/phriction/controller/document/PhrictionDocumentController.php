@@ -1,7 +1,7 @@
 <?php
 
 /*
- * Copyright 2011 Facebook, Inc.
+ * Copyright 2012 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -72,6 +72,7 @@ class PhrictionDocumentController
           'class' => 'green button',
         ),
         'Create Page');
+      $buttons = $button;
     } else {
       $version = $request->getInt('v');
       if ($version) {
@@ -97,7 +98,19 @@ class PhrictionDocumentController
       }
       $page_title = $content->getTitle();
 
-      $phids = array($content->getAuthorPHID());
+      $project_phid = null;
+      if (PhrictionDocument::isProjectSlug($slug)) {
+        $project = id(new PhabricatorProject())->loadOneWhere(
+          'phrictionSlug = %s',
+          PhrictionDocument::getProjectSlugIdentifier($slug));
+        $project_phid = $project->getPHID();
+      }
+
+      $phids = array_filter(
+        array(
+          $content->getAuthorPHID(),
+          $project_phid,
+        ));
       $handles = id(new PhabricatorObjectHandleData($phids))->loadHandles();
 
       $age = time() - $content->getDateCreated();
@@ -111,29 +124,61 @@ class PhrictionDocumentController
         $when = "{$age} days ago";
       }
 
+
+      $project_info = null;
+      if ($project_phid) {
+        $project_info =
+          '<br />This document is about the project '.
+          $handles[$project_phid]->renderLink().'.';
+      }
+
+
+
       $byline =
         '<div class="phriction-byline">'.
           "Last updated {$when} by ".
           $handles[$content->getAuthorPHID()]->renderLink().'.'.
+          $project_info.
         '</div>';
 
-      $engine = PhabricatorMarkupEngine::newPhrictionMarkupEngine();
+
+      $doc_status = $document->getStatus();
+      if ($doc_status == PhrictionDocumentStatus::STATUS_EXISTS) {
+        $core_content = $content->renderContent();
+      } else if ($doc_status == PhrictionDocumentStatus::STATUS_DELETED) {
+        $notice = new AphrontErrorView();
+        $notice->setSeverity(AphrontErrorView::SEVERITY_NOTICE);
+        $notice->setTitle('Document Deleted');
+        $notice->appendChild(
+          'This document has been deleted. You can edit it to put new content '.
+          'here, or use history to revert to an earlier version.');
+        $core_content = $notice->render();
+      } else {
+        throw new Exception("Unknown document status '{$doc_status}'!");
+      }
 
       $page_content =
         '<div class="phriction-content">'.
           $byline.
-          '<div class="phabricator-remarkup">'.
-            $engine->markupText($content->getContent()).
-          '</div>'.
+          $core_content.
         '</div>';
 
-      $button = phutil_render_tag(
+      $edit_button = phutil_render_tag(
         'a',
         array(
           'href' => '/phriction/edit/'.$document->getID().'/',
           'class' => 'button',
         ),
-        'Edit Page');
+        'Edit Document');
+      $history_button = phutil_render_tag(
+        'a',
+        array(
+          'href' => PhrictionDocument::getSlugURI($slug, 'history'),
+          'class' => 'button grey',
+        ),
+        'View History');
+      // these float right so history_button which is right most goes first
+      $buttons = $history_button.$edit_button;
     }
 
     if ($version_note) {
@@ -144,7 +189,7 @@ class PhrictionDocumentController
 
     $page =
       '<div class="phriction-header">'.
-        $button.
+        $buttons.
         '<h1>'.phutil_escape_html($page_title).'</h1>'.
         $breadcrumbs.
       '</div>'.
@@ -156,7 +201,6 @@ class PhrictionDocumentController
       $page,
       array(
         'title'   => 'Phriction - '.$page_title,
-        'history' => PhrictionDocument::getSlugURI($slug, 'history'),
       ));
 
   }
@@ -229,12 +273,14 @@ class PhrictionDocumentController
       'SELECT d.slug, d.depth, c.title FROM %T d JOIN %T c
         ON d.contentID = c.id
         WHERE d.slug LIKE %> AND d.depth IN (%d, %d)
+          AND d.status = %d
         ORDER BY d.depth, c.title LIMIT %d',
       $document_dao->getTableName(),
       $content_dao->getTableName(),
       ($slug == '/' ? '' : $slug),
       $d_child,
       $d_grandchild,
+      PhrictionDocumentStatus::STATUS_EXISTS,
       $limit);
 
     if (!$children) {
@@ -320,12 +366,13 @@ class PhrictionDocumentController
   }
 
   private function renderChildDocumentLink(array $info) {
+    $title = nonempty($info['title'], '(Untitled Document)');
     $item = phutil_render_tag(
       'a',
       array(
         'href' => PhrictionDocument::getSlugURI($info['slug']),
       ),
-      phutil_escape_html($info['title']));
+      phutil_escape_html($title));
 
     if (isset($info['empty'])) {
       $item = '<em>'.$item.'</em>';

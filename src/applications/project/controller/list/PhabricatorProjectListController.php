@@ -1,7 +1,7 @@
 <?php
 
 /*
- * Copyright 2011 Facebook, Inc.
+ * Copyright 2012 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,10 +19,54 @@
 class PhabricatorProjectListController
   extends PhabricatorProjectController {
 
-  public function processRequest() {
+  private $filter;
 
-    $projects = id(new PhabricatorProject())->loadAllWhere(
-      '1 = 1 ORDER BY id DESC limit 100');
+  public function willProcessRequest(array $data) {
+    $this->filter = idx($data, 'filter');
+  }
+
+  public function processRequest() {
+    $request = $this->getRequest();
+
+    $nav = new AphrontSideNavFilterView();
+    $nav
+      ->setBaseURI(new PhutilURI('/project/filter/'))
+      ->addLabel('User')
+      ->addFilter('active',   'Active')
+      ->addFilter('owned',    'Owned')
+      ->addSpacer()
+      ->addLabel('All')
+      ->addFilter('all',      'All Projects');
+    $this->filter = $nav->selectFilter($this->filter, 'active');
+
+    $pager = new AphrontPagerView();
+    $pager->setPageSize(250);
+    $pager->setURI($request->getRequestURI(), 'page');
+    $pager->setOffset($request->getInt('page'));
+
+    $query = new PhabricatorProjectQuery();
+    $query->setOffset($pager->getOffset());
+    $query->setLimit($pager->getPageSize() + 1);
+
+    $view_phid = $request->getUser()->getPHID();
+
+    switch ($this->filter) {
+      case 'active':
+        $table_header = 'Active Projects';
+        $query->setMembers(array($view_phid));
+        break;
+      case 'owned':
+        $table_header = 'Owned Projects';
+        $query->setOwners(array($view_phid));
+        break;
+      case 'all':
+        $table_header = 'All Projects';
+        break;
+    }
+
+    $projects = $query->execute();
+    $projects = $pager->sliceResults($projects);
+
     $project_phids = mpull($projects, 'getPHID');
 
     $profiles = array();
@@ -39,21 +83,20 @@ class PhabricatorProjectListController
         $project_phids);
     }
 
-    $author_phids = mpull($projects, 'getAuthorPHID');
-    $handles = id(new PhabricatorObjectHandleData($author_phids))
-      ->loadHandles();
-
-    $query = id(new ManiphestTaskQuery())
-      ->withProjects($project_phids)
-      ->withAnyProject(true)
-      ->withStatus(ManiphestTaskQuery::STATUS_OPEN)
-      ->setLimit(PHP_INT_MAX);
-
-    $tasks = $query->execute();
+    $tasks = array();
     $groups = array();
-    foreach ($tasks as $task) {
-      foreach ($task->getProjectPHIDs() as $phid) {
-        $groups[$phid][] = $task;
+    if ($project_phids) {
+      $query = id(new ManiphestTaskQuery())
+        ->withProjects($project_phids)
+        ->withAnyProject(true)
+        ->withStatus(ManiphestTaskQuery::STATUS_OPEN)
+        ->setLimit(PHP_INT_MAX);
+
+      $tasks = $query->execute();
+      foreach ($tasks as $task) {
+        foreach ($task->getProjectPHIDs() as $phid) {
+          $groups[$phid][] = $task;
+        }
       }
     }
 
@@ -62,7 +105,7 @@ class PhabricatorProjectListController
     foreach ($projects as $project) {
       $phid = $project->getPHID();
 
-      $profile = $profiles[$phid];
+      $profile = idx($profiles, $phid);
       $affiliations = $affil_groups[$phid];
 
       $group = idx($groups, $phid, array());
@@ -70,31 +113,29 @@ class PhabricatorProjectListController
 
       $population = count($affiliations);
 
-      $status = PhabricatorProjectStatus::getNameForStatus(
-        $project->getStatus());
+      if ($profile) {
+        $blurb = $profile->getBlurb();
+        $blurb = phutil_utf8_shorten($blurb, 64);
+      } else {
+        $blurb = null;
+      }
 
-      $blurb = $profile->getBlurb();
-      $blurb = phutil_utf8_shorten($blurb, $columns = 100);
 
       $rows[] = array(
-        phutil_escape_html($project->getName()),
+        phutil_render_tag(
+          'a',
+          array(
+            'href' => '/project/view/'.$project->getID().'/',
+          ),
+          phutil_escape_html($project->getName())),
         phutil_escape_html($blurb),
-        $handles[$project->getAuthorPHID()]->renderLink(),
         phutil_escape_html($population),
-        phutil_escape_html($status),
         phutil_render_tag(
           'a',
           array(
             'href' => '/maniphest/view/all/?projects='.$phid,
           ),
           phutil_escape_html($task_count)),
-        phutil_render_tag(
-          'a',
-          array(
-            'class' => 'small grey button',
-            'href' => '/project/view/'.$project->getID().'/',
-          ),
-          'View Project Profile'),
       );
     }
 
@@ -103,30 +144,27 @@ class PhabricatorProjectListController
       array(
         'Project',
         'Description',
-        'Mastermind',
         'Population',
-        'Status',
         'Open Tasks',
-        '',
       ));
     $table->setColumnClasses(
       array(
         'pri',
         'wide',
         '',
-        'right',
-        '',
-        'right',
-        'action',
+        ''
       ));
 
     $panel = new AphrontPanelView();
-    $panel->appendChild($table);
-    $panel->setHeader('Project');
+    $panel->setHeader($table_header);
     $panel->setCreateButton('Create New Project', '/project/create/');
+    $panel->appendChild($table);
+    $panel->appendChild($pager);
+
+    $nav->appendChild($panel);
 
     return $this->buildStandardPageResponse(
-      $panel,
+      $nav,
       array(
         'title' => 'Projects',
       ));

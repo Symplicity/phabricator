@@ -14,8 +14,8 @@ Phabricator is a LAMP application suite, so you basically need LAMP:
     patches.) Phabricator has active contributors running it on Mac OS X, Amazon
     Linux, Ubuntu, RHEL and CentOS; if you run into issues on other flavors,
     send patches or complaints.
-  - **Apache**: You need Apache. You might be able to use something else, but
-    you're on your own.
+  - **Apache** (or nginx): You need Apache (or nginx). You might be able to use
+    something else, but you're on your own.
   - **MySQL**: You need MySQL.
   - **PHP**: You need PHP 5.2 or newer.
 
@@ -38,11 +38,11 @@ If those work for you, you can skip directly to the
 Otherwise, here's a general description of what you need to install:
 
   - git (usually called "git" in package management systems)
-  - Apache (usually "httpd" or "apache2")
+  - Apache (usually "httpd" or "apache2") (or nginx)
   - MySQL Server (usually "mysqld" or "mysql-server")
   - PHP (usually "php")
-  - Required PHP extensions: mysql, curl, pcntl (these might be something like
-    "php-mysql" or "php5-mysql")
+  - Required PHP extensions: mbstring, iconv, mysql, curl, pcntl (these might be
+    something like "php-mysql" or "php5-mysql")
   - Optional PHP extensions: gd, apc (special instructions for APC are available
     below if you have difficulty installing it), xhprof (instructions below,
     you only need this if you are developing Phabricator)
@@ -96,11 +96,22 @@ If it doesn't show up, add:
 XHProf is a PHP profiling tool. You don't need to install it unless you are
 developing Phabricator and making performance changes.
 
-You can find installation instructions for xhprof here:
+You can install xhprof with:
 
-  http://mirror.facebook.net/facebook/xhprof/doc.html#installation
+  $ pecl install xhprof
 
-You only need to install the PHP extension, not any of the library.
+If you have a PEAR version prior to 1.9.3, you may run into a `phpize` failure.
+If so, you can download the source and build it with:
+
+  $ cd extension/
+  $ phpize
+  $ ./configure
+  $ make
+  $ sudo make install
+
+You may also need to add "##extension=xhprof.so#" to your php.ini.
+
+See <https://bugs.php.net/bug.php?id=59747> for more information.
 
 = Updating Phabricator =
 

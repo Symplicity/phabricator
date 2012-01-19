@@ -1,7 +1,7 @@
 <?php
 
 /*
- * Copyright 2011 Facebook, Inc.
+ * Copyright 2012 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -166,7 +166,8 @@ abstract class DifferentialFieldSpecification {
    * the field is saved. It gives you an opportunity to inspect the field value
    * and throw a @{class:DifferentialFieldValidationException} if there is a
    * problem with the value the user has provided (for example, the value the
-   * user entered is not correctly formatted).
+   * user entered is not correctly formatted). This method is also called after
+   * @{method:setValueFromParsedCommitMessage} before the revision is saved.
    *
    * By default, fields are not validated.
    *
@@ -576,10 +577,21 @@ abstract class DifferentialFieldSpecification {
     $object_map = array();
 
     $users = id(new PhabricatorUser())->loadAllWhere(
-      '(username IN (%Ls)) OR (email IN (%Ls))',
+      '((username IN (%Ls)) OR (email IN (%Ls)))
+        AND isDisabled = 0
+        AND isSystemAgent = 0',
       $value,
       $value);
-    $object_map += mpull($users, 'getPHID', 'getUsername');
+
+    $user_map = mpull($users, 'getPHID', 'getUsername');
+    foreach ($user_map as $username => $phid) {
+      // Usernames may have uppercase letters in them. Put both names in the
+      // map so we can try the original case first, so that username *always*
+      // works in weird edge cases where some other mailable object collides.
+      $object_map[$username] = $phid;
+      $object_map[strtolower($username)] = $phid;
+    }
+
     $object_map += mpull($users, 'getPHID', 'getEmail');
 
     if ($include_mailables) {
@@ -595,7 +607,11 @@ abstract class DifferentialFieldSpecification {
     $results = array();
     foreach ($value as $name) {
       if (empty($object_map[$name])) {
-        $invalid[] = $name;
+        if (empty($object_map[strtolower($name)])) {
+          $invalid[] = $name;
+        } else {
+          $results[] = $object_map[strtolower($name)];
+        }
       } else {
         $results[] = $object_map[$name];
       }
@@ -607,7 +623,8 @@ abstract class DifferentialFieldSpecification {
         ? "users and mailing lists"
         : "users";
       throw new DifferentialFieldParseException(
-        "Commit message references nonexistent {$what}: {$invalid}.");
+        "Commit message references disabled or nonexistent {$what}: ".
+        "{$invalid}.");
     }
 
     return array_unique($results);

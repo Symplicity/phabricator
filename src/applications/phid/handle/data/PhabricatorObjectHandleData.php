@@ -1,7 +1,7 @@
 <?php
 
 /*
- * Copyright 2011 Facebook, Inc.
+ * Copyright 2012 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -140,7 +140,7 @@ class PhabricatorObjectHandleData {
             $images = id(new PhabricatorFile())->loadAllWhere(
               'phid IN (%Ls)',
               $image_phids);
-            $images = mpull($images, 'getViewURI', 'getPHID');
+            $images = mpull($images, 'getBestURI', 'getPHID');
           }
 
           foreach ($phids as $phid) {
@@ -216,8 +216,8 @@ class PhabricatorObjectHandleData {
               $handle->setComplete(true);
 
               $status = $rev->getStatus();
-              if (($status == DifferentialRevisionStatus::COMMITTED) ||
-                  ($status == DifferentialRevisionStatus::ABANDONED)) {
+              if (($status == ArcanistDifferentialRevisionStatus::COMMITTED) ||
+                  ($status == ArcanistDifferentialRevisionStatus::ABANDONED)) {
                 $closed = PhabricatorObjectHandleStatus::STATUS_CLOSED;
                 $handle->setStatus($closed);
               }
@@ -234,10 +234,14 @@ class PhabricatorObjectHandleData {
           $commits = $object->loadAllWhere('phid in (%Ls)', $phids);
           $commits = mpull($commits, null, 'getPHID');
 
-          $repository_ids = mpull($commits, 'getRepositoryID');
-          $repositories = id(new PhabricatorRepository())->loadAllWhere(
-            'id in (%Ld)', array_unique($repository_ids));
-          $callsigns = mpull($repositories, 'getCallsign');
+          $repository_ids = array();
+          $callsigns = array();
+          if ($commits) {
+            $repository_ids = mpull($commits, 'getRepositoryID');
+            $repositories = id(new PhabricatorRepository())->loadAllWhere(
+              'id in (%Ld)', array_unique($repository_ids));
+            $callsigns = mpull($repositories, 'getCallsign');
+          }
 
           foreach ($phids as $phid) {
             $handle = new PhabricatorObjectHandle();
@@ -296,6 +300,7 @@ class PhabricatorObjectHandleData {
               $handle->setURI('/T'.$task->getID());
               $handle->setFullName('T'.$task->getID().': '.$task->getTitle());
               $handle->setComplete(true);
+              $handle->setAlternateID($task->getID());
               if ($task->getStatus() != ManiphestTaskStatus::STATUS_OPEN) {
                 $closed = PhabricatorObjectHandleStatus::STATUS_CLOSED;
                 $handle->setStatus($closed);

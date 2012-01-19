@@ -35,5 +35,6 @@ final class PhabricatorPHIDConstants {
   const PHID_TYPE_WIKI    = 'WIKI';
   const PHID_TYPE_APRJ    = 'APRJ';
   const PHID_TYPE_SOURCE  = 'SRCE';
+  const PHID_TYPE_ACMT   = 'ACMT';
 
 }

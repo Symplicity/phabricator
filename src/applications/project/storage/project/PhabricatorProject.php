@@ -1,7 +1,7 @@
 <?php
 
 /*
- * Copyright 2011 Facebook, Inc.
+ * Copyright 2012 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,8 +23,10 @@ class PhabricatorProject extends PhabricatorProjectDAO {
   protected $status = PhabricatorProjectStatus::UNKNOWN;
   protected $authorPHID;
   protected $subprojectPHIDs = array();
+  protected $phrictionSlug;
 
   private $subprojectsNeedUpdate;
+  private $affiliations;
 
   public function getConfiguration() {
     return array(
@@ -53,10 +55,35 @@ class PhabricatorProject extends PhabricatorProjectDAO {
     return $profile;
   }
 
+  public function getAffiliations() {
+    if ($this->affiliations === null) {
+      throw new Exception('Attach affiliations first!');
+    }
+    return $this->affiliations;
+  }
+
+  public function attachAffiliations(array $affiliations) {
+    $this->affiliations = $affiliations;
+    return $this;
+  }
+
   public function loadAffiliations() {
     $affils = PhabricatorProjectAffiliation::loadAllForProjectPHIDs(
       array($this->getPHID()));
     return $affils[$this->getPHID()];
+  }
+
+  public function setPhrictionSlug($slug) {
+
+    // NOTE: We're doing a little magic here and stripping out '/' so that
+    // project pages always appear at top level under projects/ even if the
+    // display name is "Hack / Slash" or similar (it will become
+    // 'hack_slash' instead of 'hack/slash').
+
+    $slug = str_replace('/', ' ', $slug);
+    $slug = PhrictionDocument::normalizeSlug($slug);
+    $this->phrictionSlug = $slug;
+    return $this;
   }
 
   public function save() {

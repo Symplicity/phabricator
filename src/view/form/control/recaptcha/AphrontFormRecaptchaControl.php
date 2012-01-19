@@ -1,7 +1,7 @@
 <?php
 
 /*
- * Copyright 2011 Facebook, Inc.
+ * Copyright 2012 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,6 +16,11 @@
  * limitations under the License.
  */
 
+/**
+ *
+ * @phutil-external-symbol function recaptcha_get_html
+ * @phutil-external-symbol function recaptcha_check_answer
+ */
 class AphrontFormRecaptchaControl extends AphrontFormControl {
 
   protected function getCustomControlClass() {
@@ -26,13 +31,17 @@ class AphrontFormRecaptchaControl extends AphrontFormControl {
     return self::isRecaptchaEnabled();
   }
 
-  private static function isRecaptchaEnabled() {
+  public static function isRecaptchaEnabled() {
     return PhabricatorEnv::getEnvConfig('recaptcha.enabled');
   }
 
   private static function requireLib() {
     $root = phutil_get_library_root('phabricator');
     require_once dirname($root).'/externals/recaptcha/recaptchalib.php';
+  }
+
+  public static function hasCaptchaResponse(AphrontRequest $request) {
+    return $request->getBool('recaptcha_response_field');
   }
 
   public static function processCaptcha(AphrontRequest $request) {

@@ -1,7 +1,7 @@
 <?php
 
 /*
- * Copyright 2011 Facebook, Inc.
+ * Copyright 2012 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -109,12 +109,21 @@ class PhabricatorFileViewController extends PhabricatorFileController {
 
     $form = new AphrontFormView();
 
+    $submit = new AphrontFormSubmitControl();
+
     if ($file->isViewableInBrowser()) {
       $form->setAction($file->getViewURI());
-      $button_name = 'View File';
+      $submit->setValue('View File');
     } else {
       $form->setAction('/file/download/'.$file->getPHID().'/');
-      $button_name = 'Download File';
+      $submit->setValue('Download File');
+    }
+
+    if (($user->getPHID() == $file->getAuthorPHID()) ||
+        ($user->getIsAdmin())) {
+      $submit->addCancelButton(
+        '/file/delete/'.$file->getID().'/',
+        'Delete File');
     }
 
     $file_id = 'F'.$file->getID();
@@ -171,8 +180,7 @@ class PhabricatorFileViewController extends PhabricatorFileController {
           ->setName('storageHandle')
           ->setValue($file->getStorageHandle()))
       ->appendChild(
-        id(new AphrontFormSubmitControl())
-          ->setValue($button_name));
+        id($submit));
 
     $panel = new AphrontPanelView();
     $panel->setHeader('File Info - '.$file->getName());
@@ -180,34 +188,43 @@ class PhabricatorFileViewController extends PhabricatorFileController {
     $panel->appendChild($form);
     $panel->setWidth(AphrontPanelView::WIDTH_FORM);
 
+    $xform_panel = null;
 
     $transformations = id(new PhabricatorTransformedFile())->loadAllWhere(
       'originalPHID = %s',
       $file->getPHID());
-    $rows = array();
-    foreach ($transformations as $transformed) {
-      $phid = $transformed->getTransformedPHID();
-      $rows[] = array(
-        phutil_escape_html($transformed->getTransform()),
-        phutil_render_tag(
-          'a',
-          array(
-            'href' => PhabricatorFileURI::getViewURIForPHID($phid),
-          ),
-          $phid));
+    if ($transformations) {
+      $transformed_phids = mpull($transformations, 'getTransformedPHID');
+      $transformed_files = id(new PhabricatorFile())->loadAllWhere(
+        'phid in (%Ls)',
+        $transformed_phids);
+      $transformed_map = mpull($transformed_files, null, 'getPHID');
+
+      $rows = array();
+      foreach ($transformations as $transformed) {
+        $phid = $transformed->getTransformedPHID();
+        $rows[] = array(
+          phutil_escape_html($transformed->getTransform()),
+          phutil_render_tag(
+            'a',
+            array(
+              'href' => $transformed_map[$phid]->getBestURI(),
+            ),
+            $phid));
+      }
+
+      $table = new AphrontTableView($rows);
+      $table->setHeaders(
+        array(
+          'Transform',
+          'File',
+        ));
+
+      $xform_panel = new AphrontPanelView();
+      $xform_panel->appendChild($table);
+      $xform_panel->setWidth(AphrontPanelView::WIDTH_FORM);
+      $xform_panel->setHeader('Transformations');
     }
-
-    $table = new AphrontTableView($rows);
-    $table->setHeaders(
-      array(
-        'Transform',
-        'File',
-      ));
-
-    $xform_panel = new AphrontPanelView();
-    $xform_panel->appendChild($table);
-    $xform_panel->setWidth(AphrontPanelView::WIDTH_FORM);
-    $xform_panel->setHeader('Transformations');
 
     return $this->buildStandardPageResponse(
       array($panel, $xform_panel),

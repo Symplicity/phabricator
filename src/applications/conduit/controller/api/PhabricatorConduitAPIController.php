@@ -1,7 +1,7 @@
 <?php
 
 /*
- * Copyright 2011 Facebook, Inc.
+ * Copyright 2012 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -67,6 +67,11 @@ class PhabricatorConduitAPIController
       if (isset($_REQUEST['params']) && is_array($_REQUEST['params'])) {
         $params_post = $request->getArr('params');
         foreach ($params_post as $key => $value) {
+          if ($value == '') {
+            // Interpret empty string null (e.g., the user didn't type anything
+            // into the box).
+            $value = 'null';
+          }
           $decoded_value = json_decode($value, true);
           if ($decoded_value === null && strtolower($value) != 'null') {
             // When json_decode() fails, it returns null. This almost certainly
@@ -135,7 +140,11 @@ class PhabricatorConduitAPIController
         } catch (ConduitException $ex) {
           $result = null;
           $error_code = $ex->getMessage();
-          $error_info = $method_handler->getErrorDescription($error_code);
+          if ($ex->getErrorDescription()) {
+            $error_info = $ex->getErrorDescription();
+          } else {
+            $error_info = $method_handler->getErrorDescription($error_code);
+          }
         }
         if ($allow_unguarded_writes) {
           unset($unguarded);
@@ -172,23 +181,22 @@ class PhabricatorConduitAPIController
       unset($unguarded);
     }
 
-    $result = array(
-      'result'      => $result,
-      'error_code'  => $error_code,
-      'error_info'  => $error_info,
-    );
+    $response = id(new ConduitAPIResponse())
+      ->setResult($result)
+      ->setErrorCode($error_code)
+      ->setErrorInfo($error_info);
 
     switch ($request->getStr('output')) {
       case 'human':
         return $this->buildHumanReadableResponse(
           $method,
           $api_request,
-          $result);
+          $response->toDictionary());
       case 'json':
       default:
         return id(new AphrontFileResponse())
           ->setMimeType('application/json')
-          ->setContent('for(;;);'.json_encode($result));
+          ->setContent('for(;;);'.$response->toJSON());
     }
   }
 

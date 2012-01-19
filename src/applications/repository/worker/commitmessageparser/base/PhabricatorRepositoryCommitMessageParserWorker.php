@@ -1,7 +1,7 @@
 <?php
 
 /*
- * Copyright 2011 Facebook, Inc.
+ * Copyright 2012 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -65,22 +65,14 @@ abstract class PhabricatorRepositoryCommitMessageParserWorker
         $this->repository,
         $this->commit);
       if ($hashes) {
-        $sql = array();
-        foreach ($hashes as $info) {
-          list($type, $hash) = $info;
-          $sql[] = qsprintf(
-            $conn_w,
-            '(type = %s AND hash = %s)',
-            $type,
-            $hash);
-        }
-        $revision = queryfx_one(
-          $conn_w,
-          'SELECT revisionID FROM %T WHERE %Q LIMIT 1',
-          DifferentialRevisionHash::TABLE_NAME,
-          implode(' OR ', $sql));
-        if ($revision) {
-          $revision_id = $revision['revisionID'];
+
+        $query = new DifferentialRevisionQuery();
+        $query->withCommitHashes($hashes);
+        $revisions = $query->execute();
+
+        if (!empty($revisions)) {
+          $revision = $this->identifyBestRevision($revisions);
+          $revision_id = $revision->getID();
         }
       }
     }
@@ -95,15 +87,78 @@ abstract class PhabricatorRepositoryCommitMessageParserWorker
           $revision->getID(),
           $commit->getPHID());
 
-        if ($revision->getStatus() != DifferentialRevisionStatus::COMMITTED) {
+        if ($revision->getStatus() !=
+            ArcanistDifferentialRevisionStatus::COMMITTED) {
+          $message = null;
+          $committer = $data->getCommitDetail('authorPHID');
+          if (!$committer) {
+            $committer = $revision->getAuthorPHID();
+            $message = 'Change committed by '.$data->getAuthorName().'.';
+          }
           $editor = new DifferentialCommentEditor(
             $revision,
-            $revision->getAuthorPHID(),
+            $committer,
             DifferentialAction::ACTION_COMMIT);
-          $editor->save();
+          $editor->setMessage($message)->save();
         }
       }
     }
   }
 
+  /**
+   * When querying for revisions by hash, more than one revision may be found.
+   * This function identifies the "best" revision from such a set.  Typically,
+   * there is only one revision found.   Otherwise, we try to pick an accepted
+   * revision first, followed by an open revision, and otherwise we go with a
+   * committed or abandoned revision as a last resort.
+   */
+  private function identifyBestRevision(array $revisions) {
+    // get the simplest, common case out of the way
+    if (count($revisions) == 1) {
+      return reset($revisions);
+    }
+
+    $first_choice = array();
+    $second_choice = array();
+    $third_choice = array();
+    foreach ($revisions as $revision) {
+      switch ($revision->getStatus()) {
+        // "Accepted" revisions -- ostensibly what we're looking for!
+        case ArcanistDifferentialRevisionStatus::ACCEPTED:
+          $first_choice[] = $revision;
+          break;
+        // "Open" revisions
+        case ArcanistDifferentialRevisionStatus::NEEDS_REVIEW:
+        case ArcanistDifferentialRevisionStatus::NEEDS_REVISION:
+          $second_choice[] = $revision;
+          break;
+        // default is a wtf? here
+        default:
+        case ArcanistDifferentialRevisionStatus::ABANDONED:
+        case ArcanistDifferentialRevisionStatus::COMMITTED:
+          $third_choice[] = $revision;
+          break;
+      }
+    }
+
+    // go down the ladder like a bro at last call
+    if (!empty($first_choice)) {
+      return $this->identifyMostRecentRevision($first_choice);
+    }
+    if (!empty($second_choice)) {
+      return $this->identifyMostRecentRevision($second_choice);
+    }
+    if (!empty($third_choice)) {
+      return $this->identifyMostRecentRevision($third_choice);
+    }
+  }
+
+  /**
+   * Given a set of revisions, returns the revision with the latest
+   * updated time.   This is ostensibly the most recent revision.
+   */
+  private function identifyMostRecentRevision(array $revisions) {
+    $revisions = msort($revisions, 'getDateModified');
+    return end($revisions);
+  }
 }

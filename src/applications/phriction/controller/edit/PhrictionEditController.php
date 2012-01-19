@@ -1,7 +1,7 @@
 <?php
 
 /*
- * Copyright 2011 Facebook, Inc.
+ * Copyright 2012 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -77,6 +77,21 @@ class PhrictionEditController
       }
     }
 
+    if ($request->getBool('nodraft')) {
+      $draft = null;
+      $draft_key = null;
+    } else {
+      if ($document->getPHID()) {
+        $draft_key = $document->getPHID().':'.$content->getVersion();
+      } else {
+        $draft_key = 'phriction:'.$content->getSlug();
+      }
+      $draft = id(new PhabricatorDraft())->loadOneWhere(
+        'authorPHID = %s AND draftKey = %s',
+        $user->getPHID(),
+        $draft_key);
+    }
+
     require_celerity_resource('phriction-document-css');
 
     $e_title = true;
@@ -101,6 +116,10 @@ class PhrictionEditController
 
         $editor->save();
 
+        if ($draft) {
+          $draft->delete();
+        }
+
         $uri = PhrictionDocument::getSlugURI($document->getSlug());
         return id(new AphrontRedirectResponse())->setURI($uri);
       }
@@ -116,9 +135,17 @@ class PhrictionEditController
     if ($document->getID()) {
       $panel_header = 'Edit Phriction Document';
       $submit_button = 'Save Changes';
+      $delete_button = phutil_render_tag(
+        'a',
+        array(
+          'href' => '/phriction/delete/'.$document->getID().'/',
+          'class' => 'grey button',
+        ),
+        'Delete Document');
     } else {
       $panel_header = 'Create New Phriction Document';
       $submit_button = 'Create Document';
+      $delete_button = null;
     }
 
     $uri = $document->getSlug();
@@ -129,15 +156,40 @@ class PhrictionEditController
       'a',
       array(
         'href' => PhabricatorEnv::getDoclink('article/Remarkup_Reference.html'),
+        'tabindex' => '-1',
+        'target' => '_blank',
       ),
       'Formatting Reference');
 
     $cancel_uri = PhrictionDocument::getSlugURI($document->getSlug());
 
+    if ($draft &&
+        strlen($draft->getDraft()) &&
+        ($draft->getDraft() != $content->getContent())) {
+      $content_text = $draft->getDraft();
+
+      $discard = phutil_render_tag(
+        'a',
+        array(
+          'href' => $request->getRequestURI()->alter('nodraft', true),
+        ),
+        'discard this draft');
+
+      $draft_note = new AphrontErrorView();
+      $draft_note->setSeverity(AphrontErrorView::SEVERITY_NOTICE);
+      $draft_note->setTitle('Recovered Draft');
+      $draft_note->appendChild(
+        '<p>Showing a saved draft of your edits, you can '.$discard.'.</p>');
+    } else {
+      $content_text = $content->getContent();
+      $draft_note = null;
+    }
+
     $form = id(new AphrontFormView())
       ->setUser($user)
       ->setAction($request->getRequestURI()->getPath())
       ->addHiddenInput('slug', $document->getSlug())
+      ->addHiddenInput('nodraft', $request->getBool('nodraft'))
       ->appendChild(
         id(new AphrontFormTextControl())
           ->setLabel('Title')
@@ -145,24 +197,24 @@ class PhrictionEditController
           ->setError($e_title)
           ->setName('title'))
       ->appendChild(
-        id(new AphrontFormTextControl())
-          ->setLabel('Description')
-          ->setValue($content->getDescription())
-          ->setError(null)
-          ->setName('description'))
-      ->appendChild(
         id(new AphrontFormStaticControl())
           ->setLabel('URI')
           ->setValue($uri))
       ->appendChild(
         id(new AphrontFormTextAreaControl())
           ->setLabel('Content')
-          ->setValue($content->getContent())
+          ->setValue($content_text)
           ->setHeight(AphrontFormTextAreaControl::HEIGHT_VERY_TALL)
           ->setName('content')
           ->setID('document-textarea')
           ->setEnableDragAndDropFileUploads(true)
           ->setCaption($remarkup_reference))
+      ->appendChild(
+        id(new AphrontFormTextControl())
+          ->setLabel('Edit Notes')
+          ->setValue($content->getDescription())
+          ->setError(null)
+          ->setName('description'))
       ->appendChild(
         id(new AphrontFormSubmitControl())
           ->addCancelButton($cancel_uri)
@@ -172,6 +224,10 @@ class PhrictionEditController
       ->setWidth(AphrontPanelView::WIDTH_WIDE)
       ->setHeader($panel_header)
       ->appendChild($form);
+
+    if ($delete_button) {
+      $panel->addButton($delete_button);
+    }
 
     $preview_panel =
       '<div class="aphront-panel-preview aphront-panel-preview-wide">
@@ -190,11 +246,12 @@ class PhrictionEditController
       array(
         'preview'   => 'document-preview',
         'textarea'  => 'document-textarea',
-        'uri'       => '/phriction/preview/',
+        'uri'       => '/phriction/preview/?draftkey='.$draft_key,
       ));
 
     return $this->buildStandardPageResponse(
       array(
+        $draft_note,
         $error_view,
         $panel,
         $preview_panel,

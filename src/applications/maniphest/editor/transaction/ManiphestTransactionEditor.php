@@ -72,6 +72,14 @@ class ManiphestTransactionEditor {
           $old = $task->getProjectPHIDs();
           $value_is_phid_set = true;
           break;
+        case ManiphestTransactionType::TYPE_AUXILIARY:
+          $aux_key = $transaction->getMetadataValue('aux:key');
+          if (!$aux_key) {
+            throw new Exception(
+              "Expected 'aux:key' metadata on TYPE_AUXILIARY transaction.");
+          }
+          $old = $task->getAuxiliaryAttribute($aux_key);
+          break;
         default:
           throw new Exception('Unknown action type.');
       }
@@ -150,6 +158,10 @@ class ManiphestTransactionEditor {
           case ManiphestTransactionType::TYPE_PROJECTS:
             $task->setProjectPHIDs($new);
             break;
+          case ManiphestTransactionType::TYPE_AUXILIARY:
+            $aux_key = $transaction->getMetadataValue('aux:key');
+            $task->setAuxiliaryAttribute($aux_key, $new);
+            break;
           default:
             throw new Exception('Unknown action type.');
         }
@@ -170,6 +182,8 @@ class ManiphestTransactionEditor {
     $email_cc = array_merge(
       $email_cc,
       $task->getCCPHIDs());
+
+    $this->publishFeedStory($task, $transactions);
 
     // TODO: Do this offline via timeline
     PhabricatorSearchManiphestIndexer::indexTask($task);
@@ -207,15 +221,7 @@ class ManiphestTransactionEditor {
     $view->setHandles($handles);
     list($action, $body) = $view->renderForEmail($with_date = false);
 
-    $is_create = false;
-    foreach ($transactions as $transaction) {
-      $type = $transaction->getTransactionType();
-      if (($type == ManiphestTransactionType::TYPE_STATUS) &&
-          ($transaction->getOldValue() === null) &&
-          ($transaction->getNewValue() == ManiphestTaskStatus::STATUS_OPEN)) {
-        $is_create = true;
-      }
-    }
+    $is_create = $this->isCreate($transactions);
 
     $task_uri = PhabricatorEnv::getURI('/T'.$task->getID());
 
@@ -276,4 +282,71 @@ class ManiphestTransactionEditor {
 
     return $handler_object;
   }
+
+  private function publishFeedStory(ManiphestTask $task, array $transactions) {
+    $actions = array(ManiphestAction::ACTION_UPDATE);
+    $comments = null;
+    foreach ($transactions as $transaction) {
+      if ($transaction->hasComments()) {
+        $comments = $transaction->getComments();
+      }
+      switch ($transaction->getTransactionType()) {
+        case ManiphestTransactionType::TYPE_OWNER:
+          $actions[] = ManiphestAction::ACTION_ASSIGN;
+          break;
+        case ManiphestTransactionType::TYPE_STATUS:
+          if ($task->getStatus() != ManiphestTaskStatus::STATUS_OPEN) {
+            $actions[] = ManiphestAction::ACTION_CLOSE;
+          } else if ($this->isCreate($transactions)) {
+            $actions[] = ManiphestAction::ACTION_CREATE;
+          }
+          break;
+        default:
+          break;
+      }
+    }
+
+    $action_type = ManiphestAction::selectStrongestAction($actions);
+    $owner_phid = $task->getOwnerPHID();
+    $actor_phid = head($transactions)->getAuthorPHID();
+    $author_phid = $task->getAuthorPHID();
+
+    id(new PhabricatorFeedStoryPublisher())
+      ->setStoryType(PhabricatorFeedStoryTypeConstants::STORY_MANIPHEST)
+      ->setStoryData(array(
+        'taskPHID'        => $task->getPHID(),
+        'transactionIDs'  => mpull($transactions, 'getID'),
+        'ownerPHID'       => $owner_phid,
+        'action'          => $action_type,
+        'comments'        => $comments,
+        'description'     => $task->getDescription(),
+      ))
+      ->setStoryTime(time())
+      ->setStoryAuthorPHID($actor_phid)
+      ->setRelatedPHIDs(
+        array_merge(
+          array_filter(
+            array(
+              $task->getPHID(),
+              $author_phid,
+              $actor_phid,
+              $owner_phid,
+            )),
+          $task->getProjectPHIDs()))
+      ->publish();
+  }
+
+  private function isCreate(array $transactions) {
+    $is_create = false;
+    foreach ($transactions as $transaction) {
+      $type = $transaction->getTransactionType();
+      if (($type == ManiphestTransactionType::TYPE_STATUS) &&
+          ($transaction->getOldValue() === null) &&
+          ($transaction->getNewValue() == ManiphestTaskStatus::STATUS_OPEN)) {
+        $is_create = true;
+      }
+    }
+    return $is_create;
+  }
+
 }

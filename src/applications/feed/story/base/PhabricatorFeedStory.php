@@ -51,12 +51,30 @@ abstract class PhabricatorFeedStory {
     return $this->handles;
   }
 
+  final protected function getHandle($phid) {
+    if (isset($this->handles[$phid])) {
+      if ($this->handles[$phid] instanceof PhabricatorObjectHandle) {
+        return $this->handles[$phid];
+      }
+    }
+
+    $handle = new PhabricatorObjectHandle();
+    $handle->setPHID($phid);
+    $handle->setName("Unloaded Object '{$phid}'");
+
+    return $handle;
+  }
+
   final protected function getObjects() {
     return $this->objects;
   }
 
   final protected function getStoryData() {
     return $this->data;
+  }
+
+  final public function getEpoch() {
+    return $this->getStoryData()->getEpoch();
   }
 
 }

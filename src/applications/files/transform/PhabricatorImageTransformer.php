@@ -1,7 +1,7 @@
 <?php
 
 /*
- * Copyright 2011 Facebook, Inc.
+ * Copyright 2012 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -89,13 +89,18 @@ final class PhabricatorImageTransformer {
     $scale = min($x / $dx, $y / $dy);
     $dst = imagecreatetruecolor($dx, $dy);
 
+    // If we need to chop off some pixels, chop them off from the sides instead
+    // of scaling in on <0, 0>.
+    $sdx = $scale * $dx;
+    $sdy = $scale * $dy;
+
     imagecopyresampled(
       $dst,
       $src,
       0, 0,
-      0, 0,
+      ($x - $sdx) / 2,  ($y - $sdy) / 2,
       $dx, $dy,
-      $scale * $dx, $scale * $dy);
+      $sdx, $sdy);
 
     return $dst;
   }

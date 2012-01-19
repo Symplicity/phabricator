@@ -1,7 +1,7 @@
 <?php
 
 /*
- * Copyright 2011 Facebook, Inc.
+ * Copyright 2012 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -121,7 +121,6 @@ class PhabricatorPeopleEditController extends PhabricatorPeopleController {
     $errors = array();
 
     $welcome_checked = true;
-    $is_serious = PhabricatorEnv::getEnvConfig('phabricator.serious-business');
 
     $request = $this->getRequest();
     if ($request->isFormPost()) {
@@ -140,7 +139,7 @@ class PhabricatorPeopleEditController extends PhabricatorPeopleController {
       if (!strlen($user->getUsername())) {
         $errors[] = "Username is required.";
         $e_username = 'Required';
-      } else if (!preg_match('/^[a-z0-9]+$/', $user->getUsername())) {
+      } else if (!PhabricatorUser::validateUsername($user->getUsername())) {
         $errors[] = "Username must consist of only numbers and letters.";
         $e_username = 'Invalid';
       } else {
@@ -175,44 +174,7 @@ class PhabricatorPeopleEditController extends PhabricatorPeopleController {
             $log->save();
 
             if ($welcome_checked) {
-              $admin_username = $admin->getUserName();
-              $admin_realname = $admin->getRealName();
-              $user_username = $user->getUserName();
-
-              $base_uri = PhabricatorEnv::getProductionURI('/');
-
-              $uri = $user->getEmailLoginURI();
-              $body = <<<EOBODY
-Welcome to Phabricator!
-
-{$admin_username} ({$admin_realname}) has created an account for you.
-
-  Username: {$user_username}
-
-To login to Phabricator, follow this link and set a password:
-
-  {$uri}
-
-After you have set a password, you can login in the future by going here:
-
-  {$base_uri}
-
-EOBODY;
-
-              if (!$is_serious) {
-                $body .= <<<EOBODY
-Love,
-Phabricator
-
-EOBODY;
-              }
-
-              $mail = id(new PhabricatorMetaMTAMail())
-                ->addTos(array($user->getPHID()))
-                ->setSubject('[Phabricator] Welcome to Phabricator')
-                ->setBody($body)
-                ->setFrom($admin->getPHID())
-                ->saveAndSend();
+              $user->sendWelcomeEmail($admin);
             }
           }
 

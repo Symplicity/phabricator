@@ -195,10 +195,7 @@ class PhrictionDiffController
       ),
       array(
         'title'     => 'Document History',
-        'history'   => PhrictionDocument::getSlugURI($slug, 'history'),
-        'document'  => PhrictionDocument::getSlugURI($slug),
       ));
-
   }
 
   private function renderRevertButton(
@@ -207,6 +204,12 @@ class PhrictionDiffController
 
     $document_id = $content->getDocumentID();
     $version = $content->getVersion();
+
+    if ($content->getChangeType() == PhrictionChangeType::CHANGE_DELETE) {
+      // Don't show an edit/revert button for changes which deleted the content
+      // since it's silly.
+      return null;
+    }
 
     if ($content->getID() == $current->getID()) {
       return phutil_render_tag(

@@ -1,7 +1,7 @@
 <?php
 
 /*
- * Copyright 2011 Facebook, Inc.
+ * Copyright 2012 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,6 +30,7 @@ class HeraldCommitAdapter extends HeraldObjectAdapter {
   protected $affectedPaths;
   protected $affectedRevision;
   protected $affectedPackages;
+  protected $auditNeededPackages;
 
   public function __construct(
     PhabricatorRepository $repository,
@@ -62,19 +63,8 @@ class HeraldCommitAdapter extends HeraldObjectAdapter {
 
   public function loadAffectedPaths() {
     if ($this->affectedPaths === null) {
-      $drequest = $this->buildDiffusionRequest();
-      $path_query = DiffusionPathChangeQuery::newFromDiffusionRequest(
-        $drequest);
-      $paths = $path_query->loadChanges();
-
-      $result = array();
-      foreach ($paths as $path) {
-        $basic_path = '/'.$path->getPath();
-        if ($path->getFileType() == DifferentialChangeType::FILE_DIRECTORY) {
-          $basic_path = rtrim($basic_path, '/').'/';
-        }
-        $result[] = $basic_path;
-      }
+      $result = PhabricatorOwnerPathQuery::loadAffectedPaths(
+        $this->repository, $this->commit);
       $this->affectedPaths = $result;
     }
     return $this->affectedPaths;
@@ -88,6 +78,24 @@ class HeraldCommitAdapter extends HeraldObjectAdapter {
       $this->affectedPackages = $packages;
     }
     return $this->affectedPackages;
+  }
+
+  public function loadAuditNeededPackage() {
+    if ($this->auditNeededPackages === null) {
+      $status_arr = array (
+        PhabricatorAuditStatusConstants::AUDIT_REQUIRED,
+          PhabricatorAuditStatusConstants::CONCERNED,
+        );
+      $relationships = id(new PhabricatorOwnersPackageCommitRelationship())
+          ->loadAllWhere(
+        "commitPHID = %s AND auditStatus IN (%Ls)",
+        $this->commit->getPHID(),
+        $status_arr);
+
+      $packages = mpull($relationships, 'getPackagePHID');
+      $this->auditNeededPackages = $packages;
+    }
+    return $this->auditNeededPackages;
   }
 
   public function loadDifferentialRevision() {
@@ -104,14 +112,6 @@ class HeraldCommitAdapter extends HeraldObjectAdapter {
       }
     }
     return $this->affectedRevision;
-  }
-
-  private function buildDiffusionRequest() {
-    return DiffusionRequest::newFromAphrontRequestDictionary(
-      array(
-        'callsign'  => $this->repository->getCallsign(),
-        'commit'    => $this->commit->getCommitIdentifier(),
-      ));
   }
 
   public function getHeraldField($field) {
@@ -159,6 +159,8 @@ class HeraldCommitAdapter extends HeraldObjectAdapter {
         $packages = $this->loadAffectedPackages();
         $owners = PhabricatorOwnersOwner::loadAllForPackages($packages);
         return mpull($owners, 'getUserPHID');
+      case HeraldFieldConfig::FIELD_NEED_AUDIT_FOR_PACKAGE:
+        return $this->loadAuditNeededPackage();
       case HeraldFieldConfig::FIELD_DIFFERENTIAL_REVISION:
         $revision = $this->loadDifferentialRevision();
         if (!$revision) {

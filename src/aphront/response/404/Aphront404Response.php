@@ -1,7 +1,7 @@
 <?php
 
 /*
- * Copyright 2011 Facebook, Inc.
+ * Copyright 2012 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,14 +19,23 @@
 /**
  * @group aphront
  */
-class Aphront404Response extends AphrontResponse {
+class Aphront404Response extends AphrontWebpageResponse {
 
   public function getHTTPResponseCode() {
     return 404;
   }
 
   public function buildResponseString() {
-    return '404 Not Found';
+    $failure = new AphrontRequestFailureView();
+    $failure->setHeader('404 Not Found');
+    $failure->appendChild('<p>The page you requested was not found.</p>');
+
+    $view = new PhabricatorStandardPageView();
+    $view->setTitle('404 Not Found');
+    $view->setRequest($this->getRequest());
+    $view->appendChild($failure);
+
+    return $view->render();
   }
 
 }

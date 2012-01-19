@@ -1,7 +1,7 @@
 <?php
 
 /*
- * Copyright 2011 Facebook, Inc.
+ * Copyright 2012 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -46,14 +46,44 @@ class DifferentialCommentSaveController extends DifferentialController {
         'ip' => $request->getRemoteAddr(),
       ));
 
-    $editor
-      ->setMessage($comment)
-      ->setContentSource($content_source)
-      ->setAttachInlineComments(true)
-      ->setAddCC($action != DifferentialAction::ACTION_RESIGN)
-      ->setAddedReviewers($reviewers)
-      ->setAddedCCs($ccs)
-      ->save();
+    try {
+      $editor
+        ->setMessage($comment)
+        ->setContentSource($content_source)
+        ->setAttachInlineComments(true)
+        ->setAddedReviewers($reviewers)
+        ->setAddedCCs($ccs)
+        ->save();
+    } catch (DifferentialActionHasNoEffectException $no_effect) {
+      $has_inlines = id(new DifferentialInlineComment())->loadAllWhere(
+        'authorPHID = %s AND revisionID = %d AND commentID IS NULL',
+        $request->getUser()->getPHID(),
+        $revision->getID());
+
+      $dialog = new AphrontDialogView();
+      $dialog->setUser($request->getUser());
+      $dialog->addCancelButton('/D'.$revision_id);
+
+      $dialog->addHiddenInput('revision_id',  $revision_id);
+      $dialog->addHiddenInput('action',       'none');
+      $dialog->addHiddenInput('reviewers',    $reviewers);
+      $dialog->addHiddenInput('ccs',          $ccs);
+      $dialog->addHiddenInput('comment',      $comment);
+
+      $dialog->setTitle('Action Has No Effect');
+      $dialog->appendChild(
+        '<p>'.phutil_escape_html($no_effect->getMessage()).'</p>');
+
+      if (strlen($comment) || $has_inlines) {
+        $dialog->addSubmitButton('Post as Comment');
+        $dialog->appendChild('<br />');
+        $dialog->appendChild(
+          '<p>Do you want to post your feedback anyway, as a normal '.
+          'comment?</p>');
+      }
+
+      return id(new AphrontDialogResponse())->setDialog($dialog);
+    }
 
     // TODO: Diff change detection?
 

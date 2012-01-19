@@ -1,7 +1,7 @@
 <?php
 
 /*
- * Copyright 2011 Facebook, Inc.
+ * Copyright 2012 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -37,9 +37,10 @@ class DifferentialRevision extends DifferentialDAO {
 
   private $relationships;
   private $commits;
+  private $activeDiff = false;
+  private $diffIDs;
 
   const RELATIONSHIP_TABLE    = 'differential_relationship';
-  const TABLE_VIEW_TIME       = 'differential_viewtime';
   const TABLE_COMMIT          = 'differential_commit';
 
   const RELATION_REVIEWER     = 'revw';
@@ -72,9 +73,44 @@ class DifferentialRevision extends DifferentialDAO {
 
   public function getCommitPHIDs() {
     if ($this->commits === null) {
-      throw new Exception("Must load commits!");
+      throw new Exception("Must attach commits first!");
     }
     return $this->commits;
+  }
+
+  public function getActiveDiff() {
+    // TODO: Because it's currently technically possible to create a revision
+    // without an associated diff, we allow an attached-but-null active diff.
+    // It would be good to get rid of this once we make diff-attaching
+    // transactional.
+
+    if ($this->activeDiff === false) {
+      throw new Exception("Must attach active diff first!");
+    }
+    return $this->activeDiff;
+  }
+
+  public function attachActiveDiff($diff) {
+    $this->activeDiff = $diff;
+    return $this;
+  }
+
+  public function getDiffIDs() {
+    if ($this->diffIDs === null) {
+      throw new Exception("Must attach diff IDs first!");
+    }
+    return $this->diffIDs;
+  }
+
+  public function attachDiffIDs(array $ids) {
+    rsort($ids);
+    $this->diffIDs = array_values($ids);
+    return $this;
+  }
+
+  public function attachCommitPHIDs(array $phids) {
+    $this->commits = array_values($phids);
+    return $this;
   }
 
   public function getAttachedPHIDs($type) {
@@ -169,8 +205,8 @@ class DifferentialRevision extends DifferentialDAO {
   public function loadReviewedBy() {
     $reviewer = null;
 
-    if ($this->status == DifferentialRevisionStatus::ACCEPTED ||
-        $this->status == DifferentialRevisionStatus::COMMITTED) {
+    if ($this->status == ArcanistDifferentialRevisionStatus::ACCEPTED ||
+        $this->status == ArcanistDifferentialRevisionStatus::COMMITTED) {
       $comments = $this->loadComments();
       foreach ($comments as $comment) {
         $action = $comment->getAction();

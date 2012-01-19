@@ -1,7 +1,7 @@
 <?php
 
 /*
- * Copyright 2011 Facebook, Inc.
+ * Copyright 2012 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -30,30 +30,67 @@ class PhabricatorLoginController extends PhabricatorAuthController {
       return id(new AphrontRedirectResponse())->setURI('/');
     }
 
-    $next_uri = $this->getRequest()->getPath();
-    $request->setCookie('next_uri', $next_uri);
-    if ($next_uri == '/login/' && !$request->isFormPost()) {
-      // The user went straight to /login/, so presumably they want to go
-      // to the dashboard upon logging in. Because, you know, that's logical.
-      // And people are logical. Sometimes... Fine, no they're not.
-      // We check for POST here because getPath() would get reset to /login/.
-       $request->setCookie('next_uri', '/');
+    if ($request->isConduit()) {
+
+      // A common source of errors in Conduit client configuration is getting
+      // the request path wrong. The client will end up here, so make some
+      // effort to give them a comprehensible error message.
+
+      $request_path = $this->getRequest()->getPath();
+      $conduit_path = '/api/<method>';
+      $example_path = '/api/conduit.ping';
+
+      $message =
+        "ERROR: You are making a Conduit API request to '{$request_path}', ".
+        "but the correct HTTP request path to use in order to access a ".
+        "Conduit method is '{$conduit_path}' (for example, ".
+        "'{$example_path}'). Check your configuration.";
+
+      return id(new AphrontPlainTextResponse())->setContent($message);
     }
 
-    // Always use $request->getCookie('next_uri', '/') after the above.
+    $next_uri = $this->getRequest()->getPath();
+    if ($next_uri == '/login/') {
+      $next_uri = '/';
+    }
+
+    if (!$request->isFormPost()) {
+      $request->setCookie('next_uri', $next_uri);
+    }
 
     $password_auth = PhabricatorEnv::getEnvConfig('auth.password-auth-enabled');
 
     $forms = array();
 
-    $error_view = null;
+
+    $errors = array();
     if ($password_auth) {
-      $error = false;
+      $require_captcha = false;
+      $e_captcha = true;
       $username_or_email = $request->getCookie('phusr');
       if ($request->isFormPost()) {
+
+        if (AphrontFormRecaptchaControl::isRecaptchaEnabled()) {
+          $failed_attempts = PhabricatorUserLog::loadRecentEventsFromThisIP(
+            PhabricatorUserLog::ACTION_LOGIN_FAILURE,
+            60 * 15);
+          if (count($failed_attempts) > 5) {
+            $require_captcha = true;
+            if (!AphrontFormRecaptchaControl::processCaptcha($request)) {
+              if (AphrontFormRecaptchaControl::hasCaptchaResponse($request)) {
+                $e_captcha = 'Invalid';
+                $errors[] = 'CAPTCHA was not entered correctly.';
+              } else {
+                $e_captcha = 'Required';
+                $errors[] = 'Too many login failures recently. You must '.
+                            'submit a CAPTCHA with your login request.';
+              }
+            }
+          }
+        }
+
         $username_or_email = $request->getStr('username_or_email');
         $user = null;
-        $okay = true;
         $auth_callback = PhabricatorEnv::getEnvConfig('auth.callback');
         if ($auth_callback) {
           $user = call_user_func_array($auth_callback, array($username_or_email, $request->getStr('password')));
@@ -62,44 +99,47 @@ class PhabricatorLoginController extends PhabricatorAuthController {
           $user = id(new PhabricatorUser())->loadOneWhere(
             'username = %s',
             $username_or_email);
-
-          if (!$user) {
-            $user = id(new PhabricatorUser())->loadOneWhere(
-              'email = %s',
-              $username_or_email);
-          }
-          $okay = false;
         }
-        if ($user) {
-          if ($okay || $user->comparePassword($request->getStr('password'))) {
-
-            $session_key = $user->establishSession('web');
-
-            $request->setCookie('phusr', $user->getUsername());
-            $request->setCookie('phsid', $session_key);
-
-            return id(new AphrontRedirectResponse())
-              ->setURI($request->getCookie('next_uri', '/'));
-          } else {
-            $log = PhabricatorUserLog::newLog(
-              null,
-              $user,
-              PhabricatorUserLog::ACTION_LOGIN_FAILURE);
-            $log->save();
+        if (!$errors) {
+          // Perform username/password tests only if we didn't get rate limited
+          // by the CAPTCHA.
+          if (!$user || !$user->comparePassword($request->getStr('password'))) {
+            $errors[] = 'Bad username/password.';
           }
         }
 
-        if (!$okay) {
+        if (!$errors) {
+          $session_key = $user->establishSession('web');
+
+          $request->setCookie('phusr', $user->getUsername());
+          $request->setCookie('phsid', $session_key);
+
+          $uri = new PhutilURI('/login/validate/');
+          $uri->setQueryParams(
+            array(
+              'phusr' => $user->getUsername(),
+            ));
+
+          return id(new AphrontRedirectResponse())
+            ->setURI((string)$uri);
+        } else {
+          $log = PhabricatorUserLog::newLog(
+            null,
+            $user,
+            PhabricatorUserLog::ACTION_LOGIN_FAILURE);
+          $log->save();
+
           $request->clearCookie('phusr');
           $request->clearCookie('phsid');
         }
-
-        $error = true;
       }
 
-      if ($error) {
+      if ($errors) {
         $error_view = new AphrontErrorView();
-        $error_view->setTitle('Bad username/password.');
+        $error_view->setTitle('Login Failed');
+        $error_view->setErrors($errors);
+      } else {
+        $error_view = null;
       }
 
       $form = new AphrontFormView();
@@ -117,7 +157,15 @@ class PhabricatorLoginController extends PhabricatorAuthController {
             ->setName('password')
             ->setCaption(
               '<a href="/login/email/">'.
-                'Forgot your password? / Email Login</a>'))
+                'Forgot your password? / Email Login</a>'));
+
+      if ($require_captcha) {
+        $form->appendChild(
+          id(new AphrontFormRecaptchaControl())
+            ->setError($e_captcha));
+      }
+
+      $form
         ->appendChild(
           id(new AphrontFormSubmitControl())
             ->setValue('Login'));

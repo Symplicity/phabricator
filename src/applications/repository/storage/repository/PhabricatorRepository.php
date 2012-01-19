@@ -1,7 +1,7 @@
 <?php
 
 /*
- * Copyright 2011 Facebook, Inc.
+ * Copyright 2012 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -57,19 +57,54 @@ class PhabricatorRepository extends PhabricatorRepositoryDAO {
     return $this;
   }
 
+  public function getDiffusionBrowseURIForPath($path) {
+    switch ($this->getVersionControlSystem()) {
+      case PhabricatorRepositoryType::REPOSITORY_TYPE_GIT:
+      case PhabricatorRepositoryType::REPOSITORY_TYPE_MERCURIAL:
+        $branch = '/'.$this->getDetail('default-branch');
+        break;
+      case PhabricatorRepositoryType::REPOSITORY_TYPE_SVN:
+        $branch = null;
+        break;
+      default:
+        throw new Exception("Unknown VCS.");
+    }
+
+    return '/diffusion/'.$this->getCallsign().'/browse'.$branch.$path;
+  }
+
+  public static function newPhutilURIFromGitURI($raw_uri) {
+    $uri = new PhutilURI($raw_uri);
+    if (!$uri->getProtocol()) {
+      if (strpos($raw_uri, '/') === 0) {
+        // If the URI starts with a '/', it's an implicit file:// URI on the
+        // local disk.
+        $uri = new PhutilURI('file://'.$raw_uri);
+      } else if (strpos($raw_uri, ':') !== false) {
+        // If there's no protocol (git implicit SSH) but the URI has a colon,
+        // it's a git implicit SSH URI. Reformat the URI to be a normal URI.
+        // These git URIs look like "user@domain.com:path" instead of
+        // "ssh://user@domain/path".
+        list($domain, $path) = explode(':', $raw_uri, 2);
+        $uri = new PhutilURI('ssh://'.$domain.'/'.$path);
+      } else {
+        throw new Exception("The Git URI '{$raw_uri}' could not be parsed.");
+      }
+    }
+
+    return $uri;
+  }
+
   public function getRemoteURI() {
     $raw_uri = $this->getDetail('remote-uri');
 
     $vcs = $this->getVersionControlSystem();
     $is_git = ($vcs == PhabricatorRepositoryType::REPOSITORY_TYPE_GIT);
 
-    // If there's no protocol (git implicit SSH) reformat the URI to be a
-    // normal URI. These git URIs look like "user@domain.com:path" instead of
-    // "ssh://user@domain/path".
-    $uri = new PhutilURI($raw_uri);
-    if ($is_git && !$uri->getProtocol()) {
-      list($domain, $path) = explode(':', $raw_uri, 2);
-      $uri = new PhutilURI('ssh://'.$domain.'/'.$path);
+    if ($is_git) {
+      $uri = self::newPhutilURIFromGitURI($raw_uri);
+    } else {
+      $uri = new PhutilURI($raw_uri);
     }
 
     if ($this->isSSHProtocol($uri->getProtocol())) {
@@ -295,6 +330,24 @@ class PhabricatorRepository extends PhabricatorRepositoryDAO {
 
   public function isTracked() {
     return $this->getDetail('tracking-enabled', false);
+  }
+
+  public function shouldTrackBranch($branch) {
+    $vcs = $this->getVersionControlSystem();
+
+    $is_git = ($vcs == PhabricatorRepositoryType::REPOSITORY_TYPE_GIT);
+
+    $use_filter = ($is_git);
+
+    if ($use_filter) {
+      $filter = $this->getDetail('branch-filter', array());
+      if ($filter && !isset($filter[$branch])) {
+        return false;
+      }
+    }
+
+    // By default, track all branches.
+    return true;
   }
 
 }

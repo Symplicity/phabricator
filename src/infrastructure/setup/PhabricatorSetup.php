@@ -1,7 +1,7 @@
 <?php
 
 /*
- * Copyright 2011 Facebook, Inc.
+ * Copyright 2012 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -122,6 +122,26 @@ class PhabricatorSetup {
         "consequences of leaving it unconfigured.\n");
     }
 
+    $path = getenv('PATH');
+    if (empty($path)) {
+      self::writeFailure();
+      self::write(
+        "Setup failure! The environmental \$PATH variable is empty. ".
+        "Phabricator needs to execute system commands like 'svn', 'git', ".
+        "'hg', and 'diff'. Set up your webserver so that it passes a valid ".
+        "\$PATH to the PHP process.\n\n");
+      if (php_sapi_name() == 'fpm-fcgi') {
+        self::write(
+          "You're running php-fpm, so the easiest way to do this is to add ".
+          "this line to your php-fpm.conf:\n\n".
+          "  env[PATH] = /usr/local/bin:/usr/bin:/bin\n\n".
+          "Then restart php-fpm.\n");
+      }
+      return;
+    } else {
+      self::write(" okay  \$PATH is nonempty.\n");
+    }
+
     self::write("[OKAY] Core configuration OKAY.\n");
 
     self::writeHeader("REQUIRED PHP EXTENSIONS");
@@ -130,6 +150,8 @@ class PhabricatorSetup {
       'hash',
       'json',
       'openssl',
+      'mbstring',
+      'iconv',
 
       // There is a chance we might not need this, but some configurations (like
       // Amazon SES) will require it. Just mark it 'required' since it's widely
@@ -145,19 +167,63 @@ class PhabricatorSetup {
       }
     }
 
-    list($err, $stdout, $stderr) = exec_manual(
-      '/usr/bin/env php -r %s',
-      'exit;');
+    list($err, $stdout, $stderr) = exec_manual('which php');
     if ($err) {
       self::writeFailure();
-      self::write("Unable to execute 'php' on the command line from the web ".
+      self::write("Unable to locate 'php' on the command line from the web ".
                   "server. Verify that 'php' is in the webserver's PATH.\n".
                   "   err: {$err}\n".
                   "stdout: {$stdout}\n".
                   "stderr: {$stderr}\n");
       return;
     } else {
+      self::write(" okay  PHP binary found on the command line.\n");
+      $php_bin = trim($stdout);
+    }
+
+    // NOTE: In cPanel + suphp installs, 'php' may be the PHP CGI SAPI, not the
+    // PHP CLI SAPI. proc_open() will pass the environment to the child process,
+    // which will re-execute the webpage (causing an infinite number of
+    // processes to spawn). To test that the 'php' binary is safe to execute,
+    // we call php_sapi_name() using "env -i" to wipe the environment so it
+    // doesn't execute another reuqest if it's the wrong binary. We can't use
+    // "-r" because php-cgi doesn't support that flag.
+
+    $tmp_file = new TempFile('sapi.php');
+    Filesystem::writeFile($tmp_file, '<?php echo php_sapi_name();');
+
+    list($err, $stdout, $stderr) = exec_manual(
+      '/usr/bin/env -i %s -f %s',
+      $php_bin,
+      $tmp_file);
+    if ($err) {
+      self::writeFailure();
+      self::write("Unable to execute 'php' on the command line from the web ".
+                  "server.\n".
+                  "   err: {$err}\n".
+                  "stdout: {$stdout}\n".
+                  "stderr: {$stderr}\n");
+      return;
+    } else {
       self::write(" okay  PHP is available from the command line.\n");
+
+      $sapi = trim($stdout);
+      if ($sapi != 'cli') {
+        self::writeFailure();
+        self::write(
+          "The 'php' binary on this system uses the '{$sapi}' SAPI, but the ".
+          "'cli' SAPI is expected. Replace 'php' with the php-cli SAPI ".
+          "binary, or edit your webserver configuration so the first 'php' ".
+          "in PATH is the 'cli' SAPI.\n\n".
+          "If you're running cPanel with suphp, the easiest way to fix this ".
+          "is to add '/usr/local/bin' before '/usr/bin' for 'env_path' in ".
+          "suconf.php:\n\n".
+          '  env_path="/bin:/usr/local/bin:/usr/bin"'.
+          "\n\n");
+        return;
+      } else {
+        self::write(" okay  'php' is CLI SAPI.\n");
+      }
     }
 
     $root = dirname(phutil_get_library_root('phabricator'));
@@ -248,7 +314,8 @@ class PhabricatorSetup {
       return;
     } else {
       $host = PhabricatorEnv::getEnvConfig('phabricator.base-uri');
-      $protocol = id(new PhutilURI($host))->getProtocol();
+      $host_uri = new PhutilURI($host);
+      $protocol = $host_uri->getProtocol();
       $allowed_protocols = array(
         'http'  => true,
         'https' => true,
@@ -262,7 +329,7 @@ class PhabricatorSetup {
         return;
       }
       if (preg_match('/.*\/$/', $host)) {
-        self::write(" okay  phabricator.base-uri\n");
+        self::write(" okay  phabricator.base-uri protocol\n");
       } else {
         self::writeFailure();
         self::write(
@@ -271,6 +338,22 @@ class PhabricatorSetup {
           "http://phabricator.example.com\")\nin your custom config file.".
           "\nRefer to 'default.conf.php' for documentation on configuration ".
           "options.\n");
+        return;
+      }
+
+      $host_domain = $host_uri->getDomain();
+      if (strpos($host_domain, '.') !== false) {
+        self::write(" okay  phabricator.base-uri domain\n");
+      } else {
+        self::writeFailure();
+        self::write(
+          "You must host Phabricator on a domain that contains a dot ('.'). ".
+          "The current domain, '{$host_domain}', does not have a dot, so some ".
+          "browsers will not set cookies on it. For instance, ".
+          "'http://example.com/ is OK, but 'http://example/' won't work. ".
+          "If you are using localhost, create an entry in the hosts file like ".
+          "'127.0.0.1 example.com', and access the localhost with ".
+          "'http://example.com/'.");
         return;
       }
     }

@@ -101,6 +101,10 @@ function xsprintf_query($userdata, &$pattern, &$pos, &$value, &$length) {
 
   $prefix   = '';
 
+  if (!($conn instanceof AphrontDatabaseConnection)) {
+    throw new Exception("Invalid database connection!");
+  }
+
   switch ($type) {
     case '=': // Nullable test
       switch ($next) {
@@ -278,10 +282,10 @@ function _qsprintf_check_scalar_type($value, $type, $query) {
       break;
 
     case 'Ld': case 'd': case 'f':
-      if (!is_null($value) && !is_scalar($value)) {
+      if (!is_null($value) && !is_numeric($value)) {
         throw new AphrontQueryParameterException(
           $query,
-          "Expected a scalar or null for %{$type} conversion.");
+          "Expected a numeric scalar or null for %{$type} conversion.");
       }
       break;
 

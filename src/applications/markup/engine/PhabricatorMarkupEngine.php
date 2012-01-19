@@ -1,7 +1,7 @@
 <?php
 
 /*
- * Copyright 2011 Facebook, Inc.
+ * Copyright 2012 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -45,6 +45,7 @@ class PhabricatorMarkupEngine {
       // cache documents, and the module is prohibitively expensive for large
       // documents.
       'macros' => false,
+      'header.generate-toc' => true,
     ));
   }
 
@@ -77,6 +78,7 @@ class PhabricatorMarkupEngine {
       'custom-inline' => array(),
       'custom-block'  => array(),
       'differential.diff' => null,
+      'header.generate-toc' => false,
       'macros'        => true,
       'uri.allowed-protocols' => PhabricatorEnv::getEnvConfig(
         'uri.allowed-protocols'),
@@ -95,6 +97,7 @@ class PhabricatorMarkupEngine {
       'uri.allowed-protocols',
       $options['uri.allowed-protocols']);
     $engine->setConfig('differential.diff', $options['differential.diff']);
+    $engine->setConfig('header.generate-toc', $options['header.generate-toc']);
 
     $rules = array();
     $rules[] = new PhutilRemarkupRuleEscapeRemarkup();
@@ -141,9 +144,11 @@ class PhabricatorMarkupEngine {
 
     $blocks = array();
     $blocks[] = new PhutilRemarkupEngineRemarkupQuotesBlockRule();
+    $blocks[] = new PhutilRemarkupEngineRemarkupLiteralBlockRule();
     $blocks[] = new PhutilRemarkupEngineRemarkupHeaderBlockRule();
     $blocks[] = new PhutilRemarkupEngineRemarkupListBlockRule();
     $blocks[] = new PhutilRemarkupEngineRemarkupCodeBlockRule();
+    $blocks[] = new PhutilRemarkupEngineRemarkupNoteBlockRule();
     $blocks[] = new PhutilRemarkupEngineRemarkupDefaultBlockRule();
 
     $custom_block_rule_classes = $options['custom-block'];
@@ -155,7 +160,14 @@ class PhabricatorMarkupEngine {
     }
 
     foreach ($blocks as $block) {
-      if (!($block instanceof PhutilRemarkupEngineRemarkupCodeBlockRule)) {
+      if ($block instanceof PhutilRemarkupEngineRemarkupLiteralBlockRule) {
+        $literal_rules = array();
+        $literal_rules[] = new PhutilRemarkupRuleHyperlink();
+        $literal_rules[] = new PhutilRemarkupRuleEscapeHTML();
+        $literal_rules[] = new PhutilRemarkupRuleLinebreaks();
+        $block->setMarkupRules($literal_rules);
+      } else if (
+          !($block instanceof PhutilRemarkupEngineRemarkupCodeBlockRule)) {
         $block->setMarkupRules($rules);
       }
     }

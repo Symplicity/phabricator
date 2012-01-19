@@ -1,7 +1,7 @@
 <?php
 
 /*
- * Copyright 2011 Facebook, Inc.
+ * Copyright 2012 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -56,7 +56,17 @@ class PhabricatorProjectProfileEditController
     $errors = array();
     $state = null;
     if ($request->isFormPost()) {
-      $project->setName($request->getStr('name'));
+
+      try {
+        $editor = new PhabricatorProjectEditor($project);
+        $editor->setUser($user);
+        $editor->setName($request->getStr('name'));
+        $editor->save();
+      } catch (PhabricatorProjectNameCollisionException $ex) {
+        $e_name = 'Not Unique';
+        $errors[] = $ex->getMessage();
+      }
+
       $project->setStatus($request->getStr('status'));
       $project->setSubprojectPHIDs($request->getArr('set_subprojects'));
       $profile->setBlurb($request->getStr('blurb'));
@@ -79,11 +89,10 @@ class PhabricatorProjectProfileEditController
           $okay = $file->isTransformableImage();
           if ($okay) {
             $xformer = new PhabricatorImageTransformer();
-            $xformed = $xformer->executeProfileTransform(
+            $xformed = $xformer->executeThumbTransform(
               $file,
-              $width = 280,
-              $min_height = 140,
-              $max_height = 420);
+              $x = 50,
+              $y = 50);
             $profile->setProfileImagePHID($xformed->getPHID());
           } else {
             $errors[] =
@@ -113,7 +122,6 @@ class PhabricatorProjectProfileEditController
         }
         $state[$user_phid] = array(
           'phid'    => $user_phid,
-          'status'  => $resource['status'],
           'role'    => $resource['role'],
           'owner'   => $resource['owner'],
         );
@@ -141,7 +149,6 @@ class PhabricatorProjectProfileEditController
         }
 
         $affil->setRole((string)$new['role']);
-        $affil->setStatus((string)$new['status']);
         $affil->setIsOwner((int)$new['owner']);
 
         $save_affiliations[] = $affil;
@@ -180,7 +187,6 @@ class PhabricatorProjectProfileEditController
         $state[] = array(
           'phid'    => $user_phid,
           'name'    => $handles[$user_phid]->getFullName(),
-          'status'  => $affil->getStatus(),
           'role'    => $affil->getRole(),
           'owner'   => $affil->getIsOwner(),
         );

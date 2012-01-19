@@ -96,8 +96,8 @@
   overflow: hidden;
 }
 
-.differential-comment-content .phabricator-remarkup code,
-.differential-comment-core .phabricator-remarkup code {
+.differential-comment-content .phabricator-remarkup .remarkup-code-block,
+.differential-comment-core .phabricator-remarkup .remarkup-code-block {
    width: 88ex;
    width: 81ch;
 }
@@ -189,6 +189,11 @@
   padding-left:   15px;
   padding-right:  5px;
   width: 70px; /* Need lots of width for 23,950-23,951 */
+}
+
+.differential-inline-summary td.inline-which-diff {
+  padding: 0 8px 0 0;
+  color: #666666;
 }
 
 .differential-inline-summary td.inline-line-number a:hover {

@@ -6,10 +6,10 @@
 
 
 
+phutil_require_module('arcanist', 'differential/constants/revisionstatus');
+
 phutil_require_module('phabricator', 'aphront/response/404');
-phutil_require_module('phabricator', 'aphront/writeguard');
 phutil_require_module('phabricator', 'applications/differential/constants/action');
-phutil_require_module('phabricator', 'applications/differential/constants/revisionstatus');
 phutil_require_module('phabricator', 'applications/differential/controller/base');
 phutil_require_module('phabricator', 'applications/differential/field/selector/base');
 phutil_require_module('phabricator', 'applications/differential/parser/changeset');
@@ -19,7 +19,6 @@ phutil_require_module('phabricator', 'applications/differential/storage/comment'
 phutil_require_module('phabricator', 'applications/differential/storage/diffproperty');
 phutil_require_module('phabricator', 'applications/differential/storage/inlinecomment');
 phutil_require_module('phabricator', 'applications/differential/storage/revision');
-phutil_require_module('phabricator', 'applications/differential/storage/viewtime');
 phutil_require_module('phabricator', 'applications/differential/view/addcomment');
 phutil_require_module('phabricator', 'applications/differential/view/changesetlistview');
 phutil_require_module('phabricator', 'applications/differential/view/difftableofcontents');

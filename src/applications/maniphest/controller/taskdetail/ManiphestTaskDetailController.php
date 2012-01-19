@@ -47,9 +47,6 @@ class ManiphestTaskDetailController extends ManiphestController {
       $parent_task = id(new ManiphestTask())->load($workflow);
     }
 
-    $extensions = ManiphestTaskExtensions::newExtensions();
-    $aux_fields = $extensions->getAuxiliaryFieldSpecifications();
-
     $transactions = id(new ManiphestTransaction())->loadAllWhere(
       'taskID = %d ORDER BY id ASC',
       $task->getID());
@@ -137,17 +134,17 @@ class ManiphestTaskDetailController extends ManiphestController {
       $dict['Projects'] = '<em>None</em>';
     }
 
+    $extensions = ManiphestTaskExtensions::newExtensions();
+    $aux_fields = $extensions->getAuxiliaryFieldSpecifications();
     if ($aux_fields) {
+      $task->loadAndAttachAuxiliaryAttributes();
       foreach ($aux_fields as $aux_field) {
-        $attribute = $task->loadAuxiliaryAttribute(
-          $aux_field->getAuxiliaryKey()
-        );
-
-        if ($attribute) {
-          $aux_field->setValue($attribute->getValue());
+        $aux_key = $aux_field->getAuxiliaryKey();
+        $aux_field->setValue($task->getAuxiliaryAttribute($aux_key));
+        $value = $aux_field->renderForDetailView();
+        if (strlen($value)) {
+          $dict[$aux_field->getLabel()] = $value;
         }
-
-        $dict[$aux_field->getLabel()] = $aux_field->renderForDetailView();
       }
     }
 
@@ -342,6 +339,9 @@ class ManiphestTaskDetailController extends ManiphestController {
       unset($resolution_types[ManiphestTaskStatus::STATUS_CLOSED_SPITE]);
     }
 
+    $remarkup_href = PhabricatorEnv::getDoclink(
+      'article/Remarkup_Reference.html');
+
     $comment_form = new AphrontFormView();
     $comment_form
       ->setUser($user)
@@ -404,6 +404,15 @@ class ManiphestTaskDetailController extends ManiphestController {
           ->setLabel('Comments')
           ->setName('comments')
           ->setValue($draft_text)
+          ->setCaption(
+            phutil_render_tag(
+              'a',
+              array(
+                'href' => $remarkup_href,
+                'tabindex' => '-1',
+                'target' => '_blank',
+              ),
+              'Formatting Reference'))
           ->setID('transaction-comments'))
       ->appendChild(
         id(new AphrontFormDragAndDropUploadControl())

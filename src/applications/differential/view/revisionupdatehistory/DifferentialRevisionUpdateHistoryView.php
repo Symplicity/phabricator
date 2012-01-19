@@ -1,7 +1,7 @@
 <?php
 
 /*
- * Copyright 2011 Facebook, Inc.
+ * Copyright 2012 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@ final class DifferentialRevisionUpdateHistoryView extends AphrontView {
   private $selectedVersusDiffID;
   private $selectedDiffID;
   private $selectedWhitespace;
+  private $user;
 
   public function setDiffs($diffs) {
     $this->diffs = $diffs;
@@ -41,6 +42,15 @@ final class DifferentialRevisionUpdateHistoryView extends AphrontView {
   public function setSelectedWhitespace($whitespace) {
     $this->selectedWhitespace = $whitespace;
     return $this;
+  }
+
+  public function setUser($user) {
+    $this->user = $user;
+    return $this;
+  }
+
+  public function getUser() {
+    return $this->user;
   }
 
   public function render() {
@@ -127,7 +137,7 @@ final class DifferentialRevisionUpdateHistoryView extends AphrontView {
       $desc = $row['desc'];
 
       if ($row['age']) {
-        $age = phabricator_format_timestamp($row['age']);
+        $age = phabricator_datetime($row['age'], $this->getUser());
       } else {
         $age = null;
       }
@@ -298,11 +308,19 @@ final class DifferentialRevisionUpdateHistoryView extends AphrontView {
   private function renderBaseRevision(DifferentialDiff $diff) {
     switch ($diff->getSourceControlSystem()) {
       case 'git':
-        return substr($diff->getSourceControlBaseRevision(), 0, 7);
+        $base = $diff->getSourceControlBaseRevision();
+        if (strpos($base, '@') === false) {
+          return substr($base, 0, 7);
+        } else {
+          // The diff is from git-svn
+          $base = explode('@', $base);
+          $base = last($base);
+          return $base;
+        }
       case 'svn':
         $base = $diff->getSourceControlBaseRevision();
         $base = explode('@', $base);
-        $base = end($base);
+        $base = last($base);
         return $base;
       default:
         return null;

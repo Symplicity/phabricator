@@ -1,7 +1,7 @@
 <?php
 
 /*
- * Copyright 2011 Facebook, Inc.
+ * Copyright 2012 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -29,7 +29,6 @@ class DifferentialRevisionListData {
   const QUERY_PHIDS                    = 'phids';
   const QUERY_CC                       = 'cc';
   const QUERY_ALL_OPEN                 = 'all-open';
-  const QUERY_UPDATED_SINCE            = 'updated-since';
 
   private $ids;
   private $filter;
@@ -69,7 +68,7 @@ class DifferentialRevisionListData {
         $this->revisions = $this->loadAllWhere(
           'revision.status in (%Ld) AND revision.authorPHID in (%Ls)',
           array(
-            DifferentialRevisionStatus::ACCEPTED,
+            ArcanistDifferentialRevisionStatus::ACCEPTED,
           ),
           $this->ids);
         break;
@@ -138,15 +137,15 @@ class DifferentialRevisionListData {
           $rev->getTableName(),
           $this->ids,
           array(
-            DifferentialRevisionStatus::NEEDS_REVISION,
-            DifferentialRevisionStatus::ACCEPTED,
+            ArcanistDifferentialRevisionStatus::NEEDS_REVISION,
+            ArcanistDifferentialRevisionStatus::ACCEPTED,
           ),
           $rev->getTableName(),
           DifferentialRevision::RELATIONSHIP_TABLE,
           DifferentialRevision::RELATION_REVIEWER,
           $this->ids,
           array(
-            DifferentialRevisionStatus::NEEDS_REVIEW,
+            ArcanistDifferentialRevisionStatus::NEEDS_REVIEW,
           ),
           $this->getOrderClause());
 
@@ -173,15 +172,15 @@ class DifferentialRevisionListData {
           $rev->getTableName(),
           $this->ids,
           array(
-            DifferentialRevisionStatus::NEEDS_REVIEW,
+            ArcanistDifferentialRevisionStatus::NEEDS_REVIEW,
           ),
           $rev->getTableName(),
           DifferentialRevision::RELATIONSHIP_TABLE,
           DifferentialRevision::RELATION_REVIEWER,
           $this->ids,
           array(
-            DifferentialRevisionStatus::NEEDS_REVISION,
-            DifferentialRevisionStatus::ACCEPTED,
+            ArcanistDifferentialRevisionStatus::NEEDS_REVISION,
+            ArcanistDifferentialRevisionStatus::ACCEPTED,
           ),
           $this->getOrderClause());
 
@@ -194,9 +193,6 @@ class DifferentialRevisionListData {
           'revision.phid in (%Ls)',
           $this->ids);
         break;
-      case self::QUERY_UPDATED_SINCE:
-        $this->revisions = $this->loadAllUpdated();
-        break;
     }
 
     return $this->revisions;
@@ -204,49 +200,11 @@ class DifferentialRevisionListData {
 
   private function getOpenStatuses() {
     return array(
-      DifferentialRevisionStatus::NEEDS_REVIEW,
-      DifferentialRevisionStatus::NEEDS_REVISION,
-      DifferentialRevisionStatus::ACCEPTED,
+      ArcanistDifferentialRevisionStatus::NEEDS_REVIEW,
+      ArcanistDifferentialRevisionStatus::NEEDS_REVISION,
+      ArcanistDifferentialRevisionStatus::ACCEPTED,
     );
   }
-
-  private function loadAllUpdated() {
-    $revision = new DifferentialRevision();
-    $min_view_time = (int)PhabricatorEnv::getEnvConfig('updates.min-view-time');
-
-    $data = queryfx_all(
-      $revision->establishConnection('r'),
-      'SELECT revs.* FROM (
-        (
-          SELECT revision.*
-          FROM %T revision
-          WHERE revision.authorPHID in (%Ls)
-        )
-        UNION
-        (
-           SELECT revision.*
-           FROM %T revision
-           JOIN %T rel
-           WHERE rel.revisionId = revision.Id AND rel.objectPHID in (%Ls)
-        )
-      ) as revs
-      LEFT JOIN %T viewtime ON
-        viewtime.viewerPHID in (%Ls)
-        AND viewtime.objectPHID = revs.phid
-      WHERE GREATEST(%d, IFNULL(viewtime.viewTime, 0)) < revs.dateModified
-      %Q',
-      $revision->getTableName(),
-      $this->ids,
-      $revision->getTableName(),
-      DifferentialRevision::RELATIONSHIP_TABLE,
-      $this->ids,
-      DifferentialRevision::TABLE_VIEW_TIME,
-      $this->ids,
-      $min_view_time,
-      $this->getOrderClause());
-    return $revision->loadAllFromArray($data);
-  }
-
 
   private function loadAllOpen() {
     return $this->loadAllWhere('status in (%Ld)', $this->getOpenStatuses());

@@ -1,7 +1,7 @@
 <?php
 
 /*
- * Copyright 2011 Facebook, Inc.
+ * Copyright 2012 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,6 +26,7 @@ class PhrictionDocument extends PhrictionDAO {
   protected $slug;
   protected $depth;
   protected $contentID;
+  protected $status;
 
   private $contentObject;
 
@@ -132,6 +133,26 @@ class PhrictionDocument extends PhrictionDAO {
       throw new Exception("Attach content with attachContent() first.");
     }
     return $this->contentObject;
+  }
+
+  public static function isProjectSlug($slug) {
+    $slug = self::normalizeSlug($slug);
+    $prefix = 'projects/';
+    if ($slug == $prefix) {
+      // The 'projects/' document is not itself a project slug.
+      return false;
+    }
+    return !strncmp($slug, $prefix, strlen($prefix));
+  }
+
+  public static function getProjectSlugIdentifier($slug) {
+    if (!self::isProjectSlug($slug)) {
+      throw new Exception("Slug '{$slug}' is not a project slug!");
+    }
+
+    $slug = self::normalizeSlug($slug);
+    $parts = explode('/', $slug);
+    return $parts[1].'/';
   }
 
 }

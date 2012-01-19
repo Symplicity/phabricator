@@ -1,7 +1,7 @@
 <?php
 
 /*
- * Copyright 2011 Facebook, Inc.
+ * Copyright 2012 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -24,7 +24,6 @@ class DifferentialChangesetParser {
   protected $intra        = array();
   protected $newRender    = null;
   protected $oldRender    = null;
-  protected $parsedHunk   = false;
 
   protected $filename     = null;
   protected $missingOld   = array();
@@ -179,7 +178,6 @@ class DifferentialChangesetParser {
   }
 
   public function parseHunk(DifferentialHunk $hunk) {
-    $this->parsedHunk = true;
     $lines = $hunk->getChanges();
 
     $lines = str_replace(
@@ -242,24 +240,6 @@ class DifferentialChangesetParser {
     }
   }
 
-  public function getDisplayLine($offset, $length) {
-    $start = 1;
-    for ($ii = $offset; $ii > 0; $ii--) {
-      if ($this->new[$ii] && $this->new[$ii]['line']) {
-        $start = $this->new[$ii]['line'];
-        break;
-      }
-    }
-    $end = $start;
-    for ($ii = $offset + $length; $ii < count($this->new); $ii++) {
-      if ($this->new[$ii] && $this->new[$ii]['line']) {
-        $end = $this->new[$ii]['line'];
-        break;
-      }
-    }
-    return "{$start},{$end}";
-  }
-
   public function parseInlineComment(DifferentialInlineComment $comment) {
     // Parse only comments which are actually visible.
     if ($this->isCommentVisibleOnRenderedDiff($comment)) {
@@ -285,20 +265,6 @@ class DifferentialChangesetParser {
     while (count($this->old) || count($this->new)) {
       $o_desc = array_pop($this->old);
       $n_desc = array_pop($this->new);
-
-      $oend = end($this->old);
-      if ($oend) {
-        $o_next = $oend['type'];
-      } else {
-        $o_next = null;
-      }
-
-      $nend = end($this->new);
-      if ($nend) {
-        $n_next = $nend['type'];
-      } else {
-        $n_next = null;
-      }
 
       if ($o_desc) {
         $o_type = $o_desc['type'];
@@ -540,7 +506,29 @@ class DifferentialChangesetParser {
       ipull($this->intra, 1),
       $new_corpus);
 
-    $generated = (strpos($new_corpus_block, '@'.'generated') !== false);
+    $generated_guess = (strpos($new_corpus_block, '@'.'generated') !== false);
+
+    if (!$generated_guess) {
+      $config_key = 'differential.generated-paths';
+      $generated_path_regexps = PhabricatorEnv::getEnvConfig($config_key);
+      foreach ($generated_path_regexps as $regexp) {
+        if (preg_match($regexp, $this->changeset->getFilename())) {
+          $generated_guess = true;
+          break;
+        }
+      }
+    }
+
+    $event = new PhabricatorEvent(
+      PhabricatorEventType::TYPE_DIFFERENTIAL_WILLMARKGENERATED,
+      array(
+        'corpus' => $new_corpus_block,
+        'is_generated' => $generated_guess
+      )
+    );
+    PhutilEventEngine::dispatchEvent($event);
+
+    $generated = $event->getValue('is_generated');
 
     $this->specialAttributes[self::ATTR_GENERATED] = $generated;
   }
@@ -668,6 +656,9 @@ class DifferentialChangesetParser {
   }
 
   protected function applyIntraline(&$render, $intra, $corpus) {
+
+    $line_break = "<span class=\"over-the-line\">\xE2\xAC\x85</span><br />";
+
     foreach ($render as $key => $text) {
       if (isset($intra[$key])) {
         $render[$key] = ArcanistDiffUtils::applyIntralineDiff(
@@ -675,59 +666,10 @@ class DifferentialChangesetParser {
           $intra[$key]);
       }
       if (isset($corpus[$key]) && strlen($corpus[$key]) > $this->lineWidth) {
-        $render[$key] = $this->lineWrap($render[$key]);
+        $lines = phutil_utf8_hard_wrap_html($render[$key], $this->lineWidth);
+        $render[$key] = implode($line_break, $lines);
       }
     }
-  }
-
-  /**
-   * Hard-wrap a piece of UTF-8 text with embedded HTML tags and entities.
-   *
-   * @param   string An HTML string with tags and entities.
-   * @return  string Hard-wrapped string.
-   */
-  protected function lineWrap($line) {
-    $c = 0;
-    $break_here = array();
-
-    // Convert the UTF-8 string into a list of UTF-8 characters.
-    $vector = phutil_utf8v($line);
-    $len = count($vector);
-    $byte_pos = 0;
-    for ($ii = 0; $ii < $len; ++$ii) {
-      // An ampersand indicates an HTML entity; consume the whole thing (until
-      // ";") but treat it all as one character.
-      if ($vector[$ii] == '&') {
-        do {
-          ++$ii;
-        } while ($vector[$ii] != ';');
-        ++$c;
-      // An "<" indicates an HTML tag, consume the whole thing but don't treat
-      // it as a character.
-      } else if ($vector[$ii] == '<') {
-        do {
-          ++$ii;
-        } while ($vector[$ii] != '>');
-      } else {
-        ++$c;
-      }
-
-      // Keep track of where we need to break the string later.
-      if ($c == $this->lineWidth) {
-        $break_here[$ii] = true;
-        $c = 0;
-      }
-    }
-
-    $result = array();
-    foreach ($vector as $ii => $char) {
-      $result[] = $char;
-      if (isset($break_here[$ii])) {
-        $result[] = "<span class=\"over-the-line\">\xE2\xAC\x85</span><br />";
-      }
-    }
-
-    return implode('', $result);
   }
 
   protected function getHighlightFuture($corpus) {
@@ -856,7 +798,6 @@ class DifferentialChangesetParser {
     $range_len    = null,
     $mask_force   = array()) {
 
-
     // "Top level" renders are initial requests for the whole file, versus
     // requests for a specific range generated by clicking "show more". We
     // generate property changes and "shield" UI elements only for toplevel
@@ -904,21 +845,37 @@ class DifferentialChangesetParser {
         }
 
         if ($old_phid || $new_phid) {
+
+          // grab the files, (micro) optimization for 1 query not 2
+          $file_phids = array();
           if ($old_phid) {
-            $old_uri = PhabricatorFileURI::getViewURIForPHID($old_phid);
-            $old = phutil_render_tag(
-              'img',
-              array(
-                'src' => $old_uri,
-              ));
+            $file_phids[] = $old_phid;
           }
           if ($new_phid) {
-            $new_uri = PhabricatorFileURI::getViewURIForPHID($new_phid);
-            $cur = phutil_render_tag(
-              'img',
-              array(
-                'src' => $new_uri,
-              ));
+            $file_phids[] = $new_phid;
+          }
+
+          $files = id(new PhabricatorFile())->loadAllWhere(
+            'phid IN (%Ls)',
+            $file_phids);
+
+          foreach ($files as $file) {
+            if (empty($file)) {
+              continue;
+            }
+            if ($file->getPHID() == $old_phid) {
+              $old = phutil_render_tag(
+                'img',
+                array(
+                  'src' => $file->getBestURI(),
+                ));
+            } else {
+              $cur = phutil_render_tag(
+                'img',
+                array(
+                  'src' => $file->getBestURI(),
+                ));
+            }
           }
         }
 
@@ -1302,8 +1259,9 @@ class DifferentialChangesetParser {
             'mustcapture' => true,
             'sigil'       => 'show-more',
             'meta'        => array(
+              'type'   => 'all',
               'ref'    => $reference,
-              'range' => "{$top}-{$len}/{$top}-{$len}",
+              'range'  => "{$top}-{$len}/{$top}-{$len}",
             ),
           ),
           'Show All '.$len.' Lines');
@@ -1591,7 +1549,9 @@ class DifferentialChangesetParser {
         case DifferentialChangeType::TYPE_COPY_HERE:
           $message =
             "This {$files[$file]} was {$verb} ".
-            "<strong>{$changeset->getOldFile()}</strong>.";
+            "<strong>".
+              phutil_escape_html($changeset->getOldFile()).
+            "</strong>.";
           break;
         case DifferentialChangeType::TYPE_MOVE_AWAY:
         case DifferentialChangeType::TYPE_COPY_AWAY:
@@ -1600,11 +1560,11 @@ class DifferentialChangesetParser {
           if (count($paths) > 1) {
             $message =
               "This {$files[$file]} was {$verb}: ".
-              "<strong>".implode(', ', $paths)."</strong>.";
+              "<strong>".phutil_escape_html(implode(', ', $paths))."</strong>.";
           } else {
             $message =
               "This {$files[$file]} was {$verb} ".
-              "<strong>".reset($paths)."</strong>.";
+              "<strong>".phutil_escape_html(reset($paths))."</strong>.";
           }
           break;
         case DifferentialChangeType::TYPE_CHANGE:

@@ -1,7 +1,7 @@
 <?php
 
 /*
- * Copyright 2011 Facebook, Inc.
+ * Copyright 2012 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -159,6 +159,9 @@ class DifferentialDiff extends DifferentialDAO {
       'revisionID' => $this->getRevisionID(),
       'sourceControlBaseRevision' => $this->getSourceControlBaseRevision(),
       'sourceControlPath' => $this->getSourceControlPath(),
+      'sourceControlSystem' => $this->getSourceControlSystem(),
+      'sourcePath' => $this->getSourcePath(),
+      'branch' => $this->getBranch(),
       'unitStatus' => $this->getUnitStatus(),
       'lintStatus' => $this->getLintStatus(),
       'changes' => array(),
@@ -183,13 +186,15 @@ class DifferentialDiff extends DifferentialDAO {
       $change = array(
         'metadata'      => $changeset->getMetadata(),
         'oldPath'       => $changeset->getOldFile(),
-        'currentPath'   => $changeset->getFileName(),
+        'currentPath'   => $changeset->getFilename(),
         'awayPaths'     => $changeset->getAwayPaths(),
         'oldProperties' => $changeset->getOldProperties(),
         'newProperties' => $changeset->getNewProperties(),
         'type'          => $changeset->getChangeType(),
         'fileType'      => $changeset->getFileType(),
         'commitHash'    => null,
+        'addLines'      => $changeset->getAddLines(),
+        'delLines'      => $changeset->getDelLines(),
         'hunks'         => $hunks,
       );
       $dict['changes'][] = $change;

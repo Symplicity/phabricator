@@ -1,7 +1,7 @@
 <?php
 
 /*
- * Copyright 2011 Facebook, Inc.
+ * Copyright 2012 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -146,9 +146,32 @@ final class CelerityStaticResourceResponse {
 
     $onload = array();
     if ($this->behaviors) {
-      $behavior = json_encode($this->behaviors);
-      $onload[] = 'JX.initBehaviors('.$behavior.')';
+      $behaviors = $this->behaviors;
       $this->behaviors = array();
+
+      $higher_priority_names = array(
+        'refresh-csrf',
+        'aphront-basic-tokenizer',
+      );
+
+      $higher_priority_behaviors = array_select_keys(
+        $behaviors,
+        $higher_priority_names);
+
+      foreach ($higher_priority_names as $name) {
+        unset($behaviors[$name]);
+      }
+
+      $behavior_groups = array(
+        $higher_priority_behaviors,
+        $behaviors);
+
+      foreach ($behavior_groups as $group) {
+        if (!$group) {
+          continue;
+        }
+        $onload[] = 'JX.initBehaviors('.json_encode($group).')';
+      }
     }
 
     if ($onload) {

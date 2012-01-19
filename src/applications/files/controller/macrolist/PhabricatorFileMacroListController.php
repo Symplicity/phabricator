@@ -1,7 +1,7 @@
 <?php
 
 /*
- * Copyright 2011 Facebook, Inc.
+ * Copyright 2012 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,7 +17,6 @@
  */
 
 class PhabricatorFileMacroListController extends PhabricatorFileController {
-
   public function processRequest() {
 
     $request = $this->getRequest();
@@ -53,11 +52,12 @@ class PhabricatorFileMacroListController extends PhabricatorFileController {
       $handles = id(new PhabricatorObjectHandleData($author_phids))
         ->loadHandles();
     }
+    $files_map = mpull($files, null, 'getPHID');
 
     $rows = array();
     foreach ($macros as $macro) {
-      $src = PhabricatorFileURI::getViewURIForPHID($macro->getFilePHID());
       $file_phid = $macro->getFilePHID();
+      $file = $files_map[$file_phid];
       $author_link = isset($author_phids[$file_phid])
         ? $handles[$author_phids[$file_phid]]->renderLink()
         : null;
@@ -74,13 +74,13 @@ class PhabricatorFileMacroListController extends PhabricatorFileController {
         phutil_render_tag(
           'a',
           array(
-            'href'    => $src,
+            'href'    => $file->getBestURI(),
             'target'  => '_blank',
           ),
           phutil_render_tag(
             'img',
             array(
-              'src' => $src,
+              'src' => $file->getBestURI(),
             ))),
         javelin_render_tag(
           'a',
@@ -116,8 +116,12 @@ class PhabricatorFileMacroListController extends PhabricatorFileController {
     $panel->setCreateButton('New Image Macro', '/file/macro/edit/');
     $panel->appendChild($pager);
 
+    $side_nav = new PhabricatorFileSideNavView();
+    $side_nav->setSelectedFilter('all_macros');
+    $side_nav->appendChild($panel);
+
     return $this->buildStandardPageResponse(
-      $panel,
+      $side_nav,
       array(
         'title' => 'Image Macros',
         'tab'   => 'macros',

@@ -6,7 +6,9 @@
 
 
 
-phutil_require_module('phabricator', 'aphront/response/base');
+phutil_require_module('phabricator', 'aphront/response/webpage');
+phutil_require_module('phabricator', 'view/page/failure');
+phutil_require_module('phabricator', 'view/page/standard');
 
 
 phutil_require_source('Aphront404Response.php');

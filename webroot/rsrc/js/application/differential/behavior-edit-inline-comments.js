@@ -75,6 +75,7 @@ JX.behavior('differential-edit-inline-comments', function(config) {
     function(e) {
       if (editor  ||
           selecting ||
+          e.isRightButton() ||
           getRowNumber(e.getTarget()) === undefined) {
         return;
       }
@@ -182,8 +183,13 @@ JX.behavior('differential-edit-inline-comments', function(config) {
     });
 
   var action_handler = function(op, e) {
-    var data = e.getNodeData('differential-inline-comment');
     var node = e.getNode('differential-inline-comment');
+    handle_inline_action(node, op);
+    e.kill();
+  }
+
+  var handle_inline_action = function(node, op) {
+    var data = JX.Stratcom.getData(node);
     var row  = node.parentNode.parentNode;
 
     var original = data.original;
@@ -202,8 +208,6 @@ JX.behavior('differential-edit-inline-comments', function(config) {
       .setRow(row)
       .setTable(row.parentNode)
       .start();
-
-    e.kill();
   }
 
   for (var op in {'edit' : 1, 'delete' : 1, 'reply' : 1}) {
@@ -212,6 +216,14 @@ JX.behavior('differential-edit-inline-comments', function(config) {
       ['differential-inline-comment', 'differential-inline-' + op],
       JX.bind(null, action_handler, op));
   }
+
+  JX.Stratcom.listen(
+    'differential-inline-action',
+    null,
+    function(e) {
+      var data = e.getData();
+      handle_inline_action(data.node, data.op);
+    });
 
 });
 

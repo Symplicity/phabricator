@@ -1,7 +1,7 @@
 <?php
 
 /*
- * Copyright 2011 Facebook, Inc.
+ * Copyright 2012 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -177,6 +177,10 @@ final class PhabricatorIRCBot extends PhabricatorDaemon {
         $routed_message = $this->processReadBuffer();
       } while ($routed_message);
 
+      foreach ($this->handlers as $handler) {
+        $handler->runBackgroundTasks();
+      }
+
     } while (true);
   }
 
@@ -236,9 +240,11 @@ final class PhabricatorIRCBot extends PhabricatorDaemon {
   }
 
   private function debugLog($is_read, $message) {
-    echo $is_read ? '<<< ' : '>>> ';
-    echo addcslashes($message, "\0..\37\177..\377");
-    echo "\n";
+    if ($this->getTraceMode()) {
+      echo $is_read ? '<<< ' : '>>> ';
+      echo addcslashes($message, "\0..\37\177..\377");
+      echo "\n";
+    }
   }
 
   public function getConduit() {

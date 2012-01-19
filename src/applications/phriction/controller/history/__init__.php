@@ -8,11 +8,13 @@
 
 phutil_require_module('phabricator', 'aphront/response/404');
 phutil_require_module('phabricator', 'applications/phid/handle/data');
+phutil_require_module('phabricator', 'applications/phriction/constants/changetype');
 phutil_require_module('phabricator', 'applications/phriction/controller/base');
 phutil_require_module('phabricator', 'applications/phriction/storage/content');
 phutil_require_module('phabricator', 'applications/phriction/storage/document');
 phutil_require_module('phabricator', 'view/control/pager');
 phutil_require_module('phabricator', 'view/control/table');
+phutil_require_module('phabricator', 'view/layout/crumbs');
 phutil_require_module('phabricator', 'view/layout/panel');
 phutil_require_module('phabricator', 'view/utils');
 

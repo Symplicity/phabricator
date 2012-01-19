@@ -1,7 +1,7 @@
 <?php
 
 /*
- * Copyright 2011 Facebook, Inc.
+ * Copyright 2012 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -50,7 +50,7 @@ class PhabricatorFeedStoryDifferential extends PhabricatorFeedStory {
 
     $view->setTitle(
       '<strong>'.$handles[$author_phid]->renderLink().'</strong>'.
-      ' '.$verb.' '.
+      ' '.$verb.' revision '.
       '<strong>'.$handles[$revision_phid]->renderLink().'</strong>.');
     $view->setEpoch($data->getEpoch());
 
@@ -66,9 +66,8 @@ class PhabricatorFeedStoryDifferential extends PhabricatorFeedStory {
     }
 
     if ($full_size) {
-      if (!empty($objects[$author_phid])) {
-        $image_phid = $objects[$author_phid]->getProfileImagePHID();
-        $image_uri  = PhabricatorFileURI::getViewURIForPHID($image_phid);
+      if (!empty($handles[$author_phid])) {
+        $image_uri = $handles[$author_phid]->getImageURI();
         $view->setImage($image_uri);
       }
 

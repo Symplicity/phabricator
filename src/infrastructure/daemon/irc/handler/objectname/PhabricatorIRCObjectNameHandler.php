@@ -1,7 +1,7 @@
 <?php
 
 /*
- * Copyright 2011 Facebook, Inc.
+ * Copyright 2012 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,14 +33,15 @@ class PhabricatorIRCObjectNameHandler extends PhabricatorIRCHandler {
 
     switch ($message->getCommand()) {
       case 'PRIVMSG':
-        $channel = $message->getChannel();
-        if (!$channel) {
+        $reply_to = $message->getReplyTo();
+        if (!$reply_to) {
           break;
         }
 
+        $this->handleSymbols($message);
+
         $message = $message->getMessageText();
         $matches = null;
-        $phids = array();
 
         $pattern =
           '@'.
@@ -163,19 +164,66 @@ class PhabricatorIRCObjectNameHandler extends PhabricatorIRCHandler {
 
         foreach ($output as $phid => $description) {
 
-          // Don't mention the same object more than once every 10 minutes, so
-          // we avoid spamming the chat over and over again for discsussions of
-          // a specific revision, for example.
-          $quiet_until = idx($this->recentlyMentioned, $phid, 0) + (60 * 10);
-          if (time() < $quiet_until) {
-            continue;
-          }
-          $this->recentlyMentioned[$phid] = time();
+          // Don't mention the same object more than once every 10 minutes
+          // in public channels, so we avoid spamming the chat over and over
+          // again for discsussions of a specific revision, for example. In
+          // direct-to-bot chat, respond to every object reference.
 
-          $this->write('PRIVMSG', "{$channel} :{$description}");
+          if ($this->isChannelName($reply_to)) {
+            if (empty($this->recentlyMentioned[$reply_to])) {
+              $this->recentlyMentioned[$reply_to] = array();
+            }
+
+            $quiet_until = idx(
+              $this->recentlyMentioned[$reply_to],
+              $phid,
+              0) + (60 * 10);
+
+            if (time() < $quiet_until) {
+              // Remain quiet on this channel.
+              continue;
+            }
+
+            $this->recentlyMentioned[$reply_to][$phid] = time();
+          }
+
+          $this->write('PRIVMSG', "{$reply_to} :{$description}");
         }
         break;
     }
+  }
+
+  private function handleSymbols(PhabricatorIRCMessage $message) {
+    $reply_to = $message->getReplyTo();
+    $text = $message->getMessageText();
+
+    $matches = null;
+    if (!preg_match('/where is (\S+?)\?/i', $text, $matches)) {
+      return;
+    }
+
+    $symbol = $matches[1];
+    $results = $this->getConduit()->callMethodSynchronous(
+      'diffusion.findsymbols',
+      array(
+        'name' => $symbol,
+      ));
+
+    if (count($results) > 1) {
+      $uri = $this->getURI('/diffusion/symbol/'.$symbol.'/');
+      $response = "Multiple symbols named '{$symbol}': {$uri}";
+    } else if (count($results) == 1) {
+      $result = head($results);
+      $response =
+        $result['type'].' '.
+        $result['name'].' '.
+        '('.$result['language'].'): '.
+        $result['uri'];
+    } else {
+      $response = "No symbol '{$symbol}' found anywhere.";
+    }
+
+    $this->write('PRIVMSG', "{$reply_to} :{$response}");
   }
 
 }
