@@ -91,16 +91,20 @@ class PhabricatorLoginController extends PhabricatorAuthController {
 
         $username_or_email = $request->getStr('username_or_email');
         $user = null;
+        $skip_password_check = false;
         $auth_callback = PhabricatorEnv::getEnvConfig('auth.callback');
         if ($auth_callback) {
           $user = call_user_func_array($auth_callback, array($username_or_email, $request->getStr('password')));
+          if ($user) {
+            $skip_password_check = true;
+          }
         }
         if (!$user) {
           $user = id(new PhabricatorUser())->loadOneWhere(
             'username = %s',
             $username_or_email);
         }
-        if (!$errors) {
+        if (!$errors && !$skip_password_check) {
           // Perform username/password tests only if we didn't get rate limited
           // by the CAPTCHA.
           if (!$user || !$user->comparePassword($request->getStr('password'))) {
