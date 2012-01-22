@@ -765,9 +765,9 @@ phutil_register_library_map(array(
     'PhrictionEditController' => 'applications/phriction/controller/edit',
     'PhrictionHistoryController' => 'applications/phriction/controller/history',
     'PhrictionListController' => 'applications/phriction/controller/list',
+    'QueryFormattingTestCase' => 'storage/qsprintf/__tests__',
     'ShineBadge' => 'applications/shine/storage/badge',
     'ShineDAO' => 'applications/shine/storage/base',
-    'QueryFormattingTestCase' => 'storage/qsprintf/__tests__',
   ),
   'function' =>
   array(
@@ -1413,9 +1413,9 @@ phutil_register_library_map(array(
     'PhrictionEditController' => 'PhrictionController',
     'PhrictionHistoryController' => 'PhrictionController',
     'PhrictionListController' => 'PhrictionController',
+    'QueryFormattingTestCase' => 'PhabricatorTestCase',
     'ShineBadge' => 'ShineDAO',
     'ShineDAO' => 'PhabricatorLiskDAO',
-    'QueryFormattingTestCase' => 'PhabricatorTestCase',
   ),
   'requires_interface' =>
   array(

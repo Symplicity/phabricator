@@ -6,8 +6,9 @@
 
 
 
-phutil_require_module('phabricator', 'applications/differential/constants/revisionstatus');
 phutil_require_module('phabricator', 'infrastructure/env');
+
+phutil_require_module('phutil', 'markup');
 
 
 phutil_require_source('BadgeConfig.php');
