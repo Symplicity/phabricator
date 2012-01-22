@@ -145,8 +145,10 @@ class PhabricatorShineBadgeController
               continue;
             }
 
-            $profile_image = PhabricatorFileURI::getViewURIForPHID(
+            $file = id(new PhabricatorFile())->loadOneWhere(
+              'phid = %s',
               $object->getProfileImagePHID());
+            $profile_image = $file->getBestURI();
 
             $avatars[$phid] = phutil_render_tag(
               'a',

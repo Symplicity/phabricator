@@ -6,6 +6,7 @@
 
 
 
+phutil_require_module('phabricator', 'applications/files/storage/file');
 phutil_require_module('phabricator', 'applications/people/storage/user');
 phutil_require_module('phabricator', 'applications/shine/constants/badge');
 phutil_require_module('phabricator', 'applications/shine/controller/base');
