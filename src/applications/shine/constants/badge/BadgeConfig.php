@@ -92,8 +92,8 @@ final class BadgeConfig {
       $where = self::$data[$title]['where'];
     } elseif ($title == 'Accepted') {
       $where = sprintf('status IN (%d, %d)',
-        DifferentialRevisionStatus::ACCEPTED,
-        DifferentialRevisionStatus::COMMITTED);
+        ArcanistDifferentialRevisionStatus::ACCEPTED,
+        ArcanistDifferentialRevisionStatus::COMMITTED);
     } elseif ($title == 'Profiller') {
       $where = sprintf("title != '' AND blurb != '' AND profileImagePHID != '%s'",
         PhabricatorEnv::getEnvConfig('user.default-profile-image-phid'));

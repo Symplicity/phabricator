@@ -6,6 +6,8 @@
 
 
 
+phutil_require_module('arcanist', 'differential/constants/revisionstatus');
+
 phutil_require_module('phabricator', 'infrastructure/env');
 
 phutil_require_module('phutil', 'markup');
