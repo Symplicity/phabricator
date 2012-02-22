@@ -366,42 +366,27 @@ class DifferentialRevisionListController extends DifferentialController {
   private function buildViews($filter, $user_phid, array $revisions) {
     $user = $this->getRequest()->getUser();
 
+    $template = id(new DifferentialRevisionListView())
+      ->setUser($user)
+      ->setFields(DifferentialRevisionListView::getDefaultFields());
+
     $views = array();
     switch ($filter) {
       case 'active':
-        $active = array();
-        $waiting = array();
+        list($active, $waiting) = DifferentialRevisionQuery::splitResponsible(
+          $revisions,
+          $user_phid);
 
-        // Bucket revisions into $active (revisions you need to do something
-        // about) and $waiting (revisions you're waiting on someone else to do
-        // something about).
-        foreach ($revisions as $revision) {
-          $status_review = ArcanistDifferentialRevisionStatus::NEEDS_REVIEW;
-          $needs_review = ($revision->getStatus() == $status_review);
-          $filter_is_author = ($revision->getAuthorPHID() == $user_phid);
-
-          // If exactly one of "needs review" and "the user is the author" is
-          // true, the user needs to act on it. Otherwise, they're waiting on
-          // it.
-          if ($needs_review ^ $filter_is_author) {
-            $active[] = $revision;
-          } else {
-            $waiting[] = $revision;
-          }
-        }
-
-        $view = id(new DifferentialRevisionListView())
+        $view = id(clone $template)
           ->setRevisions($active)
-          ->setUser($user)
           ->setNoDataString("You have no active revisions requiring action.");
         $views[] = array(
           'title' => 'Action Required',
           'view'  => $view,
         );
 
-        $view = id(new DifferentialRevisionListView())
+        $view = id(clone $template)
           ->setRevisions($waiting)
-          ->setUser($user)
           ->setNoDataString("You have no active revisions waiting on others.");
         $views[] = array(
           'title' => 'Waiting On Others',
@@ -418,9 +403,8 @@ class DifferentialRevisionListController extends DifferentialController {
           'subscribed'  => 'Revisions by Subscriber',
           'all'         => 'Revisions',
         );
-        $view = id(new DifferentialRevisionListView())
-          ->setRevisions($revisions)
-          ->setUser($user);
+        $view = id(clone $template)
+          ->setRevisions($revisions);
         $views[] = array(
           'title' => idx($titles, $filter),
           'view'  => $view,
@@ -429,6 +413,7 @@ class DifferentialRevisionListController extends DifferentialController {
       default:
         throw new Exception("Unknown filter '{$filter}'!");
     }
+
     return $views;
   }
 

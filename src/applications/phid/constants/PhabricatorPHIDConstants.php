@@ -1,7 +1,7 @@
 <?php
 
 /*
- * Copyright 2011 Facebook, Inc.
+ * Copyright 2012 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,7 +34,15 @@ final class PhabricatorPHIDConstants {
   const PHID_TYPE_POLL    = 'POLL';
   const PHID_TYPE_WIKI    = 'WIKI';
   const PHID_TYPE_APRJ    = 'APRJ';
+<<<<<<< HEAD
   const PHID_TYPE_SOURCE  = 'SRCE';
   const PHID_TYPE_ACMT   = 'ACMT';
 
+=======
+  const PHID_TYPE_ACMT    = 'ACMT';
+  const PHID_TYPE_DRYR    = 'DRYR';
+  const PHID_TYPE_DRYL    = 'DRYL';
+  const PHID_TYPE_OASC    = 'OASC';
+  const PHID_TYPE_OASA    = 'OASA';
+>>>>>>> upstream/master
 }

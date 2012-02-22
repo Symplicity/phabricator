@@ -38,31 +38,20 @@ return array(
 // -- IMPORTANT! Security! -------------------------------------------------- //
 
   // IMPORTANT: By default, Phabricator serves files from the same domain the
-  // application lives on. This is convenient but not secure: it creates
-  // a vulnerability where an external attacker can:
-  //
-  //  - Convince a privileged user to upload a file which appears to be an
-  //    image or some other inoccuous type of file (the file is actually both
-  //    a JAR and an image); and
-  //  - convince the user to give them the URI for the image; and
-  //  - convince the user to click a link to a site which embeds the "image"
-  //    using an <applet /> tag. This steals the user's credentials.
-  //
-  // If the attacker is internal, they can execute the first two steps
-  // themselves and need only convince another user to click a link in order to
-  // steal their credentials.
+  // application lives on. This is convenient but not secure: it creates a large
+  // class of vulnerabilities which can not be generally mitigated.
   //
   // To avoid this, you should configure a second domain in the same way you
   // have the primary domain configured (e.g., point it at the same machine and
   // set up the same vhost rules) and provide it here. For instance, if your
   // primary install is on "http://www.phabricator-example.com/", you could
   // configure "http://www.phabricator-files.com/" and specify the entire
-  // domain (with protocol) here. This will enforce that viewable files are
-  // served only from the alternate domain. Ideally, you should use a completely
-  // separate domain name rather than just a different subdomain.
+  // domain (with protocol) here. This will enforce that files are
+  // served only from the alternate domain. Ideally, you should use a
+  // completely separate domain name rather than just a different subdomain.
   //
-  // It is STRONGLY RECOMMENDED that you configure this. Phabricator makes this
-  // attack difficult, but it is viable unless you isolate the file domain.
+  // It is STRONGLY RECOMMENDED that you configure this. Your install is NOT
+  // SECURE unless you do so.
   'security.alternate-file-domain'  => null,
 
   // Default key for HMAC digests where the key is not important (i.e., the
@@ -87,7 +76,7 @@ return array(
   // exposes sensitive information to users, so make sure untrusted users can
   // not access an install running in this mode. You should definitely leave
   // this off in production. It is only really useful for using DarkConsole
-  // utilties to debug or profile logged-out pages. You must set
+  // utilities to debug or profile logged-out pages. You must set
   // 'darkconsole.enabled' to use this option.
   'darkconsole.always-on'       => false,
 
@@ -116,6 +105,9 @@ return array(
   // port than the default (which is 3306), specify it in the hostname
   // (e.g., db.example.com:1234).
   'mysql.host' => 'localhost',
+
+  // The number of times to try reconnecting to the MySQL database
+  'mysql.connection-retries' => 3,
 
 
 // -- Email ----------------------------------------------------------------- //
@@ -337,7 +329,7 @@ return array(
   'account.minimum-password-length'  => 8,
 
 
-// --  Facebook  ------------------------------------------------------------ //
+// -- Facebook OAuth -------------------------------------------------------- //
 
   // Can users use Facebook credentials to login to Phabricator?
   'facebook.auth-enabled'       => false,
@@ -356,22 +348,22 @@ return array(
   'facebook.application-secret' => null,
 
 
-// -- Github ---------------------------------------------------------------- //
+// -- GitHub OAuth ---------------------------------------------------------- //
 
-  // Can users use Github credentials to login to Phabricator?
+  // Can users use GitHub credentials to login to Phabricator?
   'github.auth-enabled'         => false,
 
-  // Can users use Github credentials to create new Phabricator accounts?
+  // Can users use GitHub credentials to create new Phabricator accounts?
   'github.registration-enabled' => true,
 
-  // Are Github accounts permanently linked to Phabricator accounts, or can
+  // Are GitHub accounts permanently linked to Phabricator accounts, or can
   // the user unlink them?
   'github.auth-permanent'       => false,
 
-  // The Github "Client ID" to use for Github API access.
+  // The GitHub "Client ID" to use for GitHub API access.
   'github.application-id'       => null,
 
-  // The Github "Secret" to use for Github API access.
+  // The GitHub "Secret" to use for GitHub API access.
   'github.application-secret'   => null,
 
   // Github (or compatible) OAuth authorization URI.
@@ -392,7 +384,7 @@ return array(
   // Github (or compatible) OAuth minimum scope.
   'github.min-scope'        => null,
 
-// -- Google ---------------------------------------------------------------- //
+// -- Google OAuth ---------------------------------------------------------- //
 
   // Can users use Google credentials to login to Phabricator?
   'google.auth-enabled'         => false,
@@ -409,6 +401,30 @@ return array(
 
   // The Google "Client Secret" to use for Google API access.
   'google.application-secret'   => null,
+
+// -- Phabricator OAuth ----------------------------------------------------- //
+
+  // Meta-town -- Phabricator is itself an OAuth Provider
+  // TODO -- T887 -- make this support multiple Phabricator instances!
+
+  // The URI of the Phabricator instance to use as an OAuth server.
+  'phabricator.oauth-uri'            => null,
+
+  // Can users use Phabricator credentials to login to Phabricator?
+  'phabricator.auth-enabled'         => false,
+
+  // Can users use Phabricator credentials to create new Phabricator accounts?
+  'phabricator.registration-enabled' => true,
+
+  // Are Phabricator accounts permanently linked to Phabricator accounts, or can
+  // the user unlink them?
+  'phabricator.auth-permanent'       => false,
+
+  // The Phabricator "Client ID" to use for Phabricator API access.
+  'phabricator.application-id'       => null,
+
+  // The Phabricator "Client Secret" to use for Phabricator API access.
+  'phabricator.application-secret'   => null,
 
 // -- Recaptcha ------------------------------------------------------------- //
 
@@ -459,7 +475,7 @@ return array(
   // This makes it harder to miss problems while developing Phabricator.
   'phabricator.show-error-callout' => false,
 
-  // When users write comments which have URIs, they'll be automaticaly linked
+  // When users write comments which have URIs, they'll be automatically linked
   // if the protocol appears in this set. This whitelist is primarily to prevent
   // security issues like javascript:// URIs.
   'uri.allowed-protocols' => array(
@@ -494,17 +510,15 @@ return array(
 
   // Lists which uploaded file types may be viewed in the browser. If a file
   // has a mime type which does not appear in this list, it will always be
-  // downloaded instead of displayed. This is a security consideration: if a
-  // user uploads a file of type "text/html" and it is displayed as
-  // "text/html", they can easily execute XSS attacks. This is also a usability
+  // downloaded instead of displayed. This is mainly a usability
   // consideration, since browsers tend to freak out when viewing enormous
   // binary files.
   //
   // The keys in this array are viewable mime types; the values are the mime
   // types they will be delivered as when they are viewed in the browser.
   //
-  // IMPORTANT: Making any file types viewable is a security vulnerability if
-  // you do not configure 'security.alternate-file-domain' above.
+  // IMPORTANT: Configure 'security.alternate-file-domain' above! Your install
+  // is NOT safe if it is left unconfigured.
   'files.viewable-mime-types' => array(
     'image/jpeg'  => 'image/jpeg',
     'image/jpg'   => 'image/jpg',
@@ -611,9 +625,17 @@ return array(
   // use 'ignore-all' by default
   'differential.whitespace-matters' => array(
     '/\.py$/',
+    '/\.l?hs$/',
   ),
 
   'differential.field-selector' => 'DifferentialDefaultFieldSelector',
+
+  // Differential can show "Host" and "Path" fields on revisions, with
+  // information about the machine and working directory where the
+  // change came from. These fields are disabled by default because they may
+  // occasionally have sensitive information; you can set this to true to
+  // enable them.
+  'differential.show-host-field'  => false,
 
   // If you set this to true, users can "!accept" revisions via email (normally,
   // they can take other actions but can not "!accept"). This action is disabled
@@ -646,6 +668,10 @@ return array(
   // Class which drives custom field construction. See "Maniphest User Guide:
   // Adding Custom Fields" in the documentation for more information.
   'maniphest.custom-task-extensions-class' => 'ManiphestDefaultTaskExtensions',
+
+// -- Phriction ------------------------------------------------------------- //
+
+  'phriction.enabled' => true,
 
 // -- Remarkup -------------------------------------------------------------- //
 
@@ -692,6 +718,14 @@ return array(
   // required to view them! This is intended for things like open source
   // projects that want to expose an activity feed on the project homepage.
   'feed.public' => false,
+
+
+// -- Drydock --------------------------------------------------------------- //
+
+  // If you want to use Drydock's builtin EC2 Blueprints, configure your AWS
+  // EC2 credentials here.
+  'amazon-ec2.access-key'   => null,
+  'amazon-ec2.secret-key'   => null,
 
 // -- Customization --------------------------------------------------------- //
 

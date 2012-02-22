@@ -2,16 +2,11 @@
  * @provides maniphest-transaction-detail-css
  */
 
-.maniphest-trnasaction-list-view {
-  padding: .5em 1.5em;
-}
-
 .maniphest-transaction-detail-container {
-  margin: 1em 1em 1.25em;
-  background: 2px 2px no-repeat;
+  margin: 1em 2em 1.25em;
+  background: 0px 2px no-repeat;
   min-height: 50px;
-  padding: 2px 2px;
-  border: 1px solid transparent;
+  padding: 2px 0px;
 }
 
 .maniphest-transaction-list-view .anchor-target {
@@ -85,6 +80,7 @@
   border-top: 1px solid #e6e6e6;
   padding: 4px 1em;
   background: #fcfcfc;
+  overflow: auto;
 }
 
 .maniphest-change-table {

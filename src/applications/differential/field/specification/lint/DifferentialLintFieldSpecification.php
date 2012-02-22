@@ -56,6 +56,8 @@ final class DifferentialLintFieldSpecification
 
           $line_link = phutil_escape_html($line);
           if (isset($path_changesets[$path])) {
+            // TODO: Create standalone links for large diffs. Logic is in
+            // DifferentialDiffTableOfContentsView::renderChangesetLink().
             $line_link = phutil_render_tag(
               'a',
               array(
@@ -63,17 +65,17 @@ final class DifferentialLintFieldSpecification
               ),
               $line_link);
           }
-          $message_markup[] =
+          $message_markup[] = hsprintf(
             '<li>'.
-              '<span class="lint-severity-'.phutil_escape_html($severity).'">'.
-                phutil_escape_html(ucwords($severity)).
-              '</span>'.
-              ' '.
-              '('.phutil_escape_html($code).') '.
-              phutil_escape_html($name).
-              ' at line '.$line_link.
-              '<p>'.phutil_escape_html($description).'</p>'.
-            '</li>';
+              '<span class="lint-severity-%s">%s</span> (%s) %s '.
+              'at line '.$line_link.
+              '<p>%s</p>'.
+            '</li>',
+            $severity,
+            ucwords($severity),
+            $code,
+            $name,
+            $description);
         }
         $lint_messages[] =
           '<li class="lint-file-block">'.

@@ -1,7 +1,7 @@
 <?php
 
 /*
- * Copyright 2011 Facebook, Inc.
+ * Copyright 2012 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -18,10 +18,11 @@
 
 class PhabricatorOwnersListController extends PhabricatorOwnersController {
 
-  private $view;
+  protected $view;
 
   public function willProcessRequest(array $data) {
-    $this->view = idx($data, 'view');
+    $this->view = idx($data, 'view', 'owned');
+    $this->setSideNavFilter('view/'.$this->view);
   }
 
   public function processRequest() {
@@ -29,38 +30,16 @@ class PhabricatorOwnersListController extends PhabricatorOwnersController {
     $request = $this->getRequest();
     $user = $request->getUser();
 
-    $views = array(
-      'owned'   => 'Owned Packages',
-      'all'     => 'All Packages',
-      'search'  => 'Search Results',
-    );
-
-    if (empty($views[$this->view])) {
-      reset($views);
-      $this->view = key($views);
-    }
-
-    if ($this->view != 'search') {
-      unset($views['search']);
-    }
-
-    $nav = new AphrontSideNavView();
-    foreach ($views as $key => $name) {
-      $nav->addNavItem(
-        phutil_render_tag(
-          'a',
-          array(
-            'href' => '/owners/view/'.$key.'/',
-            'class' => ($this->view == $key)
-              ? 'aphront-side-nav-selected'
-              : null,
-          ),
-          phutil_escape_html($name)));
-    }
-
     $package = new PhabricatorOwnersPackage();
     $owner = new PhabricatorOwnersOwner();
     $path = new PhabricatorOwnersPath();
+
+    $repository_phid = '';
+    if ($request->getStr('repository') != '') {
+      $repository_phid = id(new PhabricatorRepository())
+        ->loadOneWhere('callsign = %s', $request->getStr('repository'))
+        ->getPHID();
+    }
 
     switch ($this->view) {
       case 'search':
@@ -78,15 +57,29 @@ class PhabricatorOwnersListController extends PhabricatorOwnersController {
             $request->getStr('name'));
         }
 
-        if ($request->getStr('path')) {
+        if ($repository_phid || $request->getStr('path')) {
+
           $join[] = qsprintf(
             $conn_r,
             'JOIN %T path ON path.packageID = p.id',
             $path->getTableName());
-          $where[] = qsprintf(
-            $conn_r,
-            'path.path LIKE %~',
-            $request->getStr('path'));
+
+          if ($repository_phid) {
+            $where[] = qsprintf(
+              $conn_r,
+              'path.repositoryPHID = %s',
+              $repository_phid);
+          }
+
+          if ($request->getStr('path')) {
+            $where[] = qsprintf(
+              $conn_r,
+              'path.path LIKE %~ OR %s LIKE CONCAT(path.path, %s)',
+              $request->getStr('path'),
+              $request->getStr('path'),
+              '%');
+          }
+
         }
 
         if ($request->getArr('owner')) {
@@ -158,9 +151,18 @@ class PhabricatorOwnersListController extends PhabricatorOwnersController {
       );
     }
 
+    $callsigns = array('' => '(Any Repository)');
+    $repositories = id(new PhabricatorRepository())
+      ->loadAllWhere('1 = 1 ORDER BY callsign');
+    foreach ($repositories as $repository) {
+      $callsigns[$repository->getCallsign()] =
+        $repository->getCallsign().': '.$repository->getName();
+    }
+
     $form = id(new AphrontFormView())
       ->setUser($user)
       ->setAction('/owners/view/search/')
+      ->setMethod('GET')
       ->appendChild(
         id(new AphrontFormTextControl())
           ->setName('name')
@@ -174,6 +176,12 @@ class PhabricatorOwnersListController extends PhabricatorOwnersController {
           ->setLabel('Owner')
           ->setValue($owners_search_value))
       ->appendChild(
+        id(new AphrontFormSelectControl())
+          ->setName('repository')
+          ->setLabel('Repository')
+          ->setOptions($callsigns)
+          ->setValue($request->getStr('repository')))
+      ->appendChild(
         id(new AphrontFormTextControl())
           ->setName('path')
           ->setLabel('Path')
@@ -184,14 +192,13 @@ class PhabricatorOwnersListController extends PhabricatorOwnersController {
 
     $filter->appendChild($form);
 
-    $nav->appendChild($filter);
-    $nav->appendChild($content);
-
     return $this->buildStandardPageResponse(
-      $nav,
+      array(
+        $filter,
+        $content,
+      ),
       array(
         'title' => 'Package Index',
-        'tab' => 'index',
       ));
   }
 
@@ -243,8 +250,13 @@ class PhabricatorOwnersListController extends PhabricatorOwnersController {
       foreach ($pkg_paths as $key => $path) {
         $repo = $handles[$path->getRepositoryPHID()]->getName();
         $pkg_paths[$key] =
-          '<strong>'.$repo.'</strong> '.
-          phutil_escape_html($path->getPath());
+          '<strong>'.phutil_escape_html($repo).'</strong> '.
+          phutil_render_tag(
+            'a',
+            array(
+              'href' => '/diffusion/'.$repo.'/browse/:'.$path->getPath(),
+            ),
+            phutil_escape_html($path->getPath()));
       }
       $pkg_paths = implode('<br />', $pkg_paths);
 
@@ -289,4 +301,17 @@ class PhabricatorOwnersListController extends PhabricatorOwnersController {
     return $panel;
   }
 
+  protected function getExtraPackageViews() {
+    switch ($this->view) {
+      case 'search':
+        $extra = array(array('name' => 'Search Results',
+                             'key'  => 'view/search'));
+        break;
+      default:
+        $extra = array();
+        break;
+    }
+
+    return $extra;
+  }
 }

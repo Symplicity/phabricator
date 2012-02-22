@@ -48,11 +48,15 @@ class DifferentialChangesetViewController extends DifferentialController {
     $view = $request->getStr('view');
     if ($view) {
       $changeset->attachHunks($changeset->loadHunks());
+      $phid = idx($changeset->getMetadata(), "$view:binary-phid");
+      if ($phid) {
+        return id(new AphrontRedirectResponse())->setURI("/file/info/$phid/");
+      }
       switch ($view) {
         case 'new':
-          return $this->buildRawFileResponse($changeset->makeNewFile());
+          return $this->buildRawFileResponse($changeset, $is_new = true);
         case 'old':
-          return $this->buildRawFileResponse($changeset->makeOldFile());
+          return $this->buildRawFileResponse($changeset, $is_new = false);
         default:
           return new Aphront400Response();
       }
@@ -125,11 +129,37 @@ class DifferentialChangesetViewController extends DifferentialController {
       $changeset = $choice;
     }
 
+    $coverage = null;
+    if ($right->getDiffID()) {
+      $unit = id(new DifferentialDiffProperty())->loadOneWhere(
+        'diffID = %d AND name = %s',
+        $right->getDiffID(),
+        'arc:unit');
+
+      if ($unit) {
+        $coverage = array();
+        foreach ($unit->getData() as $result) {
+          $result_coverage = idx($result, 'coverage');
+          if (!$result_coverage) {
+            continue;
+          }
+          $file_coverage = idx($result_coverage, $right->getFileName());
+          if (!$file_coverage) {
+            continue;
+          }
+          $coverage[] = $file_coverage;
+        }
+
+        $coverage = ArcanistUnitTestResult::mergeCoverage($coverage);
+      }
+    }
+
     $spec = $request->getStr('range');
     list($range_s, $range_e, $mask) =
       DifferentialChangesetParser::parseRangeSpecification($spec);
 
     $parser = new DifferentialChangesetParser();
+    $parser->setCoverage($coverage);
     $parser->setChangeset($changeset);
     $parser->setRenderingReference($rendering_reference);
     $parser->setRenderCacheKey($render_cache_key);
@@ -226,10 +256,53 @@ class DifferentialChangesetViewController extends DifferentialController {
       $author_phid);
   }
 
-  private function buildRawFileResponse($text) {
-    return id(new AphrontFileResponse())
-      ->setMimeType('text/plain')
-      ->setContent($text);
+  private function buildRawFileResponse(
+    DifferentialChangeset $changeset,
+    $is_new) {
+
+    if ($is_new) {
+      $key = 'raw:new:phid';
+    } else {
+      $key = 'raw:old:phid';
+    }
+
+    $metadata = $changeset->getMetadata();
+
+    $file = null;
+    $phid = idx($metadata, $key);
+    if ($phid) {
+      $file = id(new PhabricatorFile())->loadOneWhere(
+        'phid = %s',
+        $phid);
+    }
+
+    if (!$file) {
+      // This is just building a cache of the changeset content in the file
+      // tool, and is safe to run on a read pathway.
+      $unguard = AphrontWriteGuard::beginScopedUnguardedWrites();
+
+      if ($is_new) {
+        $data = $changeset->makeNewFile();
+      } else {
+        $data = $changeset->makeOldFile();
+      }
+
+      $file = PhabricatorFile::newFromFileData(
+        $data,
+        array(
+          'name'      => $changeset->getFilename(),
+          'mime-type' => 'text/plain',
+        ));
+
+      $metadata[$key] = $file->getPHID();
+      $changeset->setMetadata($metadata);
+      $changeset->save();
+
+      unset($unguard);
+    }
+
+    return id(new AphrontRedirectResponse())
+      ->setURI($file->getBestURI());
   }
 
   private function buildLintInlineComments($changeset) {

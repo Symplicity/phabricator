@@ -26,6 +26,7 @@ class PhabricatorUserPreferenceSettingsPanelController
     $preferences = $user->loadPreferences();
 
     $pref_monospaced  = PhabricatorUserPreferences::PREFERENCE_MONOSPACED;
+    $pref_editor      = PhabricatorUserPreferences::PREFERENCE_EDITOR;
     $pref_titles      = PhabricatorUserPreferences::PREFERENCE_TITLES;
 
     if ($request->isFormPost()) {
@@ -35,6 +36,7 @@ class PhabricatorUserPreferenceSettingsPanelController
       $monospaced = preg_replace('/[^a-z0-9 ,"]+/i', '', $monospaced);
 
       $preferences->setPreference($pref_titles, $request->getStr($pref_titles));
+      $preferences->setPreference($pref_editor, $request->getStr($pref_editor));
       $preferences->setPreference($pref_monospaced, $monospaced);
 
       $preferences->save();
@@ -48,6 +50,14 @@ function helloWorld() {
   alert("Hello world!");
 }
 EXAMPLE;
+
+    $editor_doc_link = phutil_render_tag(
+      'a',
+      array(
+        'href' => PhabricatorEnv::getDoclink(
+          'article/User_Guide:_Configuring_an_External_Editor.html'),
+      ),
+      'User Guide: Configuring an External Editor');
 
     $form = id(new AphrontFormView())
       ->setUser($user)
@@ -64,6 +74,16 @@ EXAMPLE;
               'text' =>
               'In page titles, show Tool names as plain text: [Differential]',
             )))
+      ->appendChild(
+        id(new AphrontFormTextControl())
+        ->setLabel('Editor Link')
+        ->setName($pref_editor)
+        ->setCaption(
+          'Link to edit files in external editor. '.
+          '%f is replaced by filename, %l by line number, %r by repository '.
+          'callsign. '.
+          "For documentation, see {$editor_doc_link}.")
+        ->setValue($preferences->getPreference($pref_editor)))
       ->appendChild(
         id(new AphrontFormTextControl())
         ->setLabel('Monospaced Font')

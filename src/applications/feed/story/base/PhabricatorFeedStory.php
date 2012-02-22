@@ -1,7 +1,7 @@
 <?php
 
 /*
- * Copyright 2011 Facebook, Inc.
+ * Copyright 2012 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,6 +22,7 @@ abstract class PhabricatorFeedStory {
 
   private $handles;
   private $objects;
+  private $framed;
 
   final public function __construct(PhabricatorFeedStoryData $data) {
     $this->data = $data;
@@ -35,6 +36,11 @@ abstract class PhabricatorFeedStory {
 
   public function getRequiredObjectPHIDs() {
     return array();
+  }
+
+  final public function setFramed($framed) {
+    $this->framed = $framed;
+    return $this;
   }
 
   final public function setHandles(array $handles) {
@@ -69,12 +75,52 @@ abstract class PhabricatorFeedStory {
     return $this->objects;
   }
 
-  final protected function getStoryData() {
+  final public function getStoryData() {
     return $this->data;
   }
 
   final public function getEpoch() {
     return $this->getStoryData()->getEpoch();
+  }
+
+  final public function getChronologicalKey() {
+    return $this->getStoryData()->getChronologicalKey();
+  }
+
+  final protected function renderHandleList(array $phids) {
+    $list = array();
+    foreach ($phids as $phid) {
+      $list[] = $this->linkTo($phid);
+    }
+    return implode(', ', $list);
+  }
+
+  final protected function linkTo($phid) {
+    $handle = $this->getHandle($phid);
+
+    // NOTE: We render our own link here to customize the styling and add
+    // the '_top' target for framed feeds.
+
+    return phutil_render_tag(
+      'a',
+      array(
+        'href'    => $handle->getURI(),
+        'target'  => $this->framed ? '_top' : null,
+      ),
+      phutil_escape_html($handle->getLinkName()));
+  }
+
+  final protected function renderString($str) {
+    return '<strong>'.phutil_escape_html($str).'</strong>';
+  }
+
+  final protected function renderSummary($text, $len = 128) {
+    if ($len) {
+      $text = phutil_utf8_shorten($text, $len);
+    }
+    $text = phutil_escape_html($text);
+    $text = str_replace("\n", '<br />', $text);
+    return $text;
   }
 
 }

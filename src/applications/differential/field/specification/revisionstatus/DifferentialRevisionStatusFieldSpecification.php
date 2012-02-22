@@ -35,22 +35,36 @@ final class DifferentialRevisionStatusFieldSpecification
     $next_step = null;
     if ($status == ArcanistDifferentialRevisionStatus::ACCEPTED) {
       switch ($diff->getSourceControlSystem()) {
+        case PhabricatorRepositoryType::REPOSITORY_TYPE_MERCURIAL:
+          $next_step = '<tt>arc merge</tt>';
+          break;
         case PhabricatorRepositoryType::REPOSITORY_TYPE_GIT:
-          $next_step = 'arc amend --revision '.$revision->getID();
+          $next_step = '<tt>arc amend</tt> or <tt>arc merge</tt>';
           break;
         case PhabricatorRepositoryType::REPOSITORY_TYPE_SVN:
-          $next_step = 'arc commit --revision '.$revision->getID();
+          $next_step = '<tt>arc commit</tt>';
           break;
       }
       if ($next_step) {
-        $next_step =
-          ' &middot; '.
-          'Next step: <tt>'.phutil_escape_html($next_step).'</tt>';
+        $next_step = ' &middot; Next step: '.$next_step;
       }
     }
     $status =
       ArcanistDifferentialRevisionStatus::getNameForRevisionStatus($status);
     return '<strong>'.$status.'</strong>'.$next_step;
+  }
+
+  public function shouldAppearOnRevisionList() {
+    return true;
+  }
+
+  public function renderHeaderForRevisionList() {
+    return 'Status';
+  }
+
+  public function renderValueForRevisionList(DifferentialRevision $revision) {
+    return ArcanistDifferentialRevisionStatus::getNameForRevisionStatus(
+      $revision->getStatus());
   }
 
 }

@@ -149,14 +149,9 @@ class PhabricatorFile extends PhabricatorFileDAO {
     if (isset($params['mime-type'])) {
       $file->setMimeType($params['mime-type']);
     } else {
-      try {
-        $tmp = new TempFile();
-        Filesystem::writeFile($tmp, $data);
-        list($stdout) = execx('file -b --mime %s', $tmp);
-        $file->setMimeType($stdout);
-      } catch (Exception $ex) {
-        // Be robust here since we don't really care that much about mime types.
-      }
+      $tmp = new TempFile();
+      Filesystem::writeFile($tmp, $data);
+      $file->setMimeType(Filesystem::getMimeType($tmp));
     }
 
     $file->save();
@@ -230,16 +225,8 @@ class PhabricatorFile extends PhabricatorFileDAO {
 
     $name = phutil_escape_uri($this->getName());
 
-    $alt = PhabricatorEnv::getEnvConfig('security.alternate-file-domain');
-    if ($alt) {
-      $path = '/file/alt/'.$this->getSecretKey().'/'.$this->getPHID().'/'.$name;
-      $uri = new PhutilURI($alt);
-      $uri->setPath($path);
-
-      return (string)$uri;
-    } else {
-      return '/file/view/'.$this->getPHID().'/'.$name;
-    }
+    $path = '/file/data/'.$this->getSecretKey().'/'.$this->getPHID().'/'.$name;
+    return PhabricatorEnv::getCDNURI($path);
   }
 
   public function getInfoURI() {

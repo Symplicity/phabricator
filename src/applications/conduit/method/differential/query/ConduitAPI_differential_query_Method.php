@@ -32,6 +32,8 @@ class ConduitAPI_differential_query_Method extends ConduitAPIMethod {
     $status_types = array(
       DifferentialRevisionQuery::STATUS_ANY,
       DifferentialRevisionQuery::STATUS_OPEN,
+      DifferentialRevisionQuery::STATUS_ACCEPTED,
+      DifferentialRevisionQuery::STATUS_COMMITTED,
     );
     $status_types = implode(', ', $status_types);
 
@@ -58,6 +60,7 @@ class ConduitAPI_differential_query_Method extends ConduitAPIMethod {
       'phids'             => 'optional list<phid>',
       'subscribers'       => 'optional list<phid>',
       'responsibleUsers'  => 'optional list<phid>',
+      'branches'          => 'optional list<string>',
     );
   }
 
@@ -84,6 +87,7 @@ class ConduitAPI_differential_query_Method extends ConduitAPIMethod {
     $phids              = $request->getValue('phids');
     $subscribers        = $request->getValue('subscribers');
     $responsible_users  = $request->getValue('responsibleUsers');
+    $branches           = $request->getValue('branches');
 
     $query = new DifferentialRevisionQuery();
     if ($authors) {
@@ -143,6 +147,9 @@ class ConduitAPI_differential_query_Method extends ConduitAPIMethod {
     if ($subscribers) {
       $query->withSubscribers($subscribers);
     }
+    if ($branches) {
+      $query->withBranches($branches);
+    }
 
     $query->needRelationships(true);
     $query->needCommitPHIDs(true);
@@ -159,7 +166,7 @@ class ConduitAPI_differential_query_Method extends ConduitAPIMethod {
       }
 
       $id = $revision->getID();
-      $results[] = array(
+      $result = array(
         'id'            => $id,
         'phid'          => $revision->getPHID(),
         'title'         => $revision->getTitle(),
@@ -171,7 +178,7 @@ class ConduitAPI_differential_query_Method extends ConduitAPIMethod {
         'statusName'    =>
           ArcanistDifferentialRevisionStatus::getNameForRevisionStatus(
             $revision->getStatus()),
-        'sourcePath'    => $diff->getSourcePath(),
+        'branch'        => $diff->getBranch(),
         'summary'       => $revision->getSummary(),
         'testPlan'      => $revision->getTestPlan(),
         'lineCount'     => $revision->getLineCount(),
@@ -180,6 +187,14 @@ class ConduitAPI_differential_query_Method extends ConduitAPIMethod {
         'reviewers'     => array_values($revision->getReviewers()),
         'ccs'           => array_values($revision->getCCPHIDs()),
       );
+
+      // TODO: This is a hacky way to put permissions on this field until we
+      // have first-class support, see T838.
+      if ($revision->getAuthorPHID() == $request->getUser()->getPHID()) {
+        $result['sourcePath'] = $diff->getSourcePath();
+      }
+
+      $results[] = $result;
     }
 
     return $results;

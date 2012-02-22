@@ -1,7 +1,7 @@
 <?php
 
 /*
- * Copyright 2011 Facebook, Inc.
+ * Copyright 2012 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,6 +23,8 @@ class AphrontMySQLDatabaseConnection extends AphrontDatabaseConnection {
 
   private $config;
   private $connection;
+
+  private $nextError;
 
   private static $connectionCache = array();
 
@@ -107,10 +109,6 @@ class AphrontMySQLDatabaseConnection extends AphrontDatabaseConnection {
   private function establishConnection() {
     $this->closeConnection();
 
-    $user = $this->getConfiguration('user');
-    $host = $this->getConfiguration('host');
-    $database = $this->getConfiguration('database');
-
     $key = $this->getConnectionCacheKey();
     if (isset(self::$connectionCache[$key])) {
       $this->connection = self::$connectionCache[$key];
@@ -129,6 +127,11 @@ class AphrontMySQLDatabaseConnection extends AphrontDatabaseConnection {
         "available!");
     }
 
+    $user = $this->getConfiguration('user');
+    $host = $this->getConfiguration('host');
+    $database = $this->getConfiguration('database');
+
+
     $profiler = PhutilServiceProfiler::getInstance();
     $call_id = $profiler->beginServiceCall(
       array(
@@ -137,33 +140,43 @@ class AphrontMySQLDatabaseConnection extends AphrontDatabaseConnection {
         'database'  => $database,
       ));
 
-    try {
-      $conn = @mysql_connect(
-        $host,
-        $user,
-        $this->getConfiguration('pass'),
-        $new_link = true,
-        $flags = 0);
+    $retries = max(1, PhabricatorEnv::getEnvConfig('mysql.connection-retries'));
+    while ($retries--) {
+      try {
+        $conn = @mysql_connect(
+          $host,
+          $user,
+          $this->getConfiguration('pass'),
+          $new_link = true,
+          $flags = 0);
 
-      if (!$conn) {
-        $errno = mysql_errno();
-        $error = mysql_error();
-        throw new AphrontQueryConnectionException(
-          "Attempt to connect to {$user}@{$host} failed with error #{$errno}: ".
-          "{$error}.");
-      }
+        if (!$conn) {
+          $errno = mysql_errno();
+          $error = mysql_error();
+          throw new AphrontQueryConnectionException(
+            "Attempt to connect to {$user}@{$host} failed with error ".
+            "#{$errno}: {$error}.", $errno);
+        }
 
-      if ($database !== null) {
-        $ret = @mysql_select_db($database, $conn);
-        if (!$ret) {
-          $this->throwQueryException($conn);
+        if ($database !== null) {
+          $ret = @mysql_select_db($database, $conn);
+          if (!$ret) {
+            $this->throwQueryException($conn);
+          }
+        }
+
+        $profiler->endServiceCall($call_id, array());
+        break;
+      } catch (Exception $ex) {
+        if ($retries && $ex->getCode() == 2003) {
+          $class = get_class($ex);
+          $message = $ex->getMessage();
+          phlog("Retrying ({$retries}) after {$class}: {$message}");
+        } else {
+          $profiler->endServiceCall($call_id, array());
+          throw $ex;
         }
       }
-
-      $profiler->endServiceCall($call_id, array());
-    } catch (Exception $ex) {
-      $profiler->endServiceCall($call_id, array());
-      throw $ex;
     }
 
     self::$connectionCache[$key] = $conn;
@@ -203,7 +216,7 @@ class AphrontMySQLDatabaseConnection extends AphrontDatabaseConnection {
 
   public function executeRawQuery($raw_query) {
     $this->lastResult = null;
-    $retries = 3;
+    $retries = max(1, PhabricatorEnv::getEnvConfig('mysql.connection-retries'));
     while ($retries--) {
       try {
         $this->requireConnection();
@@ -229,6 +242,10 @@ class AphrontMySQLDatabaseConnection extends AphrontDatabaseConnection {
 
         $profiler->endServiceCall($call_id, array());
 
+        if ($this->nextError) {
+          $result = null;
+        }
+
         if ($result) {
           $this->lastResult = $result;
           break;
@@ -236,20 +253,45 @@ class AphrontMySQLDatabaseConnection extends AphrontDatabaseConnection {
 
         $this->throwQueryException($this->connection);
       } catch (AphrontQueryConnectionLostException $ex) {
+        if ($this->isInsideTransaction()) {
+          // Zero out the transaction state to prevent a second exception
+          // ("program exited with open transaction") from being thrown, since
+          // we're about to throw a more relevant/useful one instead.
+          $state = $this->getTransactionState();
+          while ($state->getDepth()) {
+            $state->decreaseDepth();
+          }
+
+          // We can't close the connection before this because
+          // isInsideTransaction() and getTransactionState() depend on the
+          // connection.
+          $this->closeConnection();
+
+          throw $ex;
+        }
+
+        $this->closeConnection();
+
         if (!$retries) {
           throw $ex;
         }
-        if ($this->isInsideTransaction()) {
-          throw $ex;
-        }
-        $this->closeConnection();
+
+        $class = get_class($ex);
+        $message = $ex->getMessage();
+        phlog("Retrying ({$retries}) after {$class}: {$message}");
       }
     }
   }
 
   private function throwQueryException($connection) {
-    $errno = mysql_errno($connection);
-    $error = mysql_error($connection);
+    if ($this->nextError) {
+      $errno = $this->nextError;
+      $error = 'Simulated error.';
+      $this->nextError = null;
+    } else {
+      $errno = mysql_errno($connection);
+      $error = mysql_error($connection);
+    }
 
     switch ($errno) {
       case 2013: // Connection Dropped
@@ -273,6 +315,15 @@ class AphrontMySQLDatabaseConnection extends AphrontDatabaseConnection {
         // TODO: 1064 is syntax error, and quite terrible in production.
         throw new AphrontQueryException("#{$errno}: {$error}");
     }
+  }
+
+  /**
+   * Force the next query to fail with a simulated error. This should be used
+   * ONLY for unit tests.
+   */
+  public function simulateErrorOnNextQuery($error) {
+    $this->nextError = $error;
+    return $this;
   }
 
 }

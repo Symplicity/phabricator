@@ -1,7 +1,7 @@
 <?php
 
 /*
- * Copyright 2011 Facebook, Inc.
+ * Copyright 2012 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -42,41 +42,43 @@ class PhabricatorOAuthFailureView extends AphrontView {
     $view->setHeader($provider_name.' Auth Failed');
     if ($this->request) {
       $view->appendChild(
-        '<p>'.
-          '<strong>Description:</strong> '.
-          phutil_escape_html($request->getStr('error_description')).
-        '</p>');
+        hsprintf(
+          '<p><strong>Description:</strong> %s</p>',
+          $request->getStr('error_description')));
       $view->appendChild(
-        '<p>'.
-          '<strong>Error:</strong> '.
-          phutil_escape_html($request->getStr('error')).
-        '</p>');
+        hsprintf(
+          '<p><strong>Error:</strong> %s</p>',
+          $request->getStr('error')));
       $view->appendChild(
-        '<p>'.
-          '<strong>Error Reason:</strong> '.
-          phutil_escape_html($request->getStr('error_reason')).
-        '</p>');
+        hsprintf(
+          '<p><strong>Error Reason:</strong> %s</p>',
+          $request->getStr('error_reason')));
     } else {
       // TODO: We can probably refine this.
       $view->appendChild(
-        '<p>Unable to authenticate with '.$provider_name.'. '.
-        'There are several reasons this might happen:</p>'.
-          '<ul>'.
-            '<li>Phabricator may be configured with the wrong Application '.
-            'Secret; or</li>'.
-            '<li>the '.$provider_name.' OAuth access token may have expired; '.
-            'or</li>'.
-            '<li>'.$provider_name.' may have revoked authorization for the '.
-            'Application; or</li>'.
-            '<li>'.$provider_name.' may be having technical problems.</li>'.
-          '</ul>'.
-        '<p>You can try again, or login using another method.</p>');
+        hsprintf(
+          '<p>Unable to authenticate with %s. '.
+          'There are several reasons this might happen:</p>'.
+            '<ul>'.
+              '<li>Phabricator may be configured with the wrong Application '.
+              'Secret; or</li>'.
+              '<li>the %s OAuth access token may have expired; or</li>'.
+              '<li>%s may have revoked authorization for the Application; '.
+              'or</li>'.
+              '<li>%s may be having technical problems.</li>'.
+            '</ul>'.
+          '<p>You can try again, or login using another method.</p>',
+          $provider_name,
+          $provider_name,
+          $provider_name,
+          $provider_name));
 
       $provider_key = $provider->getProviderKey();
-      $diagnose =
+      $diagnose = hsprintf(
         '<a href="/oauth/'.$provider_key.'/diagnose/" class="button green">'.
-          'Diagnose '.$provider_name.' OAuth Problems'.
-        '</a>';
+          'Diagnose %s OAuth Problems'.
+        '</a>',
+        $provider_name);
     }
 
     $view->appendChild(

@@ -1,7 +1,7 @@
 <?php
 
 /*
- * Copyright 2011 Facebook, Inc.
+ * Copyright 2012 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,7 +20,7 @@ final class DifferentialDefaultFieldSelector
   extends DifferentialFieldSelector {
 
   public function getFieldSpecifications() {
-    return array(
+    $fields = array(
       new DifferentialTitleFieldSpecification(),
       new DifferentialSummaryFieldSpecification(),
       new DifferentialTestPlanFieldSpecification(),
@@ -34,14 +34,52 @@ final class DifferentialDefaultFieldSelector
       new DifferentialCommitsFieldSpecification(),
       new DifferentialDependenciesFieldSpecification(),
       new DifferentialManiphestTasksFieldSpecification(),
-      new DifferentialHostFieldSpecification(),
-      new DifferentialPathFieldSpecification(),
-      new DifferentialArcanistProjectFieldSpecification(),
-      new DifferentialApplyPatchFieldSpecification(),
-      new DifferentialExportPatchFieldSpecification(),
-      new DifferentialRevisionIDFieldSpecification(),
-      new DifferentialGitSVNIDFieldSpecification(),
     );
+
+    if (PhabricatorEnv::getEnvConfig('differential.show-host-field')) {
+      $fields = array_merge(
+        $fields,
+        array(
+          new DifferentialHostFieldSpecification(),
+          new DifferentialPathFieldSpecification(),
+        ));
+    }
+
+    $fields = array_merge(
+      $fields,
+      array(
+        new DifferentialBranchFieldSpecification(),
+        new DifferentialArcanistProjectFieldSpecification(),
+        new DifferentialApplyPatchFieldSpecification(),
+        new DifferentialRevisionIDFieldSpecification(),
+        new DifferentialGitSVNIDFieldSpecification(),
+        new DifferentialDateModifiedFieldSpecification(),
+        new DifferentialDateCreatedFieldSpecification(),
+      ));
+
+    return $fields;
+  }
+
+  public function sortFieldsForRevisionList(array $fields) {
+    $map = array();
+    foreach ($fields as $field) {
+      $map[get_class($field)] = $field;
+    }
+
+    $map = array_select_keys(
+      $map,
+      array(
+        'DifferentialRevisionIDFieldSpecification',
+        'DifferentialTitleFieldSpecification',
+        'DifferentialRevisionStatusFieldSpecification',
+        'DifferentialAuthorFieldSpecification',
+        'DifferentialReviewersFieldSpecification',
+        'DifferentialDateModifiedFieldSpecification',
+        'DifferentialDateCreatedFieldSpecification',
+      )) + $map;
+
+    return array_values($map);
   }
 
 }
+

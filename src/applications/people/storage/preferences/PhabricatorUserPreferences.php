@@ -19,10 +19,12 @@
 class PhabricatorUserPreferences extends PhabricatorUserDAO {
 
   const PREFERENCE_MONOSPACED     = 'monospaced';
+  const PREFERENCE_EDITOR         = 'editor';
   const PREFERENCE_TITLES         = 'titles';
 
   const PREFERENCE_RE_PREFIX      = 're-prefix';
   const PREFERENCE_NO_SELF_MAIL   = 'self-mail';
+  const PREFERENCE_MAILTAGS       = 'mailtags';
 
   protected $userPHID;
   protected $preferences = array();

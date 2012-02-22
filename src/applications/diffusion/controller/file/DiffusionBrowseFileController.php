@@ -1,7 +1,7 @@
 <?php
 
 /*
- * Copyright 2011 Facebook, Inc.
+ * Copyright 2012 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -95,6 +95,25 @@ class DiffusionBrowseFileController extends DiffusionController {
       $select.
       '<button>View</button>');
     $view_select_panel->appendChild($view_select_form);
+
+    $user = $request->getUser();
+    if ($user) {
+      $line = 1;
+      $repository = $this->getDiffusionRequest()->getRepository();
+      $editor_link = $user->loadEditorLink($path, $line, $repository);
+      if ($editor_link) {
+        $view_select_panel->addButton(
+          phutil_render_tag(
+            'a',
+            array(
+              'href' => $editor_link,
+              'class' => 'button',
+            ),
+            'Edit'
+          ));
+      }
+    }
+
     $view_select_panel->appendChild('<div style="clear: both;"></div>');
 
     // Build the content of the file.
@@ -327,7 +346,8 @@ class DiffusionBrowseFileController extends DiffusionController {
               "\xC2\xAB",
               $prev_rev,
               $n,
-              $selected);
+              $selected,
+              'Blame previous revision');
             $prev_link = '<th style="background: ' . $color .
               '; width: 2em;">' . $prev_link . '</th>';
           }
@@ -405,7 +425,8 @@ class DiffusionBrowseFileController extends DiffusionController {
     $name = null,
     $rev = null,
     $line = null,
-    $view = null) {
+    $view = null,
+    $title = null) {
 
     $callsign = $drequest->getCallsign();
 
@@ -430,6 +451,7 @@ class DiffusionBrowseFileController extends DiffusionController {
       'a',
       array(
         'href' => "/diffusion/{$callsign}/browse/{$path}{$at}{$line}{$view}",
+        'title' => $title,
       ),
       $name
     );

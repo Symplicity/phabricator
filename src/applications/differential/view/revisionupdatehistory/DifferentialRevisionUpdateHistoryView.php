@@ -88,8 +88,9 @@ final class DifferentialRevisionUpdateHistoryView extends AphrontView {
     $last_base = null;
     foreach ($data as $row) {
 
-      $name = phutil_escape_html($row['name']);
-      $id   = phutil_escape_html($row['id']);
+      $diff = $row['obj'];
+      $name = $row['name'];
+      $id   = $row['id'];
 
       $old_class = null;
       $new_class = null;
@@ -148,15 +149,22 @@ final class DifferentialRevisionUpdateHistoryView extends AphrontView {
         $class = null;
       }
 
-      if ($row['obj']) {
+      if ($diff) {
         $lint = self::renderDiffLintStar($row['obj']);
         $unit = self::renderDiffUnitStar($row['obj']);
+        $lint_message = self::getDiffLintMessage($diff);
+        $unit_message = self::getDiffUnitMessage($diff);
+        $lint_title = ' title="'.phutil_escape_html($lint_message).'"';
+        $unit_title = ' title="'.phutil_escape_html($unit_message).'"';
+        $base = $this->renderBaseRevision($diff);
       } else {
         $lint = null;
         $unit = null;
+        $lint_title = null;
+        $unit_title = null;
+        $base = null;
       }
 
-      $base = $this->renderBaseRevision($diff);
       if ($last_base !== null && $base !== $last_base) {
         // TODO: Render some kind of notice about rebases.
       }
@@ -164,13 +172,13 @@ final class DifferentialRevisionUpdateHistoryView extends AphrontView {
 
       $rows[] =
         '<tr'.$class.'>'.
-          '<td class="revhistory-name">'.$name.'</td>'.
-          '<td class="revhistory-id">'.$id.'</td>'.
+          '<td class="revhistory-name">'.phutil_escape_html($name).'</td>'.
+          '<td class="revhistory-id">'.phutil_escape_html($id).'</td>'.
           '<td class="revhistory-base">'.phutil_escape_html($base).'</td>'.
           '<td class="revhistory-desc">'.phutil_escape_html($desc).'</td>'.
           '<td class="revhistory-age">'.$age.'</td>'.
-          '<td class="revhistory-star">'.$lint.'</td>'.
-          '<td class="revhistory-star">'.$unit.'</td>'.
+          '<td class="revhistory-star"'.$lint_title.'>'.$lint.'</td>'.
+          '<td class="revhistory-star"'.$unit_title.'>'.$unit.'</td>'.
           '<td class="revhistory-old'.$old_class.'">'.$old.'</td>'.
           '<td class="revhistory-new'.$new_class.'">'.$new.'</td>'.
         '</tr>';
@@ -183,9 +191,10 @@ final class DifferentialRevisionUpdateHistoryView extends AphrontView {
       ));
 
     $options = array(
-      'ignore-all' => 'Ignore Most',
-      'ignore-trailing' => 'Ignore Trailing',
-      'show-all' => 'Show All',
+      DifferentialChangesetParser::WHITESPACE_IGNORE_ALL => 'Ignore Most',
+      DifferentialChangesetParser::WHITESPACE_IGNORE_TRAILING =>
+        'Ignore Trailing',
+      DifferentialChangesetParser::WHITESPACE_SHOW_ALL => 'Show All',
     );
 
     $select = '<select name="whitespace">';

@@ -1,7 +1,7 @@
 <?php
 
 /*
- * Copyright 2011 Facebook, Inc.
+ * Copyright 2012 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,12 +26,17 @@ class HeraldRule extends HeraldDAO {
   protected $contentType;
   protected $mustMatchAll;
   protected $repetitionPolicy;
+  protected $ruleType;
 
   protected $configVersion = 8;
 
   private $ruleApplied = array(); // phids for which this rule has been applied
+  private $invalidOwner = false;
 
-  public static function loadAllByContentTypeWithFullData($content_type) {
+  public static function loadAllByContentTypeWithFullData(
+    $content_type,
+    $object_phid) {
+
     $rules = id(new HeraldRule())->loadAllWhere(
       'contentType = %s',
       $content_type);
@@ -39,6 +44,8 @@ class HeraldRule extends HeraldDAO {
     if (!$rules) {
       return array();
     }
+
+    self::flagDisabledUserRules($rules);
 
     $rule_ids = mpull($rules, 'getID');
 
@@ -52,17 +59,18 @@ class HeraldRule extends HeraldDAO {
 
     $applied = queryfx_all(
       id(new HeraldRule())->establishConnection('r'),
-      'SELECT * FROM %T WHERE ruleID in (%Ld)',
-      self::TABLE_RULE_APPLIED, $rule_ids
-    );
+      'SELECT * FROM %T WHERE phid = %s',
+      self::TABLE_RULE_APPLIED,
+      $object_phid);
+    $applied = ipull($applied, null, 'ruleID');
 
     $conditions = mgroup($conditions, 'getRuleID');
     $actions = mgroup($actions, 'getRuleID');
     $applied = igroup($applied, 'ruleID');
 
-
     foreach ($rules as $rule) {
-      $rule->attachAllRuleApplied(idx($applied, $rule->getID(), array()));
+      $rule->setRuleApplied($object_phid, isset($applied[$rule->getID()]));
+
       $rule->attachConditions(idx($conditions, $rule->getID(), array()));
       $rule->attachActions(idx($actions, $rule->getID(), array()));
     }
@@ -70,27 +78,40 @@ class HeraldRule extends HeraldDAO {
     return $rules;
   }
 
+  private static function flagDisabledUserRules(array $rules) {
+
+    $users = array();
+    foreach ($rules as $rule) {
+      if ($rule->getRuleType() != HeraldRuleTypeConfig::RULE_TYPE_PERSONAL) {
+        continue;
+      }
+      $users[$rule->getAuthorPHID()] = true;
+    }
+
+    $handles = id(new PhabricatorObjectHandleData(array_keys($users)))
+      ->loadHandles();
+
+    foreach ($rules as $key => $rule) {
+      if ($rule->getRuleType() != HeraldRuleTypeConfig::RULE_TYPE_PERSONAL) {
+        continue;
+      }
+      $handle = $handles[$rule->getAuthorPHID()];
+      if (!$handle->isComplete() || $handle->isDisabled()) {
+        $rule->invalidOwner = true;
+      }
+    }
+  }
+
   public function getRuleApplied($phid) {
-    // defaults to false because (ruleID, phid) pairs not in the db imply
-    // a rule that's not been applied before
-    return idx($this->ruleApplied, $phid, false);
+    if (idx($this->ruleApplied, $phid) === null) {
+      throw new Exception("Call setRuleApplied() before getRuleApplied()!");
+    }
+    return $this->ruleApplied[$phid];
   }
 
-  public function setRuleApplied($phid) {
-    $this->ruleApplied[$phid] = true;
-  }
-
-  public function attachAllRuleApplied(array $applied) {
-    // turn array of array(ruleID, phid) into array of ruleID => true
-    $this->ruleApplied = array_fill_keys(ipull($applied, 'phid'), true);
- }
-
-  public static function saveRuleApplied($rule_id, $phid) {
-    queryfx(
-      id(new HeraldRule())->establishConnection('w'),
-      'INSERT IGNORE INTO %T (phid, ruleID) VALUES (%s, %d)',
-      self::TABLE_RULE_APPLIED, $phid, $rule_id
-    );
+  public function setRuleApplied($phid, $applied) {
+    $this->ruleApplied[$phid] = $applied;
+    return $this;
   }
 
   public function loadConditions() {
@@ -129,6 +150,36 @@ class HeraldRule extends HeraldDAO {
 
   public function getActions() {
     return $this->actions;
+  }
+
+  public function loadEdits() {
+    if (!$this->getID()) {
+      return array();
+    }
+    $edits = id(new HeraldRuleEdit())->loadAllWhere(
+      'ruleID = %d ORDER BY dateCreated DESC',
+      $this->getID());
+
+    return $edits;
+  }
+
+  public function attachEdits(array $edits) {
+    $this->edits = $edits;
+    return $this;
+  }
+
+  public function getEdits() {
+    if ($this->edits === null) {
+      throw new Exception("Attach edits before accessing them!");
+    }
+    return $this->edits;
+  }
+
+  public function saveEdit($editor_phid) {
+    $edit = new HeraldRuleEdit();
+    $edit->setRuleID($this->getID());
+    $edit->setEditorPHID($editor_phid);
+    $edit->save();
   }
 
   public function saveConditions(array $conditions) {
@@ -181,6 +232,10 @@ class HeraldRule extends HeraldDAO {
         $this->getID());
       parent::delete();
 //    $this->saveTransaction();
+  }
+
+  public function hasInvalidOwner() {
+    return $this->invalidOwner;
   }
 
 }

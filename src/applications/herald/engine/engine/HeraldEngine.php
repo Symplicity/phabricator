@@ -28,11 +28,13 @@ class HeraldEngine {
 
   public static function loadAndApplyRules(HeraldObjectAdapter $object) {
     $content_type = $object->getHeraldTypeName();
-    $rules = HeraldRule::loadAllByContentTypeWithFullData($content_type);
+    $rules = HeraldRule::loadAllByContentTypeWithFullData(
+      $content_type,
+      $object->getPHID());
 
     $engine = new HeraldEngine();
     $effects = $engine->applyRules($rules, $object);
-    $engine->applyEffects($effects, $object);
+    $engine->applyEffects($effects, $object, $rules);
 
     return $engine->getTranscript();
   }
@@ -116,7 +118,11 @@ class HeraldEngine {
     return $effects;
   }
 
-  public function applyEffects(array $effects, HeraldObjectAdapter $object) {
+  public function applyEffects(
+    array $effects,
+    HeraldObjectAdapter $object,
+    array $rules) {
+
     $this->transcript->setDryRun($object instanceof HeraldDryRunAdapter);
 
     $xscripts = $object->applyHeraldEffects($effects);
@@ -130,16 +136,48 @@ class HeraldEngine {
     }
 
     if (!$this->transcript->getDryRun()) {
+
+      $rules = mpull($rules, null, 'getID');
+      $applied_ids = array();
+      $first_policy = HeraldRepetitionPolicyConfig::toInt(
+        HeraldRepetitionPolicyConfig::FIRST);
+
       // Mark all the rules that have had their effects applied as having been
       // executed for the current object.
       $rule_ids = mpull($xscripts, 'getRuleID');
+
       foreach ($rule_ids as $rule_id) {
         if (!$rule_id) {
           // Some apply transcripts are purely informational and not associated
           // with a rule, e.g. carryover emails from earlier revisions.
           continue;
         }
-        HeraldRule::saveRuleApplied($rule_id, $object->getPHID());
+
+        $rule = idx($rules, $rule_id);
+        if (!$rule) {
+          continue;
+        }
+
+        if ($rule->getRepetitionPolicy() == $first_policy) {
+          $applied_ids[] = $rule_id;
+        }
+      }
+
+      if ($applied_ids) {
+        $conn_w = id(new HeraldRule())->establishConnection('w');
+        $sql = array();
+        foreach ($applied_ids as $id) {
+          $sql[] = qsprintf(
+            $conn_w,
+            '(%s, %d)',
+            $object->getPHID(),
+            $id);
+        }
+        queryfx(
+          $conn_w,
+          'INSERT IGNORE INTO %T (phid, ruleID) VALUES %Q',
+          HeraldRule::TABLE_RULE_APPLIED,
+          implode(', ', $sql));
       }
     }
   }
@@ -187,12 +225,10 @@ class HeraldEngine {
     } else if (!$conditions) {
       $reason = "Rule failed automatically because it has no conditions.";
       $result = false;
-/* TOOD: Restore this in some form?
-    } else if (!is_fb_employee($rule->getAuthorPHID())) {
-      $reason = "Rule failed automatically because its owner is not an ".
-                "active employee.";
+    } else if ($rule->hasInvalidOwner()) {
+      $reason = "Rule failed automatically because its owner is invalid ".
+                "or disabled.";
       $result = false;
-*/
     } else {
       foreach ($conditions as $condition) {
         $match = $this->doesConditionMatch($rule, $condition, $object);

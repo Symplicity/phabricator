@@ -1,7 +1,7 @@
 <?php
 
 /*
- * Copyright 2011 Facebook, Inc.
+ * Copyright 2012 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,10 +20,16 @@ class HeraldHomeController extends HeraldController {
 
   private $view;
   private $filter;
+  private $global;
 
   public function willProcessRequest(array $data) {
     $this->view = idx($data, 'view');
-    $this->setFilter($this->view);
+    $this->global = idx($data, 'global');
+    if ($this->global) {
+      $this->setFilter($this->view.'/global');
+    } else {
+      $this->setFilter($this->view);
+    }
   }
 
   public function getFilter() {
@@ -45,10 +51,23 @@ class HeraldHomeController extends HeraldController {
       $this->view = key($map);
     }
 
-    $rules = id(new HeraldRule())->loadAllWhere(
-      'contentType = %s AND authorPHID = %s',
-      $this->view,
-      $user->getPHID());
+    if ($this->global) {
+      $rules = id(new HeraldRule())->loadAllWhere(
+        'contentType = %s AND ruleType = %s',
+        $this->view,
+        HeraldRuleTypeConfig::RULE_TYPE_GLOBAL);
+    } else {
+      $rules = id(new HeraldRule())->loadAllWhere(
+        'contentType = %s AND authorPHID = %s AND ruleType = %s',
+        $this->view,
+        $user->getPHID(),
+        HeraldRuleTypeConfig::RULE_TYPE_PERSONAL);
+    }
+
+    foreach ($rules as $rule) {
+      $edits = $rule->loadEdits();
+      $rule->attachEdits($edits);
+    }
 
     $need_phids = mpull($rules, 'getAuthorPHID');
     $handles = id(new PhabricatorObjectHandleData($need_phids))
@@ -56,10 +75,12 @@ class HeraldHomeController extends HeraldController {
 
     $list_view = id(new HeraldRuleListView())
       ->setRules($rules)
+      ->setShowOwner(!$this->global)
       ->setHandles($handles)
       ->setMap($map)
       ->setAllowCreation(true)
-      ->setView($this->view);
+      ->setView($this->view)
+      ->setUser($user);
     $panel = $list_view->render();
 
 

@@ -1,7 +1,7 @@
 <?php
 
 /*
- * Copyright 2011 Facebook, Inc.
+ * Copyright 2012 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -21,18 +21,20 @@
  */
 class PhabricatorSearchController extends PhabricatorSearchBaseController {
 
-  private $id;
+  private $key;
 
   public function willProcessRequest(array $data) {
-    $this->id = idx($data, 'id');
+    $this->key = idx($data, 'key');
   }
 
   public function processRequest() {
     $request = $this->getRequest();
     $user = $request->getUser();
 
-    if ($this->id) {
-      $query = id(new PhabricatorSearchQuery())->load($this->id);
+    if ($this->key) {
+      $query = id(new PhabricatorSearchQuery())->loadOneWhere(
+        'queryKey = %s',
+        $this->key);
       if (!$query) {
         return new Aphront404Response();
       }
@@ -42,24 +44,53 @@ class PhabricatorSearchController extends PhabricatorSearchBaseController {
       if ($request->isFormPost()) {
         $query->setQuery($request->getStr('query'));
 
-        if (strlen($request->getStr('type'))) {
-          $query->setParameter('type', $request->getStr('type'));
-        }
+        if ($request->getStr('scope')) {
+          switch ($request->getStr('scope')) {
+            case PhabricatorSearchScope::SCOPE_OPEN_REVISIONS:
+              $query->setParameter('open', 1);
+              $query->setParameter(
+                'type',
+                PhabricatorPHIDConstants::PHID_TYPE_DREV);
+              break;
+            case PhabricatorSearchScope::SCOPE_OPEN_TASKS:
+              $query->setParameter('open', 1);
+              $query->setParameter(
+                'type',
+                PhabricatorPHIDConstants::PHID_TYPE_TASK);
+              break;
+            case PhabricatorSearchScope::SCOPE_WIKI:
+              $query->setParameter(
+                'type',
+                PhabricatorPHIDConstants::PHID_TYPE_WIKI);
+              break;
+            case PhabricatorSearchScope::SCOPE_COMMITS:
+              $query->setParameter(
+                'type',
+                PhabricatorPHIDConstants::PHID_TYPE_CMIT);
+              break;
+            default:
+              break;
+          }
+        } else {
+          if (strlen($request->getStr('type'))) {
+            $query->setParameter('type', $request->getStr('type'));
+          }
 
-        if ($request->getArr('author')) {
-          $query->setParameter('author', $request->getArr('author'));
-        }
+          if ($request->getArr('author')) {
+            $query->setParameter('author', $request->getArr('author'));
+          }
 
-        if ($request->getArr('owner')) {
-          $query->setParameter('owner', $request->getArr('owner'));
-        }
+          if ($request->getArr('owner')) {
+            $query->setParameter('owner', $request->getArr('owner'));
+          }
 
-        if ($request->getInt('open')) {
-          $query->setParameter('open', $request->getInt('open'));
-        }
+          if ($request->getInt('open')) {
+            $query->setParameter('open', $request->getInt('open'));
+          }
 
-        if ($request->getArr('project')) {
-          $query->setParameter('project', $request->getArr('project'));
+          if ($request->getArr('project')) {
+            $query->setParameter('project', $request->getArr('project'));
+          }
         }
 
         if ($request->getArr('repository')) {
@@ -68,7 +99,7 @@ class PhabricatorSearchController extends PhabricatorSearchBaseController {
 
         $query->save();
         return id(new AphrontRedirectResponse())
-          ->setURI('/search/'.$query->getID().'/');
+          ->setURI('/search/'.$query->getQueryKey().'/');
       }
     }
 
@@ -230,7 +261,7 @@ class PhabricatorSearchController extends PhabricatorSearchBaseController {
         $results,
       ),
       array(
-        'title' => 'Results: what',
+        'title' => 'Search Results',
       ));
   }
 

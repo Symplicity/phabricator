@@ -1,7 +1,7 @@
 <?php
 
 /*
- * Copyright 2011 Facebook, Inc.
+ * Copyright 2012 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -33,6 +33,11 @@ abstract class ConduitAPIMethod {
 
   public function getErrorDescription($error_code) {
     return idx($this->defineErrorTypes(), $error_code, 'Unknown Error');
+  }
+
+  public function getRequiredScope() {
+    // by default, conduit methods are not accessible via OAuth
+    return PhabricatorOAuthServerScope::SCOPE_NOT_ACCESSIBLE;
   }
 
   public function executeMethod(ConduitAPIRequest $request) {
@@ -85,7 +90,7 @@ abstract class ConduitAPIMethod {
     $host->setPath('/');
     $host = (string)$host;
 
-    $self = PhabricatorEnv::getProductionURI('/');
+    $self = PhabricatorEnv::getURI('/');
     if ($self !== $host) {
       throw new Exception(
         "Your client is connecting to this install as '{$host}', but it is ".

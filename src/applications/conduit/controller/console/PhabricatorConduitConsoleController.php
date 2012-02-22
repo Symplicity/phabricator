@@ -1,7 +1,7 @@
 <?php
 
 /*
- * Copyright 2011 Facebook, Inc.
+ * Copyright 2012 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -36,6 +36,7 @@ class PhabricatorConduitConsoleController
     if (empty($methods[$this->method])) {
       $this->method = key($methods);
     }
+    $this->setFilter('method/'.$this->method);
 
     $method_class = $methods[$this->method];
     PhutilSymbolLoader::loadClass($method_class);
@@ -108,60 +109,11 @@ class PhabricatorConduitConsoleController
     $panel->appendChild($form);
     $panel->setWidth(AphrontPanelView::WIDTH_FULL);
 
-    $view = new AphrontSideNavView();
-    foreach ($this->buildNavItems() as $item) {
-      $view->addNavItem($item);
-    }
-
-    $view->appendChild($panel);
-
     return $this->buildStandardPageResponse(
-      array($view),
+      array($panel),
       array(
         'title' => 'Conduit Console',
-        'tab'   => 'console',
       ));
-  }
-
-  private function buildNavItems() {
-    $classes = $this->getAllMethodImplementationClasses();
-    $method_names = array();
-    foreach ($classes as $method_class) {
-      $method_name = ConduitAPIMethod::getAPIMethodNameFromClassName(
-        $method_class);
-      $parts = explode('.', $method_name);
-      $method_names[] = array(
-        'full_name'   => $method_name,
-        'group_name'  => reset($parts),
-      );
-    }
-    $method_names = igroup($method_names, 'group_name');
-    ksort($method_names);
-
-    $items = array();
-    foreach ($method_names as $group => $methods) {
-      $items[] = phutil_render_tag(
-        'a',
-        array(
-        ),
-        phutil_escape_html($group));
-      foreach ($methods as $method) {
-        $method_name = $method['full_name'];
-        $selected = ($method_name == $this->method);
-        $items[] = phutil_render_tag(
-          'a',
-          array(
-            'class' => $selected ? 'aphront-side-nav-selected' : null,
-            'href'  => '/conduit/method/'.$method_name,
-          ),
-          phutil_escape_html($method_name));
-      }
-      $items[] = '<hr />';
-    }
-    // Pop off the last '<hr />'.
-    array_pop($items);
-
-    return $items;
   }
 
   private function getAllMethods() {
@@ -173,22 +125,4 @@ class PhabricatorConduitConsoleController
     }
     return $methods;
   }
-
-  private function getAllMethodImplementationClasses() {
-    $classes = id(new PhutilSymbolLoader())
-      ->setAncestorClass('ConduitAPIMethod')
-      ->setType('class')
-      ->selectSymbolsWithoutLoading();
-
-    $class_names = array_values(ipull($classes, 'name'));
-    foreach ($class_names as $key => $class_name) {
-      $class_info = new ReflectionClass($class_name);
-      if ($class_info->isAbstract()) {
-        unset($class_names[$key]);
-      }
-    }
-
-    return array_values($class_names);
-  }
-
 }

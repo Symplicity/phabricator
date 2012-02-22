@@ -58,16 +58,27 @@ class PhabricatorProjectProfileEditController
     if ($request->isFormPost()) {
 
       try {
+        $xactions = array();
+        $xaction = new PhabricatorProjectTransaction();
+        $xaction->setTransactionType(
+          PhabricatorProjectTransactionType::TYPE_NAME);
+        $xaction->setNewValue($request->getStr('name'));
+        $xactions[] = $xaction;
+
+        $xaction = new PhabricatorProjectTransaction();
+        $xaction->setTransactionType(
+          PhabricatorProjectTransactionType::TYPE_STATUS);
+        $xaction->setNewValue($request->getStr('status'));
+        $xactions[] = $xaction;
+
         $editor = new PhabricatorProjectEditor($project);
         $editor->setUser($user);
-        $editor->setName($request->getStr('name'));
-        $editor->save();
+        $editor->applyTransactions($xactions);
       } catch (PhabricatorProjectNameCollisionException $ex) {
         $e_name = 'Not Unique';
         $errors[] = $ex->getMessage();
       }
 
-      $project->setStatus($request->getStr('status'));
       $project->setSubprojectPHIDs($request->getArr('set_subprojects'));
       $profile->setBlurb($request->getStr('blurb'));
 

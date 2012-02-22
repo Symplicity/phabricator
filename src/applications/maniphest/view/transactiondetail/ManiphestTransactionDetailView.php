@@ -1,7 +1,7 @@
 <?php
 
 /*
- * Copyright 2011 Facebook, Inc.
+ * Copyright 2012 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -225,16 +225,17 @@ class ManiphestTransactionDetailView extends ManiphestView {
     $num = $this->commentNumber;
     if ($num && !$this->preview) {
       Javelin::initBehavior('phabricator-watch-anchor');
+      $anchor_name = 'comment-'.$num;
       $info[] = javelin_render_tag(
         'a',
         array(
-          'name' => 'comment-'.$num,
-          'href' => '#comment-'.$num,
+          'name'  => $anchor_name,
+          'id'    => $anchor_name,
+          'href'  => '#'.$anchor_name,
         ),
-        'Comment T'.$any_transaction->getTaskID().'#'.$num);
-      $comment_anchor = 'anchor-comment-'.$num;
+        'T'.$any_transaction->getTaskID().'#'.$anchor_name);
+      $comment_anchor = 'anchor-'.$anchor_name;
     }
-
 
     $info = implode(' &middot; ', array_filter($info));
 
@@ -562,6 +563,7 @@ class ManiphestTransactionDetailView extends ManiphestView {
     switch ($transaction->getTransactionType()) {
       case ManiphestTransactionType::TYPE_DESCRIPTION:
         $id = $transaction->getID();
+
         $old_text = wordwrap($transaction->getOldValue(), 80);
         $new_text = wordwrap($transaction->getNewValue(), 80);
 
@@ -591,20 +593,6 @@ class ManiphestTransactionDetailView extends ManiphestView {
     $id = $transaction->getID();
 
     Javelin::initBehavior('maniphest-transaction-expand');
-
-    switch ($transaction->getTransactionType()) {
-      case ManiphestTransactionType::TYPE_DESCRIPTION:
-        require_celerity_resource('differential-changeset-view-css');
-        require_celerity_resource('syntax-highlighting-css');
-        $whitespace_mode = DifferentialChangesetParser::WHITESPACE_SHOW_ALL;
-        Javelin::initBehavior('differential-show-more', array(
-          'uri'         => '/maniphest/task/descriptionchange/'.$id.'/',
-          'whitespace'  => $whitespace_mode,
-        ));
-        break;
-      default:
-        break;
-    }
 
     return javelin_render_tag(
       'a',

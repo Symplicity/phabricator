@@ -25,7 +25,7 @@ final class DifferentialRevisionCommentView extends AphrontView {
   private $inlines;
   private $changesets;
   private $target;
-  private $commentNumber;
+  private $anchorName;
   private $user;
   private $versusDiffID;
 
@@ -70,8 +70,8 @@ final class DifferentialRevisionCommentView extends AphrontView {
     return $this;
   }
 
-  public function setCommentNumber($comment_number) {
-    $this->commentNumber = $comment_number;
+  public function setAnchorName($anchor_name) {
+    $this->anchorName = $anchor_name;
     return $this;
   }
 
@@ -111,17 +111,18 @@ final class DifferentialRevisionCommentView extends AphrontView {
     $info[] = $date;
 
     $comment_anchor = null;
-    $num = $this->commentNumber;
-    if ($num && !$this->preview) {
+    $anchor_name = $this->anchorName;
+    if ($anchor_name != '' && !$this->preview) {
       Javelin::initBehavior('phabricator-watch-anchor');
       $info[] = phutil_render_tag(
         'a',
         array(
-          'name' => 'comment-'.$num,
-          'href' => '#comment-'.$num,
+          'name'  => $anchor_name,
+          'id'    => $anchor_name,
+          'href'  => '#'.$anchor_name,
         ),
-        'Comment D'.$comment->getRevisionID().'#'.$num);
-      $comment_anchor = 'anchor-comment-'.$num;
+        'D'.$comment->getRevisionID().'#'.$anchor_name);
+      $comment_anchor = 'anchor-'.$anchor_name;
     }
 
     $info = implode(' &middot; ', array_filter($info));
@@ -134,8 +135,9 @@ final class DifferentialRevisionCommentView extends AphrontView {
 
     $content = $comment->getContent();
     $head_content = null;
+    $hide_comments = true;
     if (strlen(rtrim($content))) {
-      $title = "{$author_link} {$verb} this revision:";
+      $hide_comments = false;
       $cache = $comment->getCache();
       if (strlen($cache)) {
         $content = $cache;
@@ -153,16 +155,12 @@ final class DifferentialRevisionCommentView extends AphrontView {
         '<div class="phabricator-remarkup">'.
           $content.
         '</div>';
-    } else {
-      $title = null;
-      $head_content =
-        '<div class="differential-comment-nocontent">'.
-          "<p>{$author_link} {$verb} this revision.</p>".
-        '</div>';
-      $content = null;
     }
 
+    $title = "{$author_link} {$verb} this revision.";
+
     if ($this->inlines) {
+      $hide_comments = false;
       $inline_render = array();
       $inlines = $this->inlines;
       $changesets = $this->changesets;
@@ -310,6 +308,7 @@ final class DifferentialRevisionCommentView extends AphrontView {
     }
 
     if ($metadata_blocks) {
+      $hide_comments = false;
       $metadata_blocks =
         '<div class="differential-comment-metadata">'.
           implode("\n", $metadata_blocks).
@@ -318,19 +317,20 @@ final class DifferentialRevisionCommentView extends AphrontView {
       $metadata_blocks = null;
     }
 
+    $hide_comments_class = ($hide_comments ? 'hide' : '');
     return phutil_render_tag(
       'div',
       array(
-        'class' => "differential-comment {$action_class}",
+        'class' => "differential-comment",
         'id'    => $comment_anchor,
+        'style' => $background,
       ),
-      '<div class="differential-comment-head">'.
-        '<span class="differential-comment-info">'.$info.'</span>'.
-        '<span class="differential-comment-title">'.$title.'</span>'.
-        '<div style="clear: both;"></div>'.
-      '</div>'.
-      '<div class="differential-comment-body" style="'.$background.'">'.
-        '<div class="differential-comment-content">'.
+      '<div class="differential-comment-detail '.$action_class.'">'.
+        '<div class="differential-comment-header">'.
+          '<span class="differential-comment-info">'.$info.'</span>'.
+          '<span class="differential-comment-title">'.$title.'</span>'.
+        '</div>'.
+        '<div class="differential-comment-content '.$hide_comments_class.'">'.
           $head_content.
           $metadata_blocks.
           '<div class="differential-comment-core">'.
