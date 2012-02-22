@@ -34,15 +34,10 @@ final class PhabricatorPHIDConstants {
   const PHID_TYPE_POLL    = 'POLL';
   const PHID_TYPE_WIKI    = 'WIKI';
   const PHID_TYPE_APRJ    = 'APRJ';
-<<<<<<< HEAD
   const PHID_TYPE_SOURCE  = 'SRCE';
-  const PHID_TYPE_ACMT   = 'ACMT';
-
-=======
   const PHID_TYPE_ACMT    = 'ACMT';
   const PHID_TYPE_DRYR    = 'DRYR';
   const PHID_TYPE_DRYL    = 'DRYL';
   const PHID_TYPE_OASC    = 'OASC';
   const PHID_TYPE_OASA    = 'OASA';
->>>>>>> upstream/master
 }
