@@ -1,7 +1,7 @@
 <?php
 
 /*
- * Copyright 2011 Facebook, Inc.
+ * Copyright 2012 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,20 +16,29 @@
  * limitations under the License.
  */
 
-class PhabricatorAuditActionConstants {
+final class PhabricatorAuditActionConstants {
 
   const CONCERN = 'concern';
   const ACCEPT = 'accept';
-  // TODO: enable comment
-  //const COMMENT = 'comment';
+  const COMMENT = 'comment';
 
   public static function getActionNameMap() {
     static $map = array(
-      self::CONCERN => 'Have Concern',
-      self::ACCEPT => 'Accept',
+      self::COMMENT => 'Comment',
+      self::CONCERN => 'Raise Concern',
+      self::ACCEPT  => 'Accept Commit',
     );
 
     return $map;
+  }
+
+  public static function getActionPastTenseVerb($action) {
+    static $map = array(
+      self::COMMENT => 'commented on',
+      self::CONCERN => 'raised a concern with',
+      self::ACCEPT  => 'accepted',
+    );
+    return idx($map, $action, 'updated');
   }
 
   public static function getStatusNameMap() {

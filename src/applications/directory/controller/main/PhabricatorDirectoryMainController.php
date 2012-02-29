@@ -73,15 +73,22 @@ class PhabricatorDirectoryMainController
       $triage_panel = null;
       $tasks_panel = null;
     }
+
     $jump_panel = $this->buildJumpPanel();
     $revision_panel = $this->buildRevisionPanel();
+    $app_panel = $this->buildAppPanel();
+    $audit_panel = $this->buildAuditPanel();
+    $commit_panel = $this->buildCommitPanel();
 
     $content = array(
+      $app_panel,
+      $jump_panel,
       $unbreak_panel,
       $triage_panel,
-      $jump_panel,
       $revision_panel,
       $tasks_panel,
+      $audit_panel,
+      $commit_panel,
     );
 
     $nav->appendChild($content);
@@ -110,8 +117,8 @@ class PhabricatorDirectoryMainController
         '/^t$/i'                    => 'uri:/maniphest/',
         '/^p$/i'                    => 'uri:/project/',
         '/^u$/i'                    => 'uri:/people/',
-        '/r([A-Z]+)$/'              => 'repository',
-        '/r([A-Z]+)(\S+)$/'         => 'commit',
+        '/^r([A-Z]+)$/'              => 'repository',
+        '/^r([A-Z]+)(\S+)$/'         => 'commit',
         '/^d(\d+)$/i'               => 'revision',
         '/^t(\d+)$/i'               => 'task',
         '/^p\s+(.+)$/i'            => 'project',
@@ -224,31 +231,28 @@ class PhabricatorDirectoryMainController
     $task_query->withStatus(ManiphestTaskQuery::STATUS_OPEN);
     $task_query->withPriority(ManiphestTaskPriority::PRIORITY_UNBREAK_NOW);
     $task_query->setLimit(10);
-    $task_query->setCalculateRows(true);
 
     $tasks = $task_query->execute();
 
-    if ($tasks) {
-      $panel = new AphrontPanelView();
-      $panel->setHeader('Unbreak Now!');
-      $panel->setCaption('Open tasks with "Unbreak Now!" priority.');
-      $panel->addButton(
-        phutil_render_tag(
-          'a',
-          array(
-            'href' => '/maniphest/view/all/',
-            'class' => 'grey button',
-          ),
-          'View All Unbreak Now ('.$task_query->getRowCount().") \xC2\xBB"));
-
-      $panel->appendChild($this->buildTaskListView($tasks));
-    } else {
-      $panel = new AphrontMiniPanelView();
-      $panel->appendChild(
-        '<p><strong>No "Unbreak Now!" Tasks:</strong> '.
-        'Nothing appears to be critically broken right now.</p>');
-      $panel = '<br />'.$panel->render();
+    if (!$tasks) {
+      return $this->renderMiniPanel(
+        'No "Unbreak Now!" Tasks',
+        'Nothing appears to be critically broken right now.');
     }
+
+    $panel = new AphrontPanelView();
+    $panel->setHeader('Unbreak Now!');
+    $panel->setCaption('Open tasks with "Unbreak Now!" priority.');
+    $panel->addButton(
+      phutil_render_tag(
+        'a',
+        array(
+          'href' => '/maniphest/view/all/',
+          'class' => 'grey button',
+        ),
+        "View All Unbreak Now \xC2\xBB"));
+
+    $panel->appendChild($this->buildTaskListView($tasks));
 
     return $panel;
   }
@@ -263,38 +267,36 @@ class PhabricatorDirectoryMainController
       $task_query->withPriority(ManiphestTaskPriority::PRIORITY_TRIAGE);
       $task_query->withProjects(mpull($projects, 'getPHID'));
       $task_query->withAnyProject(true);
-      $task_query->setCalculateRows(true);
       $task_query->setLimit(10);
       $tasks = $task_query->execute();
     } else {
       $tasks = array();
     }
 
-    if ($tasks) {
-      $panel = new AphrontPanelView();
-      $panel->setHeader('Needs Triage');
-      $panel->setCaption(
-        'Open tasks with "Needs Triage" priority in '.
-        '<a href="/project/">projects you are a member of</a>.');
-
-      $panel->addButton(
-        phutil_render_tag(
-          'a',
-          array(
-            // TODO: This should filter to just your projects' need-triage
-            // tasks?
-            'href' => '/maniphest/view/alltriage/',
-            'class' => 'grey button',
-          ),
-          'View All Triage ('.$task_query->getRowCount().") \xC2\xBB"));
-      $panel->appendChild($this->buildTaskListView($tasks));
-    } else {
-      $panel = new AphrontMiniPanelView();
-      $panel->appendChild(
-        '<p><strong>No "Needs Triage" Tasks:</strong> '.
+    if (!$tasks) {
+      return $this->renderMiniPanel(
+        'No "Needs Triage" Tasks',
         'No tasks in <a href="/project/">projects you are a member of</a> '.
         'need triage.</p>');
     }
+
+    $panel = new AphrontPanelView();
+    $panel->setHeader('Needs Triage');
+    $panel->setCaption(
+      'Open tasks with "Needs Triage" priority in '.
+      '<a href="/project/">projects you are a member of</a>.');
+
+    $panel->addButton(
+      phutil_render_tag(
+        'a',
+        array(
+          // TODO: This should filter to just your projects' need-triage
+          // tasks?
+          'href' => '/maniphest/view/alltriage/',
+          'class' => 'grey button',
+        ),
+        "View All Triage \xC2\xBB"));
+    $panel->appendChild($this->buildTaskListView($tasks));
 
     return $panel;
   }
@@ -317,6 +319,12 @@ class PhabricatorDirectoryMainController
       $revisions,
       $user_phid);
 
+    if (!$active) {
+      return $this->renderMiniPanel(
+        'No Waiting Revisions',
+        'No revisions are waiting on you.');
+    }
+
     $panel = new AphrontPanelView();
     $panel->setHeader('Revisions Waiting on You');
     $panel->setCaption('Revisions waiting for you for review or commit.');
@@ -330,24 +338,20 @@ class PhabricatorDirectoryMainController
         ),
         "View Active Revisions \xC2\xBB"));
 
-    if ($active) {
-      $fields =
+    $fields =
 
-      $revision_view = id(new DifferentialRevisionListView())
-        ->setRevisions($active)
-        ->setFields(DifferentialRevisionListView::getDefaultFields())
-        ->setUser($user);
-      $phids = array_merge(
-        array($user_phid),
-        $revision_view->getRequiredHandlePHIDs());
-      $handles = id(new PhabricatorObjectHandleData($phids))->loadHandles();
+    $revision_view = id(new DifferentialRevisionListView())
+      ->setRevisions($active)
+      ->setFields(DifferentialRevisionListView::getDefaultFields())
+      ->setUser($user);
+    $phids = array_merge(
+      array($user_phid),
+      $revision_view->getRequiredHandlePHIDs());
+    $handles = id(new PhabricatorObjectHandleData($phids))->loadHandles();
 
-      $revision_view->setHandles($handles);
+    $revision_view->setHandles($handles);
 
-      $panel->appendChild($revision_view);
-    } else {
-      $panel->appendChild('<p>No revisions are waiting on you.</p>');
-    }
+    $panel->appendChild($revision_view);
 
     return $panel;
   }
@@ -360,37 +364,30 @@ class PhabricatorDirectoryMainController
     $task_query->withStatus(ManiphestTaskQuery::STATUS_OPEN);
     $task_query->setGroupBy(ManiphestTaskQuery::GROUP_PRIORITY);
     $task_query->withOwners(array($user_phid));
-    $task_query->setCalculateRows(true);
     $task_query->setLimit(10);
 
     $tasks = $task_query->execute();
+
+
+    if (!$tasks) {
+      return $this->renderMiniPanel(
+        'No Assigned Tasks',
+        'You have no assigned tasks.');
+    }
 
     $panel = new AphrontPanelView();
     $panel->setHeader('Assigned Tasks');
     $panel->setCaption('Tasks assigned to you.');
 
-    if ($tasks) {
-      $panel->addButton(
-        phutil_render_tag(
-          'a',
-          array(
-            'href' => '/maniphest/',
-            'class' => 'button grey',
-          ),
-          "View All Assigned Tasks (".$task_query->getRowCount().") \xC2\xBB"));
-      $panel->appendChild($this->buildTaskListView($tasks));
-    } else {
-      $panel->addButton(
-        phutil_render_tag(
-          'a',
-          array(
-            'href' => '/maniphest/?users='.
-              ManiphestTaskOwner::OWNER_UP_FOR_GRABS,
-            'class' => 'button grey',
-          ),
-          "View Unassigned Tasks \xC2\xBB"));
-      $panel->appendChild('<p>You have no assigned tasks.</p>');
-    }
+    $panel->addButton(
+      phutil_render_tag(
+        'a',
+        array(
+          'href' => '/maniphest/',
+          'class' => 'button grey',
+        ),
+        "View Active Tasks \xC2\xBB"));
+    $panel->appendChild($this->buildTaskListView($tasks));
 
     return $panel;
   }
@@ -514,49 +511,208 @@ class PhabricatorDirectoryMainController
         'class' => 'phabricator-jump-nav',
         'name'  => 'jump',
         'id'    => $uniq_id,
-      )).
-      phutil_render_tag(
-        'p',
-        array(
-          'class' => 'phabricator-jump-nav-caption',
-        ),
-        'Enter the name of an object like <tt>D123</tt> to quickly jump to '.
-        'it. See '.$doc_link.' or type <tt>help</tt>.');
+      ));
+    $jump_caption = phutil_render_tag(
+      'p',
+      array(
+        'class' => 'phabricator-jump-nav-caption',
+      ),
+      'Enter the name of an object like <tt>D123</tt> to quickly jump to '.
+      'it. See '.$doc_link.' or type <tt>help</tt>.');
 
     $panel = new AphrontPanelView();
+    $panel->addClass('aphront-unpadded-panel-view');
     $panel->appendChild(
       phabricator_render_form(
         $user,
         array(
           'action' => '/jump/',
           'method' => 'POST',
+          'class'  => 'phabricator-jump-nav-form',
         ),
-        $jump_input));
+        $jump_input.
+        $jump_caption));
+
+    return $panel;
+  }
+
+  private function buildAppPanel() {
+    require_celerity_resource('phabricator-app-buttons-css');
 
     $nav_buttons = array();
 
-    if (PhabricatorEnv::getEnvConfig('maniphest.enabled')) {
-      $nav_buttons['/maniphest/task/create/'] = 'Create a Task';
-    }
-    $nav_buttons['/file/'] = 'Upload a File';
-    $nav_buttons['/paste/'] = 'Create Paste';
-    if (PhabricatorEnv::getEnvConfig('phriction.enabled')) {
-      $nav_buttons['/w/'] = 'Browse Wiki';
-    }
-    $nav_buttons['/diffusion/'] = 'Browse Code';
+    $nav_buttons[] = array(
+      'Differential',
+      '/differential/',
+      'differential');
 
-    $panel->appendChild('<div class="phabricator-jump-nav-buttons">');
-    foreach ($nav_buttons as $uri => $name) {
-      $panel->appendChild(
+    if (PhabricatorEnv::getEnvConfig('maniphest.enabled')) {
+      $nav_buttons[] = array(
+        'Maniphest',
+        '/maniphest/',
+        'maniphest');
+      $nav_buttons[] = array(
+        'Create Task',
+        '/maniphest/task/create/',
+        'create-task');
+    }
+
+    $nav_buttons[] = array(
+      'Upload File',
+      '/file/',
+      'upload-file');
+    $nav_buttons[] = array(
+      'Create Paste',
+      '/paste/',
+      'create-paste');
+
+
+    if (PhabricatorEnv::getEnvConfig('phriction.enabled')) {
+      $nav_buttons[] = array(
+        'Browse Wiki',
+        '/w/',
+        'phriction');
+    }
+
+    $nav_buttons[] = array(
+      'Browse Code',
+      '/diffusion/',
+      'diffusion');
+
+    $nav_buttons[] = array(
+      'Audit Code',
+      '/audit/',
+      'audit');
+
+    $view = new AphrontNullView();
+    $view->appendChild('<div class="phabricator-app-buttons">');
+    foreach ($nav_buttons as $info) {
+      list($name, $uri, $icon) = $info;
+
+      $button = phutil_render_tag(
+        'a',
+        array(
+          'href'  => $uri,
+          'class' => 'app-button icon-'.$icon,
+        ),
+        phutil_render_tag(
+          'div',
+          array(
+            'class' => 'app-icon icon-'.$icon,
+          ),
+          ''));
+      $caption = phutil_render_tag(
+        'a',
+        array(
+          'href' => $uri,
+          'class' => 'phabricator-button-caption',
+        ),
+        phutil_escape_html($name));
+
+      $view->appendChild(
+        '<div class="phabricator-app-button">'.
+          $button.
+          $caption.
+        '</div>');
+    }
+    $view->appendChild('<div style="clear: both;"></div></div>');
+
+    return $view;
+  }
+
+  private function renderMiniPanel($title, $body) {
+    $panel = new AphrontMiniPanelView();
+    $panel->appendChild(
+      phutil_render_tag(
+        'p',
+        array(
+        ),
+        '<strong>'.$title.':</strong> '.$body));
+    return $panel;
+  }
+
+  public function buildAuditPanel() {
+    $request = $this->getRequest();
+    $user = $request->getUser();
+
+    $phids = PhabricatorAuditCommentEditor::loadAuditPHIDsForUser($user);
+
+    $query = new PhabricatorAuditQuery();
+    $query->withAuditorPHIDs($phids);
+    $query->withStatus(PhabricatorAuditQuery::STATUS_OPEN);
+    $query->setLimit(10);
+
+    $audits = $query->execute();
+
+    if (!$audits) {
+      return $this->renderMinipanel(
+        'No Audits',
+        'No commits are waiting for you to audit them.');
+    }
+
+    $view = new PhabricatorAuditListView();
+    $view->setAudits($audits);
+
+    $phids = $view->getRequiredHandlePHIDs();
+    $handles = id(new PhabricatorObjectHandleData($phids))->loadHandles();
+    $view->setHandles($handles);
+
+    $panel = new AphrontPanelView();
+    $panel->setHeader('Audits');
+    $panel->setCaption('Commits awaiting your audit.');
+    $panel->appendChild($view);
+      $panel->addButton(
         phutil_render_tag(
           'a',
           array(
-            'href' => $uri,
+            'href' => '/audit/',
             'class' => 'button grey',
           ),
-          phutil_escape_html($name)));
+          "View Active Audits \xC2\xBB"));
+
+    return $panel;
+  }
+
+  public function buildCommitPanel() {
+    $request = $this->getRequest();
+    $user = $request->getUser();
+
+    $phids = array($user->getPHID());
+
+    $query = new PhabricatorAuditCommitQuery();
+    $query->withAuthorPHIDs($phids);
+    $query->withStatus(PhabricatorAuditQuery::STATUS_OPEN);
+    $query->needCommitData(true);
+    $query->setLimit(10);
+
+    $commits = $query->execute();
+
+    if (!$commits) {
+      return $this->renderMinipanel(
+        'No Problem Commits',
+        'No one has raised concerns with your commits.');
     }
-    $panel->appendChild('</div>');
+
+    $view = new PhabricatorAuditCommitListView();
+    $view->setCommits($commits);
+    $view->setUser($user);
+
+    $phids = $view->getRequiredHandlePHIDs();
+    $handles = id(new PhabricatorObjectHandleData($phids))->loadHandles();
+    $view->setHandles($handles);
+
+    $panel = new AphrontPanelView();
+    $panel->setHeader('Problem Commits');
+    $panel->setCaption('Commits which auditors have raised concerns about.');
+    $panel->appendChild($view);
+      $panel->addButton(
+        phutil_render_tag(
+          'a',
+          array(
+            'href' => '/audit/',
+            'class' => 'button grey',
+          ),
+          "View Problem Commits \xC2\xBB"));
 
     return $panel;
   }

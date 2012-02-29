@@ -158,9 +158,24 @@ class AphrontDefaultApplicationConfiguration
       ),
 
       '/oauthserver/' => array(
-        'auth/' => 'PhabricatorOAuthServerAuthController',
-        'token/' => 'PhabricatorOAuthServerTokenController',
-        'test/' => 'PhabricatorOAuthServerTestController',
+        'auth/'          => 'PhabricatorOAuthServerAuthController',
+        'test/'          => 'PhabricatorOAuthServerTestController',
+        'token/'         => 'PhabricatorOAuthServerTokenController',
+        'clientauthorization/' => array(
+          '$' => 'PhabricatorOAuthClientAuthorizationListController',
+          'delete/(?P<phid>[^/]+)/' =>
+            'PhabricatorOAuthClientAuthorizationDeleteController',
+          'edit/(?P<phid>[^/]+)/' =>
+            'PhabricatorOAuthClientAuthorizationEditController',
+        ),
+        'client/' => array(
+          '$'                        => 'PhabricatorOAuthClientListController',
+          'create/$'                 => 'PhabricatorOAuthClientEditController',
+          'delete/(?P<phid>[^/]+)/$' =>
+            'PhabricatorOAuthClientDeleteController',
+          'edit/(?P<phid>[^/]+)/$'   => 'PhabricatorOAuthClientEditController',
+          'view/(?P<phid>[^/]+)/$'   => 'PhabricatorOAuthClientViewController',
+        ),
       ),
 
       '/xhprof/' => array(
@@ -177,6 +192,7 @@ class AphrontDefaultApplicationConfiguration
         '$' => 'ManiphestTaskListController',
         'view/(?P<view>\w+)/$' => 'ManiphestTaskListController',
         'report/(?:(?P<view>\w+)/)?$' => 'ManiphestReportController',
+        'batch/$' => 'ManiphestBatchEditController',
         'task/' => array(
           'create/$' => 'ManiphestTaskEditController',
           'edit/(?P<id>\d+)/$' => 'ManiphestTaskEditController',
@@ -191,6 +207,7 @@ class AphrontDefaultApplicationConfiguration
           'save/' => 'ManiphestTransactionSaveController',
           'preview/(?P<id>\d+)/$' => 'ManiphestTransactionPreviewController',
         ),
+        'export/(?P<key>[^/]+)/$' => 'ManiphestExportController',
       ),
 
       '/T(?P<id>\d+)$' => 'ManiphestTaskDetailController',
@@ -249,7 +266,7 @@ class AphrontDefaultApplicationConfiguration
           'browse/'.
             '(?P<path>.*?)'.
             '(?:[;](?P<commit>[a-z0-9]+))?'.
-            '(?:[$](?P<line>\d+))?'.
+            '(?:[$](?P<line>\d+(?:-\d+)?))?'.
             '$'
               => 'DiffusionBrowseController',
           'diff/'.
@@ -268,10 +285,6 @@ class AphrontDefaultApplicationConfiguration
             'complete/$' => 'DiffusionPathCompleteController',
             'validate/$' => 'DiffusionPathValidateController',
           ),
-        ),
-        'author/' => array(
-          '$' => 'DiffusionCommitListController',
-          '(?P<username>\w+)/$' => 'DiffusionCommitListController',
         ),
         'symbol/(?P<name>[^/]+)/$' => 'DiffusionSymbolController',
       ),
@@ -335,8 +348,11 @@ class AphrontDefaultApplicationConfiguration
       ),
 
       '/audit/' => array(
-        '$' => 'PhabricatorAuditEditController',
-        'edit/$' => 'PhabricatorAuditEditController',
+        '$' => 'PhabricatorAuditListController',
+        'view/(?P<filter>[^/]+)/(?:(?P<name>[^/]+)/)?$'
+          => 'PhabricatorAuditListController',
+        'addcomment/$' => 'PhabricatorAuditAddCommentController',
+        'preview/(?P<id>\d+)/$' => 'PhabricatorAuditPreviewController',
       ),
 
       '/xhpast/' => array(

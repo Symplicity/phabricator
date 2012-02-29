@@ -86,6 +86,9 @@ class DiffusionCommitController extends DiffusionController {
       $content[] = $detail_panel;
     }
 
+    $content[] = $this->buildAuditTable($commit);
+    $content[] = $this->buildComments($commit);
+
     $change_query = DiffusionPathChangeQuery::newFromDiffusionRequest(
       $drequest);
     $changes = $change_query->loadChanges();
@@ -213,6 +216,8 @@ class DiffusionCommitController extends DiffusionController {
       $content[] = $change_list;
     }
 
+    $content[] = $this->buildAddCommentView($commit);
+
     return $this->buildStandardPageResponse(
       $content,
       array(
@@ -263,6 +268,11 @@ class DiffusionCommitController extends DiffusionController {
       $props['Differential Revision'] = $handles[$revision_phid]->renderLink();
     }
 
+    if ($commit->getAuditStatus()) {
+      $props['Audit'] = PhabricatorAuditCommitStatusConstants::getStatusName(
+        $commit->getAuditStatus());
+    }
+
     $request = $this->getDiffusionRequest();
 
     $contains = DiffusionContainsQuery::newFromDiffusionRequest($request);
@@ -288,6 +298,118 @@ class DiffusionCommitController extends DiffusionController {
       '<table class="diffusion-commit-properties">'.
         implode("\n", $rows).
       '</table>';
+  }
+
+  private function buildAuditTable($commit) {
+    $user = $this->getRequest()->getUser();
+
+    $query = new PhabricatorAuditQuery();
+    $query->withCommitPHIDs(array($commit->getPHID()));
+    $audits = $query->execute();
+
+    $view = new PhabricatorAuditListView();
+    $view->setAudits($audits);
+
+    $phids = $view->getRequiredHandlePHIDs();
+    $handles = id(new PhabricatorObjectHandleData($phids))->loadHandles();
+    $view->setHandles($handles);
+    $view->setAuthorityPHIDs(
+      PhabricatorAuditCommentEditor::loadAuditPHIDsForUser($user));
+
+    $panel = new AphrontPanelView();
+    $panel->setHeader('Audits');
+    $panel->appendChild($view);
+
+    return $panel;
+  }
+
+  private function buildComments($commit) {
+    $user = $this->getRequest()->getUser();
+    $comments = id(new PhabricatorAuditComment())->loadAllWhere(
+      'targetPHID = %s ORDER BY dateCreated ASC',
+      $commit->getPHID());
+
+    $view = new DiffusionCommentListView();
+    $view->setUser($user);
+    $view->setComments($comments);
+
+    $phids = $view->getRequiredHandlePHIDs();
+    $handles = id(new PhabricatorObjectHandleData($phids))->loadHandles();
+    $view->setHandles($handles);
+
+    return $view;
+  }
+
+  private function buildAddCommentView($commit) {
+    $user = $this->getRequest()->getUser();
+
+    $is_serious = PhabricatorEnv::getEnvConfig('phabricator.serious-business');
+
+    $draft = id(new PhabricatorDraft())->loadOneWhere(
+      'authorPHID = %s AND draftKey = %s',
+      $user->getPHID(),
+      'diffusion-audit-'.$commit->getID());
+    if ($draft) {
+      $draft = $draft->getDraft();
+    } else {
+      $draft = null;
+    }
+
+    $form = id(new AphrontFormView())
+      ->setUser($user)
+      ->setAction('/audit/addcomment/')
+      ->addHiddenInput('commit', $commit->getPHID())
+      ->appendChild(
+        id(new AphrontFormSelectControl())
+          ->setLabel('Action')
+          ->setName('action')
+          ->setID('audit-action')
+          ->setOptions(PhabricatorAuditActionConstants::getActionNameMap()))
+      ->appendChild(
+        id(new AphrontFormTextAreaControl())
+          ->setLabel('Comments')
+          ->setName('content')
+          ->setValue($draft)
+          ->setID('audit-content')
+          ->setCaption(phutil_render_tag(
+            'a',
+            array(
+              'href' => PhabricatorEnv::getDoclink(
+                'article/Remarkup_Reference.html'),
+              'tabindex' => '-1',
+              'target' => '_blank',
+            ),
+            'Formatting Reference')))
+      ->appendChild(
+        id(new AphrontFormSubmitControl())
+          ->setValue($is_serious ? 'Submit' : 'Cook the Books'));
+
+    $panel = new AphrontPanelView();
+    $panel->setHeader($is_serious ? 'Audit Commit' : 'Creative Accounting');
+    $panel->appendChild($form);
+
+    require_celerity_resource('phabricator-transaction-view-css');
+
+    Javelin::initBehavior('audit-preview', array(
+      'uri'       => '/audit/preview/'.$commit->getID().'/',
+      'preview'   => 'audit-preview',
+      'content'   => 'audit-content',
+      'action'    => 'audit-action',
+    ));
+
+    $preview_panel =
+      '<div class="aphront-panel-preview">
+        <div id="audit-preview">
+          <div class="aphront-panel-preview-loading-text">
+            Loading preview...
+          </div>
+        </div>
+      </div>';
+
+    $view = new AphrontNullView();
+    $view->appendChild($panel);
+    $view->appendChild($preview_panel);
+    return $view;
   }
 
 }

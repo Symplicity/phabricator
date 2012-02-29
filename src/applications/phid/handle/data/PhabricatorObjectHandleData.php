@@ -117,6 +117,11 @@ class PhabricatorObjectHandleData {
                 $handle->setFullName('upforgrabs (Up For Grabs)');
                 $handle->setComplete(true);
                 break;
+              case ManiphestTaskOwner::PROJECT_NO_PROJECT:
+                $handle->setName('No Project');
+                $handle->setFullName('noproject (No Project)');
+                $handle->setComplete(true);
+                break;
               default:
                 $handle->setName('Foul Magicks');
                 break;
@@ -260,8 +265,14 @@ class PhabricatorObjectHandleData {
               // we don't have have info about the repository anymore.
               if ($repository) {
                 $vcs = $repository->getVersionControlSystem();
-                if ($vcs == PhabricatorRepositoryType::REPOSITORY_TYPE_GIT) {
-                  $short_identifier = substr($commit_identifier, 0, 16);
+
+                $type_git = PhabricatorRepositoryType::REPOSITORY_TYPE_GIT;
+                $type_hg = PhabricatorRepositoryType::REPOSITORY_TYPE_MERCURIAL;
+
+                $is_git = ($vcs == $type_git);
+                $is_hg = ($vcs == $type_hg);
+                if ($is_git || $is_hg) {
+                  $short_identifier = substr($commit_identifier, 0, 12);
                 } else {
                   $short_identifier = $commit_identifier;
                 }

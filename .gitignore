@@ -14,3 +14,6 @@
 
 # phpStorm project files
 .idea
+
+# Arcanist scratch directory
+/.arc

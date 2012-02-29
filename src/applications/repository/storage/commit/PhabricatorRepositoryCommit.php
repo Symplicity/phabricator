@@ -22,6 +22,9 @@ class PhabricatorRepositoryCommit extends PhabricatorRepositoryDAO {
   protected $phid;
   protected $commitIdentifier;
   protected $epoch;
+  protected $mailKey;
+  protected $authorPHID;
+  protected $auditStatus = PhabricatorAuditCommitStatusConstants::NONE;
 
   private $commitData;
 
@@ -58,6 +61,13 @@ class PhabricatorRepositoryCommit extends PhabricatorRepositoryDAO {
     return $this->commitData;
   }
 
+  public function save() {
+    if (!$this->mailKey) {
+      $this->mailKey = Filesystem::readRandomCharacters(20);
+    }
+    return parent::save();
+  }
+
   public function delete() {
     $data = $this->loadCommitData();
     $this->openTransaction();
@@ -70,5 +80,47 @@ class PhabricatorRepositoryCommit extends PhabricatorRepositoryDAO {
     $this->saveTransaction();
     return $result;
   }
+
+  /**
+   * Synchronize a commit's overall audit status with the individual audit
+   * triggers.
+   */
+  public function updateAuditStatus(array $rships) {
+    $any_concern = false;
+    $any_accept = false;
+    $any_need = false;
+
+    foreach ($rships as $rship) {
+      switch ($rship->getAuditStatus()) {
+        case PhabricatorAuditStatusConstants::AUDIT_REQUIRED:
+          $any_need = true;
+          break;
+        case PhabricatorAuditStatusConstants::ACCEPTED:
+          $any_accept = true;
+          break;
+        case PhabricatorAuditStatusConstants::CONCERNED:
+          $any_concern = true;
+          break;
+      }
+    }
+
+    if ($any_concern) {
+      $status = PhabricatorAuditCommitStatusConstants::CONCERN_RAISED;
+    } else if ($any_accept) {
+      if ($any_need) {
+        $status = PhabricatorAuditCommitStatusConstants::PARTIALLY_AUDITED;
+      } else {
+        $status = PhabricatorAuditCommitStatusConstants::FULLY_AUDITED;
+      }
+    } else if ($any_need) {
+      $status = PhabricatorAuditCommitStatusConstants::NEEDS_AUDIT;
+    } else {
+      $status = PhabricatorAuditCommitStatusConstants::NONE;
+    }
+
+    return $this->setAuditStatus($status);
+  }
+
+
 
 }
