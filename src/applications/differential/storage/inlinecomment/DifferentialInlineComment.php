@@ -16,18 +16,18 @@
  * limitations under the License.
  */
 
-class DifferentialInlineComment extends DifferentialDAO {
+final class DifferentialInlineComment
+  extends DifferentialDAO
+  implements PhabricatorInlineCommentInterface {
 
   protected $revisionID;
-  protected $commentID;
-  protected $authorPHID;
-
   protected $changesetID;
-  protected $isNewFile;
+  protected $commentID;
 
+  protected $authorPHID;
+  protected $isNewFile;
   protected $lineNumber;
   protected $lineLength;
-
   protected $content;
   protected $cache;
 
@@ -42,11 +42,83 @@ class DifferentialInlineComment extends DifferentialDAO {
     return $this->syntheticAuthor;
   }
 
-  public function isCompatible(DifferentialInlineComment $comment) {
+  public function isCompatible(PhabricatorInlineCommentInterface $comment) {
     return
-      $this->authorPHID === $comment->authorPHID &&
-      $this->syntheticAuthor === $comment->syntheticAuthor &&
-      $this->content === $comment->content;
+      ($this->getAuthorPHID() === $comment->getAuthorPHID()) &&
+      ($this->getSyntheticAuthor() === $comment->getSyntheticAuthor()) &&
+      ($this->getContent() === $comment->getContent());
+  }
+
+  public function setContent($content) {
+    $this->setCache(null);
+    $this->writeField('content', $content);
+    return $this;
+  }
+
+  public function getContent() {
+    return $this->readField('content');
+  }
+
+  public function isDraft() {
+    return !$this->getCommentID();
+  }
+
+  // NOTE: We need to provide implementations so we conform to the shared
+  // interface; these are all trivial and just explicit versions of the Lisk
+  // defaults.
+
+  public function setChangesetID($id) {
+    $this->writeField('changesetID', $id);
+    return $this;
+  }
+
+  public function getChangesetID() {
+    return $this->readField('changesetID');
+  }
+
+  public function setIsNewFile($is_new) {
+    $this->writeField('isNewFile', $is_new);
+    return $this;
+  }
+
+  public function getIsNewFile() {
+    return $this->readField('isNewFile');
+  }
+
+  public function setLineNumber($number) {
+    $this->writeField('lineNumber', $number);
+    return $this;
+  }
+
+  public function getLineNumber() {
+    return $this->readField('lineNumber');
+  }
+
+  public function setLineLength($length) {
+    $this->writeField('lineLength', $length);
+    return $this;
+  }
+
+  public function getLineLength() {
+    return $this->readField('lineLength');
+  }
+
+  public function setCache($cache) {
+    $this->writeField('cache', $cache);
+    return $this;
+  }
+
+  public function getCache() {
+    return $this->readField('cache');
+  }
+
+  public function setAuthorPHID($phid) {
+    $this->writeField('authorPHID', $phid);
+    return $this;
+  }
+
+  public function getAuthorPHID() {
+    return $this->readField('authorPHID');
   }
 
 }

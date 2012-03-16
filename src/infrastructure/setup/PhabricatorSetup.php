@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-class PhabricatorSetup {
+final class PhabricatorSetup {
 
   public static function runSetup() {
     header("Content-Type: text/plain");
@@ -461,8 +461,8 @@ class PhabricatorSetup {
     if ($timeout > 5) {
       self::writeNote(
         "Your MySQL connect timeout is very high ({$timeout} seconds). ".
-        "Consider reducing it by setting 'mysql.connect_timeout' in your ".
-        "php.ini.");
+        "Consider reducing it to 5 or below by setting ".
+        "'mysql.connect_timeout' in your php.ini.");
     }
 
     self::write(" okay  Trying to connect to MySQL database ".

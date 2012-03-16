@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-class DifferentialRevisionViewController extends DifferentialController {
+final class DifferentialRevisionViewController extends DifferentialController {
 
   private $revisionID;
 
@@ -68,6 +68,7 @@ class DifferentialRevisionViewController extends DifferentialController {
       $target,
       array(
         'local:commits',
+        'arc:unit',
       ));
 
     list($changesets, $vs_map, $rendering_references) =
@@ -236,10 +237,14 @@ class DifferentialRevisionViewController extends DifferentialController {
 
     $changeset_view = new DifferentialChangesetListView();
     $changeset_view->setChangesets($visible_changesets);
-    $changeset_view->setEditable(!$viewer_is_anonymous);
+
+    if (!$viewer_is_anonymous) {
+      $changeset_view->setInlineCommentControllerURI(
+        '/differential/comment/inline/edit/'.$revision->getID().'/');
+    }
+
     $changeset_view->setStandaloneViews(true);
     $changeset_view->setUser($user);
-    $changeset_view->setRevision($revision);
     $changeset_view->setDiff($target);
     $changeset_view->setRenderingReferences($rendering_references);
     $changeset_view->setVsMap($vs_map);
@@ -262,6 +267,13 @@ class DifferentialRevisionViewController extends DifferentialController {
 
     $toc_view = new DifferentialDiffTableOfContentsView();
     $toc_view->setChangesets($changesets);
+    $toc_view->setVisibleChangesets($visible_changesets);
+    $toc_view->setUnitTestData(idx($props, 'arc:unit', array()));
+    if ($repository) {
+      $toc_view->setRepository($repository);
+    }
+    $toc_view->setDiff($target);
+    $toc_view->setUser($user);
     $toc_view->setStandaloneViewLink(empty($visible_changesets));
     $toc_view->setVsMap($vs_map);
     $toc_view->setRevisionID($revision->getID());
@@ -440,6 +452,7 @@ class DifferentialRevisionViewController extends DifferentialController {
           $actions[DifferentialAction::ACTION_ABANDON] = true;
           $actions[DifferentialAction::ACTION_REQUEST] = true;
           $actions[DifferentialAction::ACTION_RETHINK] = true;
+          $actions[DifferentialAction::ACTION_COMMIT] = true;
           break;
         case ArcanistDifferentialRevisionStatus::COMMITTED:
           break;

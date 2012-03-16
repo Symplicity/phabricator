@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-class PhabricatorDirectoryMainController
+final class PhabricatorDirectoryMainController
   extends PhabricatorDirectoryController {
 
   private $filter;
@@ -105,82 +105,18 @@ class PhabricatorDirectoryMainController
 
     if ($request->isFormPost()) {
       $jump = $request->getStr('jump');
-      $jump = trim($jump);
 
-      $help_href = PhabricatorEnv::getDocLink(
-        'article/Jump_Nav_User_Guide.html');
+      $response = PhabricatorJumpNavHandler::jumpPostResponse($jump);
+      if ($response) {
+        return $response;
+      } else {
+        $query = new PhabricatorSearchQuery();
+        $query->setQuery($jump);
+        $query->save();
 
-      $patterns = array(
-        '/^help/i'                  => 'uri:'.$help_href,
-        '/^d$/i'                    => 'uri:/differential/',
-        '/^r$/i'                    => 'uri:/diffusion/',
-        '/^t$/i'                    => 'uri:/maniphest/',
-        '/^p$/i'                    => 'uri:/project/',
-        '/^u$/i'                    => 'uri:/people/',
-        '/^r([A-Z]+)$/'              => 'repository',
-        '/^r([A-Z]+)(\S+)$/'         => 'commit',
-        '/^d(\d+)$/i'               => 'revision',
-        '/^t(\d+)$/i'               => 'task',
-        '/^p\s+(.+)$/i'            => 'project',
-        '/^u\s+(\S+)$/i'            => 'user',
-        '/^task:\s*(.+)/i'         => 'create-task',
-        '/^(?:s|symbol)\s+(\S+)/i'  => 'find-symbol',
-      );
-
-
-      foreach ($patterns as $pattern => $effect) {
-        $matches = null;
-        if (preg_match($pattern, $jump, $matches)) {
-          if (!strncmp($effect, 'uri:', 4)) {
-            return id(new AphrontRedirectResponse())
-              ->setURI(substr($effect, 4));
-          } else {
-            switch ($effect) {
-              case 'repository':
-                return id(new AphrontRedirectResponse())
-                  ->setURI('/diffusion/'.$matches[1].'/');
-              case 'commit':
-                return id(new AphrontRedirectResponse())
-                  ->setURI('/'.$matches[0]);
-              case 'revision':
-                return id(new AphrontRedirectResponse())
-                  ->setURI('/D'.$matches[1]);
-              case 'task':
-                return id(new AphrontRedirectResponse())
-                  ->setURI('/T'.$matches[1]);
-              case 'user':
-                return id(new AphrontRedirectResponse())
-                  ->setURI('/p/'.$matches[1].'/');
-              case 'project':
-                $project = PhabricatorProjectQueryUtil
-                  ::findCloselyNamedProject($matches[1]);
-                if ($project) {
-                  return id(new AphrontRedirectResponse())
-                    ->setURI('/project/view/'.$project->getID().'/');
-                } else {
-                    $jump = $matches[1];
-                }
-                break;
-              case 'find-symbol':
-                return id(new AphrontRedirectResponse())
-                  ->setURI('/diffusion/symbol/'.$matches[1].'/?jump=true');
-              case 'create-task':
-                return id(new AphrontRedirectResponse())
-                  ->setURI('/maniphest/task/create/?title='
-                    .phutil_escape_uri($matches[1]));
-              default:
-                throw new Exception("Unknown jump effect '{$effect}'!");
-            }
-          }
-        }
+        return id(new AphrontRedirectResponse())
+          ->setURI('/search/'.$query->getQueryKey().'/');
       }
-
-      $query = new PhabricatorSearchQuery();
-      $query->setQuery($jump);
-      $query->save();
-
-      return id(new AphrontRedirectResponse())
-        ->setURI('/search/'.$query->getQueryKey().'/');
     }
 
 
@@ -292,7 +228,7 @@ class PhabricatorDirectoryMainController
         array(
           // TODO: This should filter to just your projects' need-triage
           // tasks?
-          'href' => '/maniphest/view/alltriage/',
+          'href' => '/maniphest/view/projecttriage/',
           'class' => 'grey button',
         ),
         "View All Triage \xC2\xBB"));
@@ -640,9 +576,11 @@ class PhabricatorDirectoryMainController
     $query = new PhabricatorAuditQuery();
     $query->withAuditorPHIDs($phids);
     $query->withStatus(PhabricatorAuditQuery::STATUS_OPEN);
+    $query->needCommitData(true);
     $query->setLimit(10);
 
     $audits = $query->execute();
+    $commits = $query->getCommits();
 
     if (!$audits) {
       return $this->renderMinipanel(
@@ -652,6 +590,7 @@ class PhabricatorDirectoryMainController
 
     $view = new PhabricatorAuditListView();
     $view->setAudits($audits);
+    $view->setCommits($commits);
 
     $phids = $view->getRequiredHandlePHIDs();
     $handles = id(new PhabricatorObjectHandleData($phids))->loadHandles();

@@ -1,7 +1,7 @@
 <?php
 
 /*
- * Copyright 2011 Facebook, Inc.
+ * Copyright 2012 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-class LiskIsolationTestCase extends PhabricatorTestCase {
+final class LiskIsolationTestCase extends PhabricatorTestCase {
 
   public function testIsolatedWrites() {
     $dao = new LiskIsolationTestDAO();
@@ -36,6 +36,25 @@ class LiskIsolationTestCase extends PhabricatorTestCase {
 
     $this->assertEqual($id, $dao->getID(), 'Expect ID unchanged.');
     $this->assertEqual($phid, $dao->getPHID(), 'Expect PHID unchanged.');
+  }
+
+  public function testEphemeral() {
+    $dao = new LiskIsolationTestDAO();
+    $dao->save();
+    $dao->makeEphemeral();
+
+    $this->tryTestCases(
+      array(
+        $dao,
+      ),
+      array(
+        false,
+      ),
+      array($this, 'saveDAO'));
+  }
+
+  public function saveDAO($dao) {
+    $dao->save();
   }
 
   public function testIsolationContainment() {

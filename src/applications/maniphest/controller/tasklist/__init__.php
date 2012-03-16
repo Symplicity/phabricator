@@ -14,6 +14,7 @@ phutil_require_module('phabricator', 'applications/maniphest/controller/base');
 phutil_require_module('phabricator', 'applications/maniphest/query');
 phutil_require_module('phabricator', 'applications/maniphest/view/tasklist');
 phutil_require_module('phabricator', 'applications/phid/handle/data');
+phutil_require_module('phabricator', 'applications/project/query/project');
 phutil_require_module('phabricator', 'applications/search/storage/query');
 phutil_require_module('phabricator', 'infrastructure/celerity/api');
 phutil_require_module('phabricator', 'infrastructure/javelin/api');
@@ -25,7 +26,6 @@ phutil_require_module('phabricator', 'view/form/control/text');
 phutil_require_module('phabricator', 'view/form/control/togglebuttons');
 phutil_require_module('phabricator', 'view/form/control/tokenizer');
 phutil_require_module('phabricator', 'view/layout/listfilter');
-phutil_require_module('phabricator', 'view/layout/sidenavfilter');
 phutil_require_module('phabricator', 'view/null');
 
 phutil_require_module('phutil', 'markup');

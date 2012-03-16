@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-class DifferentialChangesetDetailView extends AphrontView {
+final class DifferentialChangesetDetailView extends AphrontView {
 
   private $changeset;
   private $buttons = array();
@@ -64,6 +64,8 @@ class DifferentialChangesetDetailView extends AphrontView {
   public function render() {
     require_celerity_resource('differential-changeset-view-css');
     require_celerity_resource('syntax-highlighting-css');
+
+    Javelin::initBehavior('phabricator-oncopy', array());
 
     if ($this->revisionID) {
       $edit = true;

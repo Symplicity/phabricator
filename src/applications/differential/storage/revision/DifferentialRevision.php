@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-class DifferentialRevision extends DifferentialDAO {
+final class DifferentialRevision extends DifferentialDAO {
 
   protected $title;
   protected $status;
@@ -26,6 +26,7 @@ class DifferentialRevision extends DifferentialDAO {
 
   protected $phid;
   protected $authorPHID;
+  protected $lastReviewerPHID;
 
   protected $dateCommitted;
 

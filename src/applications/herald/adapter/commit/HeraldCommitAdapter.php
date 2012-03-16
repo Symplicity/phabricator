@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-class HeraldCommitAdapter extends HeraldObjectAdapter {
+final class HeraldCommitAdapter extends HeraldObjectAdapter {
 
   protected $diff;
   protected $revision;
@@ -87,17 +87,17 @@ class HeraldCommitAdapter extends HeraldObjectAdapter {
 
   public function loadAuditNeededPackage() {
     if ($this->auditNeededPackages === null) {
-      $status_arr = array (
+      $status_arr = array(
         PhabricatorAuditStatusConstants::AUDIT_REQUIRED,
-          PhabricatorAuditStatusConstants::CONCERNED,
-        );
-      $relationships = id(new PhabricatorOwnersPackageCommitRelationship())
+        PhabricatorAuditStatusConstants::CONCERNED,
+      );
+      $requests = id(new PhabricatorRepositoryAuditRequest())
           ->loadAllWhere(
         "commitPHID = %s AND auditStatus IN (%Ls)",
         $this->commit->getPHID(),
         $status_arr);
 
-      $packages = mpull($relationships, 'getPackagePHID');
+      $packages = mpull($requests, 'getAuditorPHID');
       $this->auditNeededPackages = $packages;
     }
     return $this->auditNeededPackages;

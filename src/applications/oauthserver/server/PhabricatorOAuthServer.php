@@ -84,19 +84,30 @@ final class PhabricatorOAuthServer {
 
   /**
    * @task auth
+   * @return tuple <bool hasAuthorized, ClientAuthorization or null>
    */
-  public function userHasAuthorizedClient() {
+  public function userHasAuthorizedClient(array $scope) {
 
     $authorization = id(new PhabricatorOAuthClientAuthorization())->
       loadOneWhere('userPHID = %s AND clientPHID = %s',
                    $this->getUser()->getPHID(),
-                   $this->getClient->getPHID());
-
+                   $this->getClient()->getPHID());
     if (empty($authorization)) {
-      return false;
+      return array(false, null);
     }
 
-    return true;
+    if ($scope) {
+      $missing_scope = array_diff_key($scope,
+                                      $authorization->getScope());
+    } else {
+      $missing_scope = false;
+    }
+
+    if ($missing_scope) {
+      return array(false, $authorization);
+    }
+
+    return array(true, $authorization);
   }
 
   /**
@@ -115,7 +126,7 @@ final class PhabricatorOAuthServer {
   /**
    * @task auth
    */
-  public function generateAuthorizationCode() {
+  public function generateAuthorizationCode(PhutilURI $redirect_uri) {
 
     $code   = Filesystem::readRandomCharacters(32);
     $client = $this->getClient();
@@ -125,6 +136,7 @@ final class PhabricatorOAuthServer {
     $authorization_code->setClientPHID($client->getPHID());
     $authorization_code->setClientSecret($client->getSecret());
     $authorization_code->setUserPHID($this->getUser()->getPHID());
+    $authorization_code->setRedirectURI((string) $redirect_uri);
     $authorization_code->save();
 
     return $authorization_code;
@@ -191,6 +203,7 @@ final class PhabricatorOAuthServer {
       return false;
     }
 
+    $valid = true;
     if ($expired) {
       $valid = false;
       // check if the scope includes "offline_access", which makes the
@@ -202,6 +215,41 @@ final class PhabricatorOAuthServer {
       }
     }
 
+    return $valid;
+  }
+
+  /**
+   * See http://tools.ietf.org/html/draft-ietf-oauth-v2-23#section-3.1.2
+   * for details on what makes a given redirect URI "valid".
+   */
+  public function validateRedirectURI(PhutilURI $uri) {
+    if (PhabricatorEnv::isValidRemoteWebResource($uri)) {
+      if ($uri->getFragment()) {
+        return false;
+      }
+      if ($uri->getDomain()) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /**
+   * If there's a URI specified in an OAuth request, it must be validated in
+   * its own right. Further, it must have the same domain and (at least) the
+   * same query parameters as the primary URI.
+   */
+  public function validateSecondaryRedirectURI(PhutilURI $secondary_uri,
+                                               PhutilURI $primary_uri) {
+    $valid = $this->validateRedirectURI($secondary_uri);
+    if ($valid) {
+      $valid_domain    = ($secondary_uri->getDomain() ==
+                          $primary_uri->getDomain());
+      $good_params     = $primary_uri->getQueryParams();
+      $test_params     = $secondary_uri->getQueryParams();
+      $missing_params  = array_diff_key($good_params, $test_params);
+      $valid           = $valid_domain && empty($missing_params);
+    }
     return $valid;
   }
 

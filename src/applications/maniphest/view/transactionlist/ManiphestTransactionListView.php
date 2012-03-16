@@ -19,13 +19,14 @@
 /**
  * @group maniphest
  */
-class ManiphestTransactionListView extends ManiphestView {
+final class ManiphestTransactionListView extends ManiphestView {
 
   private $transactions;
   private $handles;
   private $user;
   private $markupEngine;
   private $preview;
+  private $auxiliaryFields;
 
   public function setTransactions(array $transactions) {
     $this->transactions = $transactions;
@@ -49,6 +50,11 @@ class ManiphestTransactionListView extends ManiphestView {
 
   public function setPreview($preview) {
     $this->preview = $preview;
+    return $this;
+  }
+
+  public function setAuxiliaryFields(array $fields) {
+    $this->auxiliaryFields = $fields;
     return $this;
   }
 
@@ -90,7 +96,7 @@ class ManiphestTransactionListView extends ManiphestView {
       require_celerity_resource('syntax-highlighting-css');
       $whitespace_mode = DifferentialChangesetParser::WHITESPACE_SHOW_ALL;
       Javelin::initBehavior('differential-show-more', array(
-        'uri'         => '/maniphest/task/descriptiondiff/',
+        'uri'         => '/maniphest/task/descriptionchange/',
         'whitespace'  => $whitespace_mode,
       ));
     }
@@ -99,6 +105,7 @@ class ManiphestTransactionListView extends ManiphestView {
     foreach ($groups as $group) {
       $view = new ManiphestTransactionDetailView();
       $view->setUser($this->user);
+      $view->setAuxiliaryFields($this->auxiliaryFields);
       $view->setTransactionGroup($group);
       $view->setHandles($this->handles);
       $view->setMarkupEngine($this->markupEngine);

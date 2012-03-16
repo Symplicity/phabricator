@@ -19,7 +19,7 @@
 /**
  * @group maniphest
  */
-class ManiphestTaskListView extends ManiphestView {
+final class ManiphestTaskListView extends ManiphestView {
 
   private $tasks;
   private $handles;
@@ -58,10 +58,7 @@ class ManiphestTaskListView extends ManiphestView {
       $views[] = $view->render();
     }
 
-    return
-      '<div style="padding: 1em;">'.
-        implode("\n", $views).
-      '</div>';
+    return implode("\n", $views);
   }
 
 }

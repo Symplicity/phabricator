@@ -19,7 +19,8 @@
 /**
  * @group maniphest
  */
-class ManiphestTaskDescriptionChangeController extends ManiphestController {
+final class ManiphestTaskDescriptionChangeController
+  extends ManiphestController {
 
   private $transactionID;
 
@@ -33,12 +34,18 @@ class ManiphestTaskDescriptionChangeController extends ManiphestController {
   }
 
   public function willProcessRequest(array $data) {
-    $this->setTransactionID($data['id']);
+    $this->setTransactionID(idx($data, 'id'));
   }
 
   public function processRequest() {
     $request = $this->getRequest();
     $user = $request->getUser();
+
+    $is_show_more = false;
+    if (!$this->getTransactionID()) {
+      $this->setTransactionID($this->getRequest()->getStr('ref'));
+      $is_show_more = true;
+    }
 
     $transaction_id = $this->getTransactionID();
     $transaction = id(new ManiphestTransaction())->load($transaction_id);
@@ -67,7 +74,12 @@ class ManiphestTaskDescriptionChangeController extends ManiphestController {
     $view->setRenderFullSummary(true);
     $view->setRangeSpecification($request->getStr('range'));
 
-    return id(new AphrontAjaxResponse())->setContent($view->render());
+    if ($is_show_more) {
+      return id(new PhabricatorChangesetResponse())
+        ->setRenderedChangeset($view->render());
+    } else {
+      return id(new AphrontAjaxResponse())->setContent($view->render());
+    }
   }
 
 }

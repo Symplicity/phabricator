@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-class DiffusionBrowseFileController extends DiffusionController {
+final class DiffusionBrowseFileController extends DiffusionController {
 
   // Image types we want to display inline using <img> tags
   protected $imageTypes = array(
@@ -84,6 +84,23 @@ class DiffusionBrowseFileController extends DiffusionController {
 
     require_celerity_resource('diffusion-source-css');
 
+    $edit_button = '';
+    $user = $request->getUser();
+    if ($user) {
+      $line = 1;
+      $repository = $this->getDiffusionRequest()->getRepository();
+      $editor_link = $user->loadEditorLink($path, $line, $repository);
+      if ($editor_link) {
+        $edit_button = phutil_render_tag(
+          'a',
+          array(
+            'href' => $editor_link,
+            'class' => 'button',
+          ),
+          'Edit');
+      }
+    }
+
     $view_select_panel = new AphrontPanelView();
     $view_select_form = phutil_render_tag(
       'form',
@@ -93,26 +110,9 @@ class DiffusionBrowseFileController extends DiffusionController {
         'class'  => 'diffusion-browse-type-form',
       ),
       $select.
-      '<button>View</button>');
+      ' <button>View</button> '.
+      $edit_button);
     $view_select_panel->appendChild($view_select_form);
-
-    $user = $request->getUser();
-    if ($user) {
-      $line = 1;
-      $repository = $this->getDiffusionRequest()->getRepository();
-      $editor_link = $user->loadEditorLink($path, $line, $repository);
-      if ($editor_link) {
-        $view_select_panel->addButton(
-          phutil_render_tag(
-            'a',
-            array(
-              'href' => $editor_link,
-              'class' => 'button',
-            ),
-            'Edit'
-          ));
-      }
-    }
 
     $view_select_panel->appendChild('<div style="clear: both;"></div>');
 
@@ -299,32 +299,29 @@ class DiffusionBrowseFileController extends DiffusionController {
   private function buildDisplayRows($text_list, $rev_list, $blame_dict,
     $needs_blame, DiffusionRequest $drequest, $file_query, $selected) {
     $last_rev = null;
-    $color = null;
+    $color = '#eeeeee';
     $rows = array();
     $n = 1;
     $view = $this->getRequest()->getStr('view');
 
     if ($blame_dict) {
       $epoch_list = ipull($blame_dict, 'epoch');
-      $max = max($epoch_list);
-      $min = min($epoch_list);
-      $range = $max - $min + 1;
-    } else {
-      $range = 1;
+      $epoch_max = max($epoch_list);
+      $epoch_min = min($epoch_list);
+      $epoch_range = $epoch_max - $epoch_min + 1;
     }
 
     $targ = '';
     $min_line = 0;
     $line = $drequest->getLine();
-    if (strpos($line,'-') !== false) {
-      list($min,$max) = explode('-',$line,2);
+    if (strpos($line, '-') !== false) {
+      list($min, $max) = explode('-', $line, 2);
       $min_line = min($min, $max);
       $max_line = max($min, $max);
     } else if (strlen($line)) {
       $min_line = $line;
       $max_line = $line;
     }
-
 
     foreach ($text_list as $k => $line) {
       if ($needs_blame) {
@@ -340,9 +337,15 @@ class DiffusionBrowseFileController extends DiffusionController {
             '<th style="background: '.$color.'"></th>';
         } else {
 
-          $color_number = (int)(0xEE -
-            0xEE * ($blame_dict[$rev]['epoch'] - $min) / $range);
-          $color = sprintf('#%02xee%02x', $color_number, $color_number);
+          $revision_time = null;
+          if ($blame_dict) {
+            $color_number = (int)(0xEE -
+              0xEE * ($blame_dict[$rev]['epoch'] - $epoch_min) / $epoch_range);
+            $color = sprintf('#%02xee%02x', $color_number, $color_number);
+            $revision_time = phabricator_datetime(
+              $blame_dict[$rev]['epoch'],
+              $this->getRequest()->getUser());
+          }
 
           $revision_link = self::renderRevision(
             $drequest,
@@ -361,8 +364,13 @@ class DiffusionBrowseFileController extends DiffusionController {
               $n,
               $selected,
               'Blame previous revision');
-            $prev_link = '<th style="background: ' . $color .
-              '; width: 2em;">' . $prev_link . '</th>';
+            $prev_link = phutil_render_tag(
+              'th',
+              array(
+                'class' => 'diffusion-wide-link',
+                'style' => 'background: '.$color.'; width: 2em;',
+              ),
+              $prev_link);
           }
 
           if (isset($blame_dict[$rev]['handle'])) {
@@ -372,8 +380,8 @@ class DiffusionBrowseFileController extends DiffusionController {
           }
           $blame_info =
             $prev_link .
-            '<th style="background: '.$color.
-              '; width: 12em;">'.$revision_link.'</th>'.
+            '<th style="background: '.$color.'; width: 12em;" title="'.
+            phutil_escape_html($revision_time).'">'.$revision_link.'</th>'.
             '<th style="background: '.$color.'; width: 12em'.
               '; font-weight: normal; color: #333;">'.$author_link.'</th>';
           $last_rev = $rev;
@@ -409,7 +417,9 @@ class DiffusionBrowseFileController extends DiffusionController {
         ),
         $n);
 
-      $rows[] = $tr.$blame_info.'<th>'.$l.'</th><td>'.$targ.$line.'</td></tr>';
+      $rows[] = $tr.$blame_info.
+        '<th class="diffusion-wide-link">'.$l.'</th>'.
+        '<td>'.$targ.$line.'</td></tr>';
       ++$n;
     }
 

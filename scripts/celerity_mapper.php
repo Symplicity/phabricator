@@ -2,7 +2,7 @@
 <?php
 
 /*
- * Copyright 2011 Facebook, Inc.
+ * Copyright 2012 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -49,6 +49,10 @@ $package_spec = array(
     'javelin-behavior-phabricator-keyboard-shortcuts',
     'javelin-behavior-refresh-csrf',
     'javelin-behavior-phabricator-watch-anchor',
+    'javelin-behavior-phabricator-autofocus',
+    'phabricator-paste-file-upload',
+    'phabricator-menu-item',
+    'phabricator-dropdown-menu',
   ),
   'core.pkg.css' => array(
     'phabricator-core-css',
@@ -65,9 +69,13 @@ $package_spec = array(
     'aphront-list-filter-view-css',
 
     'phabricator-directory-css',
+    'phabricator-jump-nav',
+    'phabricator-app-buttons-css',
 
     'phabricator-remarkup-css',
     'syntax-highlighting-css',
+    'aphront-pager-view-css',
+    'phabricator-transaction-view-css',
   ),
   'differential.pkg.css' => array(
     'differential-core-view-css',
@@ -101,9 +109,23 @@ $package_spec = array(
     'javelin-behavior-phabricator-object-selector',
 
     'differential-inline-comment-editor',
+    'javelin-behavior-differential-dropdown-menus',
+    'javelin-behavior-buoyant',
   ),
   'diffusion.pkg.css' => array(
     'diffusion-commit-view-css',
+  ),
+  'maniphest.pkg.css' => array(
+    'maniphest-task-summary-css',
+    'maniphest-transaction-detail-css',
+    'maniphest-task-detail-css',
+    'aphront-attached-file-view-css',
+  ),
+  'maniphest.pkg.js' => array(
+    'javelin-behavior-maniphest-batch-selector',
+    'javelin-behavior-maniphest-transaction-controls',
+    'javelin-behavior-maniphest-transaction-preview',
+    'javelin-behavior-maniphest-transaction-expand',
   ),
 );
 
@@ -169,8 +191,12 @@ foreach ($file_map as $path => $info) {
   $provides = array_filter($provides);
   $requires = array_filter($requires);
 
+  if (!$provides) {
+    // Tests and documentation-only JS is permitted to @provide no targets.
+    continue;
+  }
+
   if (count($provides) > 1) {
-    // NOTE: Documentation-only JS is permitted to @provide no targets.
     throw new Exception(
       "File {$path} must @provide at most one Celerity target.");
   }
@@ -250,7 +276,7 @@ $runtime_map = var_export($runtime_map, true);
 $runtime_map = preg_replace('/\s+$/m', '', $runtime_map);
 $runtime_map = preg_replace('/array \(/', 'array(', $runtime_map);
 
-ksort($package_map['packages']);
+$package_map['packages'] = isort($package_map['packages'], 'name');
 ksort($package_map['reverse']);
 $package_map = var_export($package_map, true);
 $package_map = preg_replace('/\s+$/m', '', $package_map);

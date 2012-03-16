@@ -8,10 +8,12 @@
 
 phutil_require_module('phabricator', 'aphront/response/404');
 phutil_require_module('phabricator', 'aphront/response/redirect');
+phutil_require_module('phabricator', 'applications/people/storage/preferences');
 phutil_require_module('phabricator', 'applications/phid/constants');
 phutil_require_module('phabricator', 'applications/phid/handle/data');
 phutil_require_module('phabricator', 'applications/search/constants/scope');
 phutil_require_module('phabricator', 'applications/search/controller/base');
+phutil_require_module('phabricator', 'applications/search/engine/jumpnav');
 phutil_require_module('phabricator', 'applications/search/selector/base');
 phutil_require_module('phabricator', 'applications/search/storage/query');
 phutil_require_module('phabricator', 'applications/search/view/searchresult');

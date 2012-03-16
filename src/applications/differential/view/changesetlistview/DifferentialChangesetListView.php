@@ -16,12 +16,11 @@
  * limitations under the License.
  */
 
-class DifferentialChangesetListView extends AphrontView {
+final class DifferentialChangesetListView extends AphrontView {
 
   private $changesets = array();
   private $references = array();
-  private $editable;
-  private $revision;
+  private $inlineURI;
   private $renderURI = '/differential/changeset/';
   private $whitespace;
   private $standaloneViews;
@@ -36,8 +35,8 @@ class DifferentialChangesetListView extends AphrontView {
     return $this;
   }
 
-  public function setEditable($editable) {
-    $this->editable = $editable;
+  public function setInlineCommentControllerURI($uri) {
+    $this->inlineURI = $uri;
     return $this;
   }
 
@@ -48,11 +47,6 @@ class DifferentialChangesetListView extends AphrontView {
 
   public function setUser(PhabricatorUser $user) {
     $this->user = $user;
-    return $this;
-  }
-
-  public function setRevision(DifferentialRevision $revision) {
-    $this->revision = $revision;
     return $this;
   }
 
@@ -114,7 +108,7 @@ class DifferentialChangesetListView extends AphrontView {
     foreach ($changesets as $key => $changeset) {
       $file = $changeset->getFilename();
       $class = 'differential-changeset';
-      if (!$this->editable) {
+      if (!$this->inlineURI) {
         $class .= ' differential-changeset-noneditable';
       }
 
@@ -191,6 +185,8 @@ class DifferentialChangesetListView extends AphrontView {
       $mapping[$uniq_id] = $ref;
     }
 
+    require_celerity_resource('aphront-tooltip-css');
+
     Javelin::initBehavior('differential-populate', array(
       'registry'    => $mapping,
       'whitespace'  => $this->whitespace,
@@ -204,21 +200,23 @@ class DifferentialChangesetListView extends AphrontView {
 
     Javelin::initBehavior('differential-comment-jump', array());
 
-    if ($this->editable) {
-
+    if ($this->inlineURI) {
       $undo_templates = $this->renderUndoTemplates();
 
-      $revision = $this->revision;
       Javelin::initBehavior('differential-edit-inline-comments', array(
-        'uri' => '/differential/comment/inline/edit/'.$revision->getID().'/',
-        'undo_templates' => $undo_templates,
+        'uri'             => $this->inlineURI,
+        'undo_templates'  => $undo_templates,
+        'stage'           => 'differential-review-stage',
       ));
     }
 
-    return
-      '<div class="differential-review-stage" id="differential-review-stage">'.
-        implode("\n", $output).
-      '</div>';
+    return phutil_render_tag(
+      'div',
+      array(
+        'class' => 'differential-review-stage',
+        'id'    => 'differential-review-stage',
+      ),
+      implode("\n", $output));
   }
 
   /**

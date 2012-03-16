@@ -100,6 +100,25 @@ abstract class DifferentialMail {
       $template->addHeader('X-Herald-Rules', $this->heraldRulesHeader);
     }
 
+    $revision = $this->revision;
+    if ($revision) {
+      if ($revision->getAuthorPHID()) {
+        $template->addHeader(
+          'X-Differential-Author',
+          '<'.$revision->getAuthorPHID().'>');
+      }
+      if ($revision->getReviewers()) {
+        $template->addHeader(
+          'X-Differential-Reviewers',
+          '<'.implode('>, <', $revision->getReviewers()).'>');
+      }
+      if ($revision->getCCPHIDs()) {
+        $template->addHeader(
+          'X-Differential-CCs',
+          '<'.implode('>, <', $revision->getCCPHIDs()).'>');
+      }
+    }
+
     $template->setIsBulk(true);
     $template->setRelatedPHID($this->getRevision()->getPHID());
 
@@ -179,8 +198,6 @@ MANAGE HERALD DIFFERENTIAL RULES
 
 WHY DID I GET THIS EMAIL?
   {$xscript_uri}
-
-Tip: use the X-Herald-Rules header to filter Herald messages in your client.
 
 EOTEXT;
     }

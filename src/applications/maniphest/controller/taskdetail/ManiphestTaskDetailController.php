@@ -19,7 +19,7 @@
 /**
  * @group maniphest
  */
-class ManiphestTaskDetailController extends ManiphestController {
+final class ManiphestTaskDetailController extends ManiphestController {
 
   private $id;
 
@@ -192,7 +192,7 @@ class ManiphestTaskDetailController extends ManiphestController {
         '</div>'.
       '</div>';
 
-    require_celerity_resource('mainphest-task-detail-css');
+    require_celerity_resource('maniphest-task-detail-css');
 
     $table = array();
     foreach ($dict as $key => $value) {
@@ -450,6 +450,7 @@ class ManiphestTaskDetailController extends ManiphestController {
           'id'       => 'projects-tokenizer',
           'src'      => '/typeahead/common/projects/',
           'ondemand' => PhabricatorEnv::getEnvConfig('tokenizer.ondemand'),
+          'placeholder' => 'Type a project name...',
         ),
         ManiphestTransactionType::TYPE_OWNER => array(
           'id'       => 'assign-tokenizer',
@@ -457,15 +458,16 @@ class ManiphestTaskDetailController extends ManiphestController {
           'value'    => $default_claim,
           'limit'    => 1,
           'ondemand' => PhabricatorEnv::getEnvConfig('tokenizer.ondemand'),
+          'placeholder' => 'Type a user name...',
         ),
         ManiphestTransactionType::TYPE_CCS => array(
           'id'       => 'cc-tokenizer',
           'src'      => '/typeahead/common/mailable/',
           'ondemand' => PhabricatorEnv::getEnvConfig('tokenizer.ondemand'),
+          'placeholder' => 'Type a user or mailing list...',
         ),
       ),
     ));
-
 
     Javelin::initBehavior('maniphest-transaction-preview', array(
       'uri'     => '/maniphest/transaction/preview/'.$task->getID().'/',
@@ -494,6 +496,7 @@ class ManiphestTaskDetailController extends ManiphestController {
     $transaction_view->setTransactions($transactions);
     $transaction_view->setHandles($handles);
     $transaction_view->setUser($user);
+    $transaction_view->setAuxiliaryFields($aux_fields);
     $transaction_view->setMarkupEngine($engine);
 
     return $this->buildStandardPageResponse(

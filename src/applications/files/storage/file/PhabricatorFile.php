@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-class PhabricatorFile extends PhabricatorFileDAO {
+final class PhabricatorFile extends PhabricatorFileDAO {
 
   const STORAGE_FORMAT_RAW  = 'raw';
 
@@ -284,6 +284,24 @@ class PhabricatorFile extends PhabricatorFileDAO {
       default:
         throw new Exception('Unknown type matched as image MIME type.');
     }
+  }
+
+  public static function getTransformableImageFormats() {
+    $supported = array();
+
+    if (function_exists('imagejpeg')) {
+      $supported[] = 'jpg';
+    }
+
+    if (function_exists('imagepng')) {
+      $supported[] = 'png';
+    }
+
+    if (function_exists('imagegif')) {
+      $supported[] = 'gif';
+    }
+
+    return $supported;
   }
 
   protected function instantiateStorageEngine() {

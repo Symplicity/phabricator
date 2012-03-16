@@ -19,7 +19,7 @@
 /**
  * @group maniphest
  */
-class ManiphestTaskListController extends ManiphestController {
+final class ManiphestTaskListController extends ManiphestController {
 
   const DEFAULT_PAGE_SIZE = 1000;
 
@@ -57,20 +57,7 @@ class ManiphestTaskListController extends ManiphestController {
       return id(new AphrontRedirectResponse())->setURI($uri);
     }
 
-    $nav = new AphrontSideNavFilterView();
-    $nav->setBaseURI(new PhutilURI('/maniphest/view/'));
-    $nav->addLabel('User Tasks');
-    $nav->addFilter('action',       'Assigned');
-    $nav->addFilter('created',      'Created');
-    $nav->addFilter('subscribed',   'Subscribed');
-    $nav->addFilter('triage',       'Need Triage');
-    $nav->addSpacer();
-    $nav->addLabel('All Tasks');
-    $nav->addFilter('alltriage',    'Need Triage');
-    $nav->addFilter('all',          'All Tasks');
-    $nav->addSpacer();
-    $nav->addLabel('Custom');
-    $nav->addFilter('custom',       'Custom Query');
+    $nav = $this->buildBaseSideNav();
 
     $this->view = $nav->selectFilter($this->view, 'action');
 
@@ -79,6 +66,8 @@ class ManiphestTaskListController extends ManiphestController {
       'created' => true,
       'subscribed' => true,
       'triage' => true,
+      'projecttriage' => true,
+      'projectall' => true,
     );
 
     list($status_map, $status_control) = $this->renderStatusLinks();
@@ -88,7 +77,14 @@ class ManiphestTaskListController extends ManiphestController {
     $user_phids = $request->getStrList(
       'users',
       array($user->getPHID()));
-    $project_phids = $request->getStrList('projects');
+    if ($this->view == 'projecttriage' || $this->view == 'projectall') {
+      $project_query = new PhabricatorProjectQuery();
+      $project_query->setMembers($user_phids);
+      $projects = $project_query->execute();
+      $project_phids = mpull($projects, 'getPHID');
+    } else {
+      $project_phids = $request->getStrList('projects');
+    }
     $exclude_project_phids = $request->getStrList('xprojects');
     $task_ids = $request->getStrList('tasks');
     $owner_phids = $request->getStrList('owners');
@@ -173,12 +169,14 @@ class ManiphestTaskListController extends ManiphestController {
     foreach ($project_phids as $phid) {
       $tokens[$phid] = $handles[$phid]->getFullName();
     }
-    $form->appendChild(
-      id(new AphrontFormTokenizerControl())
-        ->setDatasource('/typeahead/common/searchproject/')
-        ->setName('set_projects')
-        ->setLabel('Projects')
-        ->setValue($tokens));
+    if ($this->view != 'projectall' && $this->view != 'projecttriage') {
+      $form->appendChild(
+        id(new AphrontFormTokenizerControl())
+          ->setDatasource('/typeahead/common/searchproject/')
+          ->setName('set_projects')
+          ->setLabel('Projects')
+          ->setValue($tokens));
+    }
 
     if ($this->view == 'custom') {
       $tokens = array();
@@ -232,8 +230,11 @@ class ManiphestTaskListController extends ManiphestController {
 
     require_celerity_resource('maniphest-task-summary-css');
 
+    $list_container = new AphrontNullView();
+    $list_container->appendChild('<div class="maniphest-list-container">');
+
     if (!$have_tasks) {
-      $nav->appendChild(
+      $list_container->appendChild(
         '<h1 class="maniphest-task-group-header">'.
           'No matching tasks.'.
         '</h1>');
@@ -252,7 +253,7 @@ class ManiphestTaskListController extends ManiphestController {
       $max = number_format($max);
       $tot = number_format($tot);
 
-      $nav->appendChild(
+      $list_container->appendChild(
         '<div class="maniphest-total-result-count">'.
           "Displaying tasks {$cur} - {$max} of {$tot}.".
         '</div>');
@@ -285,9 +286,12 @@ class ManiphestTaskListController extends ManiphestController {
         ),
         $selector->render());
 
-      $nav->appendChild($selector);
-      $nav->appendChild($pager);
+      $list_container->appendChild($selector);
+      $list_container->appendChild($pager);
     }
+
+    $list_container->appendChild('</div>');
+    $nav->appendChild($list_container);
 
     return $this->buildStandardPageResponse(
       $nav,
@@ -350,6 +354,13 @@ class ManiphestTaskListController extends ManiphestController {
         $query->withPriority(ManiphestTaskPriority::PRIORITY_TRIAGE);
         break;
       case 'all':
+        break;
+      case 'projecttriage':
+        $query->withPriority(ManiphestTaskPriority::PRIORITY_TRIAGE);
+        $query->withAnyProject(true);
+        break;
+      case 'projectall':
+        $query->withAnyProject(true);
         break;
     }
 

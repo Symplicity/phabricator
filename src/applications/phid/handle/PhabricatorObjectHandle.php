@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-class PhabricatorObjectHandle {
+final class PhabricatorObjectHandle {
 
   private $uri;
   private $phid;
@@ -223,6 +223,7 @@ class PhabricatorObjectHandle {
         break;
       default:
         $name = $this->getFullName();
+        break;
     }
     return $name;
   }

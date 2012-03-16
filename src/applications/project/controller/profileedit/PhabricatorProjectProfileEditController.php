@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-class PhabricatorProjectProfileEditController
+final class PhabricatorProjectProfileEditController
   extends PhabricatorProjectController {
 
   public function willProcessRequest(array $data) {
@@ -52,7 +52,11 @@ class PhabricatorProjectProfileEditController
     $affiliations = $project->loadAffiliations();
     $affiliations = mpull($affiliations, null, 'getUserPHID');
 
+    $supported_formats = PhabricatorFile::getTransformableImageFormats();
+
     $e_name = true;
+    $e_image = null;
+
     $errors = array();
     $state = null;
     if ($request->isFormPost()) {
@@ -106,9 +110,10 @@ class PhabricatorProjectProfileEditController
               $y = 50);
             $profile->setProfileImagePHID($xformed->getPHID());
           } else {
+            $e_image = 'Not Supported';
             $errors[] =
-              'Only valid image files (jpg, jpeg, png or gif) '.
-              'will be accepted.';
+              'This server only supports these image formats: '.
+              implode(', ', $supported_formats).'.';
           }
         }
       }
@@ -249,13 +254,13 @@ class PhabricatorProjectProfileEditController
       ->appendChild(
         id(new AphrontFormFileControl())
           ->setLabel('Change Image')
-          ->setName('image'))
+          ->setName('image')
+          ->setError($e_image)
+          ->setCaption('Supported formats: '.implode(', ', $supported_formats)))
       ->appendChild(
-        '<h1>Resources</h1>'.
-        '<input type="hidden" name="resources" id="resources" />'.
-        '<div class="aphront-form-inset">'.
-          '<div style="float: right;">'.
-            javelin_render_tag(
+        id(new AphrontFormInsetView())
+          ->setTitle('Resources')
+          ->setRightButton(javelin_render_tag(
               'a',
               array(
                 'href' => '#',
@@ -263,18 +268,15 @@ class PhabricatorProjectProfileEditController
                 'sigil' => 'add-resource',
                 'mustcapture' => true,
               ),
-              'Add New Resource').
-          '</div>'.
-          '<p></p>'.
-          '<div style="clear: both;"></div>'.
-          javelin_render_tag(
+              'Add New Resource'))
+          ->addHiddenInput('resources', 'resources')
+          ->setContent(javelin_render_tag(
             'table',
             array(
               'sigil' => 'resources',
               'class' => 'project-resource-table',
             ),
-            '').
-        '</div>')
+            '')))
       ->appendChild(
         id(new AphrontFormSubmitControl())
           ->addCancelButton('/project/view/'.$project->getID().'/')

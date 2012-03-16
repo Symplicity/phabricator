@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-class DifferentialChangesetParser {
+final class DifferentialChangesetParser {
 
   protected $visible      = array();
   protected $new          = array();
@@ -66,7 +66,11 @@ class DifferentialChangesetParser {
 
   const WHITESPACE_SHOW_ALL         = 'show-all';
   const WHITESPACE_IGNORE_TRAILING  = 'ignore-trailing';
+
+  // TODO: This is now "Ignore Most" in the UI.
   const WHITESPACE_IGNORE_ALL       = 'ignore-all';
+
+  const WHITESPACE_IGNORE_FORCE     = 'ignore-force';
 
   /**
    * Configure which Changeset comments added to the right side of the visible
@@ -198,8 +202,6 @@ class DifferentialChangesetParser {
         $char = $line[0];
         if ($char == ' ') {
           $types[$line_index] = null;
-        } else if ($char == '\\' && $line_index > 0) {
-          $types[$line_index] = $types[$line_index - 1];
         } else {
           $types[$line_index] = $char;
         }
@@ -225,6 +227,10 @@ class DifferentialChangesetParser {
         'text'  => (string)substr($lines[$cursor], 1),
         'line'  => $new_line,
       );
+      if ($type == '\\' && $cursor > 1) {
+        $type = $types[$cursor - 1];
+        $data['text'] = ltrim($data['text']);
+      }
       switch ($type) {
         case '+':
           $this->new[] = $data;
@@ -246,7 +252,9 @@ class DifferentialChangesetParser {
     }
   }
 
-  public function parseInlineComment(DifferentialInlineComment $comment) {
+  public function parseInlineComment(
+    PhabricatorInlineCommentInterface $comment) {
+
     // Parse only comments which are actually visible.
     if ($this->isCommentVisibleOnRenderedDiff($comment)) {
       $this->comments[] = $comment;
@@ -395,6 +403,12 @@ class DifferentialChangesetParser {
         }
         $new[$k]['text'] = idx($new_text, $desc['line']);
 
+        if ($this->whitespaceMode == self::WHITESPACE_IGNORE_FORCE) {
+          // Under forced ignore mode, ignore even internal whitespace
+          // changes.
+          continue;
+        }
+
         // If there's a corresponding "old" text and the line is marked as
         // unchanged, test if there are internal whitespace changes between
         // non-whitespace characters, e.g. spaces added to a string or spaces
@@ -412,6 +426,9 @@ class DifferentialChangesetParser {
             // whitespace changes. Mark this line changed.
             $old[$k]['type'] = '-';
             $new[$k]['type'] = '+';
+
+            // Re-mark this line for intraline diffing.
+            unset($skip_intra[$k]);
           }
         }
       }
@@ -467,13 +484,17 @@ class DifferentialChangesetParser {
 
     $old_corpus = array();
     foreach ($this->old as $o) {
-      $old_corpus[] = $o['text'];
+      if ($o['type'] != '\\') {
+        $old_corpus[] = $o['text'];
+      }
     }
     $old_corpus_block = implode("\n", $old_corpus);
 
     $new_corpus = array();
     foreach ($this->new as $n) {
-      $new_corpus[] = $n['text'];
+      if ($n['type'] != '\\') {
+        $new_corpus[] = $n['text'];
+      }
     }
     $new_corpus_block = implode("\n", $new_corpus);
 
@@ -700,6 +721,7 @@ class DifferentialChangesetParser {
     switch ($whitespace_mode) {
       case self::WHITESPACE_SHOW_ALL:
       case self::WHITESPACE_IGNORE_TRAILING:
+      case self::WHITESPACE_IGNORE_FORCE:
         break;
       default:
         $whitespace_mode = self::WHITESPACE_IGNORE_ALL;
@@ -715,10 +737,15 @@ class DifferentialChangesetParser {
         $changeset->getFileType() == DifferentialChangeType::FILE_SYMLINK) {
       if ($skip_cache || !$this->loadCache()) {
 
-        $ignore_all = ($this->whitespaceMode == self::WHITESPACE_IGNORE_ALL);
+        $ignore_all = (($whitespace_mode == self::WHITESPACE_IGNORE_ALL) ||
+                       ($whitespace_mode == self::WHITESPACE_IGNORE_FORCE));
 
-        if ($ignore_all && $changeset->getWhitespaceMatters()) {
-          $ignore_all = false;
+        $force_ignore = ($whitespace_mode == self::WHITESPACE_IGNORE_FORCE);
+
+        if (!$force_ignore) {
+          if ($ignore_all && $changeset->getWhitespaceMatters()) {
+            $ignore_all = false;
+          }
         }
 
         // The "ignore all whitespace" algorithm depends on rediffing the
@@ -1048,11 +1075,11 @@ class DifferentialChangesetParser {
    * taking into consideration which halves of which changesets will actually
    * be shown.
    *
-   * @param DifferentialInlineComment Comment to test for visibility.
+   * @param PhabricatorInlineCommentInterface Comment to test for visibility.
    * @return bool True if the comment is visible on the rendered diff.
    */
   private function isCommentVisibleOnRenderedDiff(
-    DifferentialInlineComment $comment) {
+    PhabricatorInlineCommentInterface $comment) {
 
     $changeset_id = $comment->getChangesetID();
     $is_new = $comment->getIsNewFile();
@@ -1076,11 +1103,12 @@ class DifferentialChangesetParser {
    * Note that the comment must appear somewhere on the rendered changeset, as
    * per isCommentVisibleOnRenderedDiff().
    *
-   * @param DifferentialInlineComment Comment to test for display location.
+   * @param PhabricatorInlineCommentInterface Comment to test for display
+   *              location.
    * @return bool True for right, false for left.
    */
   private function isCommentOnRightSideWhenDisplayed(
-    DifferentialInlineComment $comment) {
+    PhabricatorInlineCommentInterface $comment) {
 
     if (!$this->isCommentVisibleOnRenderedDiff($comment)) {
       throw new Exception("Comment is not visible on changeset!");
@@ -1314,7 +1342,10 @@ class DifferentialChangesetParser {
         $o_text = isset($this->oldRender[$ii]) ? $this->oldRender[$ii] : null;
         $o_attr = null;
         if ($this->old[$ii]['type']) {
-          if (empty($this->new[$ii])) {
+          if ($this->old[$ii]['type'] == '\\') {
+            $o_text = $this->old[$ii]['text'];
+            $o_attr = ' class="comment"';
+          } elseif (empty($this->new[$ii])) {
             $o_attr = ' class="old old-full"';
           } else {
             $o_attr = ' class="old"';
@@ -1345,7 +1376,10 @@ class DifferentialChangesetParser {
         $n_cov = '<td class="cov '.$cov_class.'"></td>';
 
         if ($this->new[$ii]['type']) {
-          if (empty($this->old[$ii])) {
+          if ($this->new[$ii]['type'] == '\\') {
+            $n_text = $this->new[$ii]['text'];
+            $n_attr = ' class="comment"';
+          } elseif (empty($this->old[$ii])) {
             $n_attr = ' class="new new-full"';
           } else {
             $n_attr = ' class="new"';
@@ -1383,7 +1417,10 @@ class DifferentialChangesetParser {
           '<th'.$o_id.'>'.$o_num.'</th>'.
           '<td'.$o_attr.'>'.$o_text.'</td>'.
           '<th'.$n_id.'>'.$n_num.'</th>'.
-          '<td'.$n_attr.'>'.$n_text.'</td>'.
+          // NOTE: This is a unicode zero-width space, which we use as a hint
+          // when intercepting 'copy' events to make sure sensible text ends
+          // up on the clipboard. See the 'phabricator-oncopy' behavior.
+          '<td'.$n_attr.'>'."\xE2\x80\x8B".$n_text.'</td>'.
           $n_cov.
         '</tr>';
 
@@ -1425,12 +1462,13 @@ class DifferentialChangesetParser {
     return implode('', $html);
   }
 
-  private function renderInlineComment(DifferentialInlineComment $comment) {
+  private function renderInlineComment(
+    PhabricatorInlineCommentInterface $comment) {
 
     $user = $this->user;
     $edit = $user &&
             ($comment->getAuthorPHID() == $user->getPHID()) &&
-            (!$comment->getCommentID());
+            ($comment->isDraft());
 
     $on_right = $this->isCommentOnRightSideWhenDisplayed($comment);
 
@@ -1544,6 +1582,7 @@ class DifferentialChangesetParser {
       DifferentialChangeType::FILE_DIRECTORY  => 'directory',
       DifferentialChangeType::FILE_BINARY     => 'binary file',
       DifferentialChangeType::FILE_SYMLINK    => 'symlink',
+      DifferentialChangeType::FILE_SUBMODULE  => 'submodule',
     );
 
     static $changes = array(
@@ -1695,6 +1734,51 @@ class DifferentialChangesetParser {
     }
 
     return array($range_s, $range_e, $mask);
+  }
+
+  /**
+   * Render "modified coverage" information; test coverage on modified lines.
+   * This synthesizes diff information with unit test information into a useful
+   * indicator of how well tested a change is.
+   */
+  public function renderModifiedCoverage() {
+    $na = '<em>-</em>';
+
+    if (!$this->coverage) {
+      return $na;
+    }
+
+    $covered = 0;
+    $not_covered = 0;
+
+    foreach ($this->new as $k => $new) {
+      if (!$new['line']) {
+        continue;
+      }
+
+      if (!$new['type']) {
+        continue;
+      }
+
+      if (empty($this->coverage[$new['line'] - 1])) {
+        continue;
+      }
+
+      switch ($this->coverage[$new['line'] - 1]) {
+        case 'C':
+          $covered++;
+          break;
+        case 'U':
+          $not_covered++;
+          break;
+      }
+    }
+
+    if (!$covered && !$not_covered) {
+      return $na;
+    }
+
+    return sprintf('%d%%', 100 * ($covered / ($covered + $not_covered)));
   }
 
 }

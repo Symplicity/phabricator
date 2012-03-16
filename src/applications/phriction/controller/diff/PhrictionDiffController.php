@@ -1,7 +1,7 @@
 <?php
 
 /*
- * Copyright 2011 Facebook, Inc.
+ * Copyright 2012 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -19,7 +19,7 @@
 /**
  * @group phriction
  */
-class PhrictionDiffController
+final class PhrictionDiffController
   extends PhrictionController {
 
   private $id;
@@ -93,7 +93,8 @@ class PhrictionDiffController
     $output = $parser->render($range_s, $range_e, $mask);
 
     if ($request->isAjax()) {
-      return id(new AphrontAjaxResponse())->setContent($output);
+      return id(new PhabricatorChangesetResponse())
+        ->setRenderedChangeset($output);
     }
 
     require_celerity_resource('differential-changeset-view-css');

@@ -7,6 +7,7 @@
 
 
 phutil_require_module('phabricator', 'applications/differential/storage/base');
+phutil_require_module('phabricator', 'infrastructure/diff/interface/inline');
 
 
 phutil_require_source('DifferentialInlineComment.php');

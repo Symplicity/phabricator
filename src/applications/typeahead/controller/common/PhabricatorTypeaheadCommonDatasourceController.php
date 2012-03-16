@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-class PhabricatorTypeaheadCommonDatasourceController
+final class PhabricatorTypeaheadCommonDatasourceController
   extends PhabricatorTypeaheadDatasourceController {
 
   public function willProcessRequest(array $data) {
@@ -129,6 +129,7 @@ class PhabricatorTypeaheadCommonDatasourceController
           $user->getUsername().' ('.$user->getRealName().')',
           '/p/'.$user->getUsername(),
           $user->getPHID(),
+          $user->getUsername(),
         );
       }
     }
@@ -145,7 +146,9 @@ class PhabricatorTypeaheadCommonDatasourceController
     }
 
     if ($need_projs) {
-      $projs = id(new PhabricatorProject())->loadAll();
+      $projs = id(new PhabricatorProject())->loadAllWhere(
+        'status != %d',
+        PhabricatorProjectStatus::STATUS_ARCHIVED);
       foreach ($projs as $proj) {
         $data[] = array(
           $proj->getName(),
@@ -162,6 +165,7 @@ class PhabricatorTypeaheadCommonDatasourceController
           'r'.$repo->getCallsign().' ('.$repo->getName().')',
           '/diffusion/'.$repo->getCallsign().'/',
           $repo->getPHID(),
+          'r'.$repo->getCallsign(),
         );
       }
     }

@@ -19,7 +19,8 @@
 /**
  * @group conduit
  */
-class ConduitAPI_differential_getcommitmessage_Method extends ConduitAPIMethod {
+final class ConduitAPI_differential_getcommitmessage_Method
+  extends ConduitAPIMethod {
 
   public function getMethodDescription() {
     return "Retrieve Differential commit messages or message templates.";
@@ -138,7 +139,7 @@ class ConduitAPI_differential_getcommitmessage_Method extends ConduitAPIMethod {
     }
     $commit_message = implode("\n\n", $commit_message);
 
-    return wordwrap($commit_message, 80);
+    return $commit_message;
   }
 
 }

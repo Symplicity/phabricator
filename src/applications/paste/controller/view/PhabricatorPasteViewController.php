@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-class PhabricatorPasteViewController extends PhabricatorPasteController {
+final class PhabricatorPasteViewController extends PhabricatorPasteController {
 
   private $id;
 
@@ -142,6 +142,7 @@ class PhabricatorPasteViewController extends PhabricatorPasteController {
 
     $text_list = explode("\n", $source);
 
+    Javelin::initBehavior('phabricator-oncopy', array());
     $rows = $this->buildDisplayRows($text_list);
 
     $corpus_table = phutil_render_tag(
@@ -179,7 +180,10 @@ class PhabricatorPasteViewController extends PhabricatorPasteController {
         ),
         $n);
       $rows[] = '<tr id="'.$anchor.'"><th>'.$link.'</th>'.
-        '<td style="white-space: pre-wrap;">'.$line.'</td></tr>';
+        '<td style="white-space: pre-wrap;">'.
+        // NOTE: See the 'phabricator-oncopy' behavior.
+        "\xE2\x80\x8B".
+        $line.'</td></tr>';
       ++$n;
     }
 

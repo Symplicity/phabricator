@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-class PhabricatorRepository extends PhabricatorRepositoryDAO {
+final class PhabricatorRepository extends PhabricatorRepositoryDAO {
 
   const TABLE_PATH = 'repository_path';
   const TABLE_PATHCHANGE = 'repository_pathchange';
@@ -318,6 +318,17 @@ class PhabricatorRepository extends PhabricatorRepositoryDAO {
     } else {
       return false;
     }
+  }
+
+  public function getPublicRemoteURI() {
+    $uri = new PhutilURI($this->getRemoteURI());
+
+    // Make sure we don't leak anything if this repo is using HTTP Basic Auth
+    // with the credentials in the URI or something zany like that.
+    $uri->setUser(null);
+    $uri->setPass(null);
+
+    return $uri;
   }
 
   private function isSSHProtocol($protocol) {

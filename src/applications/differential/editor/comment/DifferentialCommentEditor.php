@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-class DifferentialCommentEditor {
+final class DifferentialCommentEditor {
 
   protected $revision;
   protected $actorPHID;
@@ -30,6 +30,8 @@ class DifferentialCommentEditor {
 
   private $parentMessageID;
   private $contentSource;
+
+  private $isDaemonWorkflow;
 
   public function __construct(
     DifferentialRevision $revision,
@@ -85,6 +87,11 @@ class DifferentialCommentEditor {
 
   public function setContentSource(PhabricatorContentSource $content_source) {
     $this->contentSource = $content_source;
+    return $this;
+  }
+
+  public function setIsDaemonWorkflow($is_daemon) {
+    $this->isDaemonWorkflow = $is_daemon;
     return $this;
   }
 
@@ -320,6 +327,32 @@ class DifferentialCommentEditor {
         break;
 
       case DifferentialAction::ACTION_COMMIT:
+
+        // NOTE: The daemons can mark things committed from any state. We treat
+        // them as completely authoritative.
+
+        if (!$this->isDaemonWorkflow) {
+          if (!$actor_is_author) {
+            throw new Exception(
+              "You can not mark a revision you don't own as committed.");
+          }
+
+          $status_committed = ArcanistDifferentialRevisionStatus::COMMITTED;
+          $status_accepted = ArcanistDifferentialRevisionStatus::ACCEPTED;
+
+          if ($revision_status == $status_committed) {
+            throw new DifferentialActionHasNoEffectException(
+              "You can not mark this revision as committed because it has ".
+              "already been marked as committed.");
+          }
+
+          if ($revision_status != $status_accepted) {
+            throw new DifferentialActionHasNoEffectException(
+              "You can not mark this revision as committed because it is ".
+              "has not been accepted.");
+          }
+        }
+
         $revision
           ->setStatus(ArcanistDifferentialRevisionStatus::COMMITTED);
         break;
@@ -384,6 +417,12 @@ class DifferentialCommentEditor {
         break;
       default:
         throw new Exception('Unsupported action.');
+    }
+
+    // Update information about reviewer in charge.
+    if ($action == DifferentialAction::ACTION_ACCEPT ||
+        $action == DifferentialAction::ACTION_REJECT) {
+      $revision->setLastReviewerPHID($actor_phid);
     }
 
     // Always save the revision (even if we didn't actually change any of its

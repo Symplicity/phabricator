@@ -16,7 +16,7 @@
  * limitations under the License.
  */
 
-class DifferentialChangesetViewController extends DifferentialController {
+final class DifferentialChangesetViewController extends DifferentialController {
 
 
   public function shouldRequireLogin() {
@@ -130,7 +130,7 @@ class DifferentialChangesetViewController extends DifferentialController {
     }
 
     $coverage = null;
-    if ($right->getDiffID()) {
+    if ($right && $right->getDiffID()) {
       $unit = id(new DifferentialDiffProperty())->loadOneWhere(
         'diffID = %d AND name = %s',
         $right->getDiffID(),
@@ -208,9 +208,16 @@ class DifferentialChangesetViewController extends DifferentialController {
 
     $output = $parser->render($range_s, $range_e, $mask);
 
+    $mcov = $parser->renderModifiedCoverage();
+
     if ($request->isAjax()) {
-      return id(new AphrontAjaxResponse())
-        ->setContent($output);
+      $coverage = array(
+        'differential-mcoverage-'.md5($changeset->getFilename()) => $mcov,
+      );
+
+      return id(new PhabricatorChangesetResponse())
+        ->setRenderedChangeset($output)
+        ->setCoverage($coverage);
     }
 
     Javelin::initBehavior('differential-show-more', array(

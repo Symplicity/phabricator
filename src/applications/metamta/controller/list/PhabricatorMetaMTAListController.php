@@ -1,7 +1,7 @@
 <?php
 
 /*
- * Copyright 2011 Facebook, Inc.
+ * Copyright 2012 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,7 +16,8 @@
  * limitations under the License.
  */
 
-class PhabricatorMetaMTAListController extends PhabricatorMetaMTAController {
+final class PhabricatorMetaMTAListController
+  extends PhabricatorMetaMTAController {
 
   public function processRequest() {
     // Get a page of mails together with pager.
@@ -24,6 +25,7 @@ class PhabricatorMetaMTAListController extends PhabricatorMetaMTAController {
     $user = $request->getUser();
     $offset = $request->getInt('offset', 0);
     $related_phid = $request->getStr('phid');
+    $status = $request->getStr('status');
 
     $pager = new AphrontPagerView();
     $pager->setOffset($offset);
@@ -32,11 +34,21 @@ class PhabricatorMetaMTAListController extends PhabricatorMetaMTAController {
     $mail = new PhabricatorMetaMTAMail();
     $conn_r = $mail->establishConnection('r');
 
-    if ($related_phid) {
-      $where_clause = qsprintf(
+    $wheres = array();
+    if ($status) {
+      $wheres[] = qsprintf(
         $conn_r,
-        'WHERE relatedPHID = %s',
+        'status = %s',
+        $status);
+    }
+    if ($related_phid) {
+      $wheres[] = qsprintf(
+        $conn_r,
+        'relatedPHID = %s',
         $related_phid);
+    }
+    if (count($wheres)) {
+      $where_clause = 'WHERE '.implode($wheres, ' AND ');
     } else {
       $where_clause = 'WHERE 1 = 1';
     }

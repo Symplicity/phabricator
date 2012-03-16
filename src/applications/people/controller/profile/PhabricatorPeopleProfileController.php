@@ -16,7 +16,8 @@
  * limitations under the License.
  */
 
-class PhabricatorPeopleProfileController extends PhabricatorPeopleController {
+final class PhabricatorPeopleProfileController
+  extends PhabricatorPeopleController {
 
   private $username;
   private $page;
@@ -45,9 +46,10 @@ class PhabricatorPeopleProfileController extends PhabricatorPeopleController {
     if (!$profile) {
       $profile = new PhabricatorUserProfile();
     }
+    $username = phutil_escape_uri($user->getUserName());
 
     $nav = new AphrontSideNavFilterView();
-    $nav->setBaseURI(new PhutilURI('/p/'.$user->getUserName().'/'));
+    $nav->setBaseURI(new PhutilURI('/p/'.$username.'/'));
     $nav->addFilter('feed', 'Feed');
     $nav->addFilter('about', 'About');
 
@@ -58,7 +60,7 @@ class PhabricatorPeopleProfileController extends PhabricatorPeopleController {
     $nav->addFilter(
       null,
       "Revisions {$external_arrow}",
-      '/differential/filter/revisions/?phid='.$user->getPHID());
+      '/differential/filter/revisions/'.$username.'/');
 
     $nav->addFilter(
       null,
@@ -68,7 +70,7 @@ class PhabricatorPeopleProfileController extends PhabricatorPeopleController {
     $nav->addFilter(
       null,
       "Commits {$external_arrow}",
-      '/audit/view/author/'.phutil_escape_uri($user->getUserName()).'/');
+      '/audit/view/author/'.$username.'/');
 
     $oauths = id(new PhabricatorUserOAuthInfo())->loadAllWhere(
       'userID = %d',

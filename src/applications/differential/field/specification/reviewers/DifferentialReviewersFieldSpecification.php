@@ -19,7 +19,7 @@
 final class DifferentialReviewersFieldSpecification
   extends DifferentialFieldSpecification {
 
-  private $reviewers;
+  private $reviewers = array();
   private $error;
 
   public function shouldAppearOnRevisionView() {
@@ -86,6 +86,7 @@ final class DifferentialReviewersFieldSpecification
     return id(new AphrontFormTokenizerControl())
       ->setLabel('Reviewers')
       ->setName('reviewers')
+      ->setUser($this->getUser())
       ->setDatasource('/typeahead/common/users/')
       ->setValue($reviewer_map)
       ->setError($this->error);
@@ -149,15 +150,16 @@ final class DifferentialReviewersFieldSpecification
   }
 
   public function renderValueForRevisionList(DifferentialRevision $revision) {
-    $reviewer_phids = $revision->getReviewers();
-    if ($reviewer_phids) {
-      $first = reset($reviewer_phids);
-      if (count($reviewer_phids) > 1) {
-        $suffix = ' (+'.(count($reviewer_phids) - 1).')';
+    $primary_reviewer = $this->getPrimaryReviewer($revision);
+    if ($primary_reviewer) {
+      $other_reviewers = array_flip($revision->getReviewers());
+      unset($other_reviewers[$primary_reviewer]);
+      if ($other_reviewers) {
+        $suffix = ' (+'.(count($other_reviewers)).')';
       } else {
         $suffix = null;
       }
-      return $this->getHandle($first)->renderLink().$suffix;
+      return $this->getHandle($primary_reviewer)->renderLink().$suffix;
     } else {
       return '<em>None</em>';
     }
@@ -165,11 +167,19 @@ final class DifferentialReviewersFieldSpecification
 
   public function getRequiredHandlePHIDsForRevisionList(
     DifferentialRevision $revision) {
-    $reviewer_phids = $revision->getReviewers();
-    if ($reviewer_phids) {
-      return array(reset($reviewer_phids));
+    $primary_reviewer = $this->getPrimaryReviewer($revision);
+    if ($primary_reviewer) {
+      return array($primary_reviewer);
     }
     return array();
+  }
+
+  private function getPrimaryReviewer(DifferentialRevision $revision) {
+    $primary_reviewer = $revision->getLastReviewerPHID();
+    if (!$primary_reviewer) {
+      $primary_reviewer = head($revision->getReviewers());
+    }
+    return $primary_reviewer;
   }
 
 }

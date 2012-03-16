@@ -16,7 +16,8 @@
  * limitations under the License.
  */
 
-class PhabricatorOwnersListController extends PhabricatorOwnersController {
+final class PhabricatorOwnersListController
+  extends PhabricatorOwnersController {
 
   protected $view;
 
@@ -272,7 +273,7 @@ class PhabricatorOwnersListController extends PhabricatorOwnersController {
         phutil_render_tag(
           'a',
           array(
-            'href' => '/owners/related/package/?phid='.$package->getPHID(),
+            'href' => '/audit/view/packagecommits/?phid='.$package->getPHID(),
           ),
           phutil_escape_html('Related Commits'))
       );

@@ -78,4 +78,46 @@ final class PhabricatorOAuthServerScope {
     return $requested_scopes;
   }
 
+  /**
+   * A scopes list is considered valid if each scope is a known scope
+   * and each scope is seen only once.  Otherwise, the list is invalid.
+   */
+  static public function validateScopesList($scope_list) {
+    $scopes       = explode(' ', $scope_list);
+    $known_scopes = self::getScopesDict();
+    $seen_scopes  = array();
+    foreach ($scopes as $scope) {
+      if (!isset($known_scopes[$scope])) {
+        return false;
+      }
+      if (isset($seen_scopes[$scope])) {
+        return false;
+      }
+      $seen_scopes[$scope] = 1;
+    }
+
+    return true;
+  }
+
+  /**
+   * A scopes dictionary is considered valid if each key is a known scope.
+   * Otherwise, the dictionary is invalid.
+   */
+  static public function validateScopesDict($scope_dict) {
+    $known_scopes   = self::getScopesDict();
+    $unknown_scopes = array_diff_key($scope_dict,
+                                     $known_scopes);
+    return empty($unknown_scopes);
+  }
+
+  /**
+   * Transforms a space-delimited scopes list into a scopes dict. The list
+   * should be validated by @{method:validateScopesList} before
+   * transformation.
+   */
+   static public function scopesListToDict($scope_list) {
+    $scopes = explode(' ', $scope_list);
+    return array_fill_keys($scopes, 1);
+  }
+
 }

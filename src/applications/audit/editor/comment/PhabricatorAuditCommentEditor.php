@@ -21,6 +21,8 @@ final class PhabricatorAuditCommentEditor {
   private $commit;
   private $user;
 
+  private $attachInlineComments;
+
   public function __construct(PhabricatorRepositoryCommit $commit) {
     $this->commit = $commit;
     return $this;
@@ -28,6 +30,11 @@ final class PhabricatorAuditCommentEditor {
 
   public function setUser(PhabricatorUser $user) {
     $this->user = $user;
+    return $this;
+  }
+
+  public function setAttachInlineComments($attach_inline_comments) {
+    $this->attachInlineComments = $attach_inline_comments;
     return $this;
   }
 
@@ -40,10 +47,26 @@ final class PhabricatorAuditCommentEditor {
       'targetPHID = %s',
       $commit->getPHID());
 
+    $inline_comments = array();
+    if ($this->attachInlineComments) {
+      $inline_comments = id(new PhabricatorAuditInlineComment())->loadAllWhere(
+        'authorPHID = %s AND commitPHID = %s
+          AND auditCommentID IS NULL',
+        $user->getPHID(),
+        $commit->getPHID());
+    }
+
     $comment
       ->setActorPHID($user->getPHID())
       ->setTargetPHID($commit->getPHID())
       ->save();
+
+    if ($inline_comments) {
+      foreach ($inline_comments as $inline) {
+        $inline->setAuditCommentID($comment->getID());
+        $inline->save();
+      }
+    }
 
     // When a user submits an audit comment, we update all the audit requests
     // they have authority over to reflect the most recent status. The general
@@ -54,7 +77,7 @@ final class PhabricatorAuditCommentEditor {
     $audit_phids = self::loadAuditPHIDsForUser($this->user);
     $audit_phids = array_fill_keys($audit_phids, true);
 
-    $relationships = id(new PhabricatorOwnersPackageCommitRelationship())
+    $requests = id(new PhabricatorRepositoryAuditRequest())
       ->loadAllWhere(
         'commitPHID = %s',
         $commit->getPHID());
@@ -65,34 +88,34 @@ final class PhabricatorAuditCommentEditor {
 
     // Status may be empty for updates which don't affect status, like
     // "comment".
-    $have_any_relationship = false;
-    foreach ($relationships as $relationship) {
-      if (empty($audit_phids[$relationship->getPackagePHID()])) {
+    $have_any_requests = false;
+    foreach ($requests as $request) {
+      if (empty($audit_phids[$request->getAuditorPHID()])) {
         continue;
       }
-      $have_any_relationship = true;
+      $have_any_requests = true;
       if ($status) {
-        $relationship->setAuditStatus($status);
-        $relationship->save();
+        $request->setAuditStatus($status);
+        $request->save();
       }
     }
 
-    if (!$have_any_relationship) {
+    if (!$have_any_requests) {
       // If the user has no current authority over any audit trigger, make a
       // new one to represent their audit state.
-      $relationship = id(new PhabricatorOwnersPackageCommitRelationship())
+      $request = id(new PhabricatorRepositoryAuditRequest())
         ->setCommitPHID($commit->getPHID())
-        ->setPackagePHID($user->getPHID())
+        ->setAuditorPHID($user->getPHID())
         ->setAuditStatus(
             $status
               ? $status
               : PhabricatorAuditStatusConstants::AUDIT_NOT_REQUIRED)
         ->setAuditReasons(array("Voluntary Participant"))
         ->save();
-      $relationships[] = $relationship;
+      $requests[] = $request;
     }
 
-    $commit->updateAuditStatus($relationships);
+    $commit->updateAuditStatus($requests);
     $commit->save();
 
     $this->publishFeedStory($comment, array_keys($audit_phids));
@@ -185,14 +208,20 @@ final class PhabricatorAuditCommentEditor {
     );
     $verb = idx($map, $comment->getAction(), 'Commented On');
 
+    $reply_handler = self::newReplyHandlerForCommit($commit);
+
     $prefix = PhabricatorEnv::getEnvConfig('metamta.diffusion.subject-prefix');
     $subject = "{$prefix} [{$verb}] {$name}: {$summary}";
-    $thread_id  = '<diffusion-audit-'.$commit->getPHID().'>';
+
+    $threading = self::getMailThreading($commit->getPHID());
+    list($thread_id, $thread_topic) = $threading;
+
     $is_new     = !count($other_comments);
     $body       = $this->renderMailBody(
       $comment,
       "{$name}: {$summary}",
-      $handle);
+      $handle,
+      $reply_handler);
 
     $email_to = array();
 
@@ -212,13 +241,11 @@ final class PhabricatorAuditCommentEditor {
     $template = id(new PhabricatorMetaMTAMail())
       ->setSubject($subject)
       ->setFrom($comment->getActorPHID())
-      ->addHeader('Thread-Topic', 'Diffusion Audit '.$commit->getPHID())
       ->setThreadID($thread_id, $is_new)
+      ->addHeader('Thread-Topic', $thread_topic)
       ->setRelatedPHID($commit->getPHID())
       ->setIsBulk(true)
       ->setBody($body);
-
-    $reply_handler = self::newReplyHandlerForCommit($commit);
 
     $mails = $reply_handler->multiplexMail(
       $template,
@@ -228,6 +255,13 @@ final class PhabricatorAuditCommentEditor {
     foreach ($mails as $mail) {
       $mail->saveAndSend();
     }
+  }
+
+  public static function getMailThreading($phid) {
+    return array(
+      '<diffusion-audit-'.$phid.'>',
+      'Diffusion Audit '.$phid,
+    );
   }
 
   public static function newReplyHandlerForCommit($commit) {
@@ -241,7 +275,8 @@ final class PhabricatorAuditCommentEditor {
   private function renderMailBody(
     PhabricatorAuditComment $comment,
     $cname,
-    PhabricatorObjectHandle $handle) {
+    PhabricatorObjectHandle $handle,
+    PhabricatorMailReplyHandler $reply_handler) {
 
     $commit = $this->commit;
     $user = $this->user;
@@ -258,6 +293,11 @@ final class PhabricatorAuditCommentEditor {
     }
 
     $body[] = "COMMIT\n  ".PhabricatorEnv::getProductionURI($handle->getURI());
+
+    $reply_instructions = $reply_handler->getReplyHandlerInstructions();
+    if ($reply_instructions) {
+      $body[] = "REPLY HANDLER ACTIONS\n  ".$reply_instructions;
+    }
 
     return implode("\n\n", $body)."\n";
   }

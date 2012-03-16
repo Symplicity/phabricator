@@ -21,7 +21,7 @@
  * reviewers, diffs, and CCs. Unlike simple edits, these changes trigger
  * complicated email workflows.
  */
-class DifferentialRevisionEditor {
+final class DifferentialRevisionEditor {
 
   protected $revision;
   protected $actorPHID;
@@ -373,7 +373,7 @@ class DifferentialRevisionEditor {
 
       // Save the changes we made above.
 
-      $diff->setDescription(substr($this->getComments(), 0, 80));
+      $diff->setDescription(preg_replace('/\n.*/s', '', $this->getComments()));
       $diff->save();
 
       $this->updateAffectedPathTable($revision, $diff, $changesets);
