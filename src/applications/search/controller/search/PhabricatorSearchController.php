@@ -113,6 +113,7 @@ final class PhabricatorSearchController
           return id(new AphrontRedirectResponse())
             ->setURI('/search/'.$query->getQueryKey().'/');
         }
+      }
     }
 
     $more = PhabricatorEnv::getEnvConfig('search.more-document-types', array());
@@ -276,6 +277,5 @@ final class PhabricatorSearchController
         'title' => 'Search Results',
       ));
   }
-
 
 }
