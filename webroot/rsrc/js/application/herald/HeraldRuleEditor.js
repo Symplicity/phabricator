@@ -65,7 +65,6 @@ JX.install('HeraldRuleEditor', {
 
     this._renderConditions(conditions);
     this._renderActions(actions);
-    this._renderAuthorInput();
   },
 
   members : {
@@ -120,12 +119,6 @@ JX.install('HeraldRuleEditor', {
         conditions: this._config.conditions,
         actions: this._config.actions
       });
-
-      var authorInput = JX.DOM.find(this._root, 'input', 'author');
-      var authorID = JX.keys(this._config.authorGetter())[0];
-      if (authorID) {
-        authorInput.value = authorID;
-      }
     },
 
     _getConditionValue : function(id) {
@@ -195,7 +188,6 @@ JX.install('HeraldRuleEditor', {
         JX.Stratcom.addSigil(node, 'action-target');
       }
 
-
       var old_type = this._actionTypes[row_id];
       if (old_type == type || !old_type) {
         set_fn(this._getActionTarget(row_id));
@@ -233,6 +225,12 @@ JX.install('HeraldRuleEditor', {
           get_fn = JX.bag;
           set_fn = JX.bag;
           break;
+        case 'flagcolor':
+          input = this._renderSelect(this._config.template.colors);
+          get_fn = function() { return input.value; };
+          set_fn = function(v) { input.value = v; };
+          set_fn(this._config.template.defaultColor);
+          break;
         default:
           input = JX.$N('input');
           get_fn = function() { return input.value; };
@@ -242,22 +240,6 @@ JX.install('HeraldRuleEditor', {
 
       return [input, get_fn, set_fn];
     },
-
-    _renderAuthorInput : function() {
-      var tokenizer = this._newTokenizer('email', 1);
-      input = tokenizer[0];
-      set_fn = tokenizer[2];
-      set_fn(this._config.author);
-      this._config.authorGetter = tokenizer[1];
-      try {
-        var author_cell = JX.$('author-input');
-        JX.DOM.setContent(author_cell, input);
-      } catch (ex) {
-        // TODO: Get rid of the ownership changing stuff or something?
-        // On global rules, there's no "author" input. Not fixing this
-        // properly because I think I'm going to nuke it soon.
-      }
-   },
 
     _renderValueInputForRow : function(row_id) {
       var cond = this._config.conditions[row_id];

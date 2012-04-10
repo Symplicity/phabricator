@@ -1,7 +1,7 @@
 <?php
 
 /*
- * Copyright 2011 Facebook, Inc.
+ * Copyright 2012 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -27,6 +27,7 @@ final class DiffusionBrowseTableView extends DiffusionView {
   }
 
   public function setHandles(array $handles) {
+    assert_instances_of($handles, 'PhabricatorObjectHandle');
     $this->handles = $handles;
     return $this;
   }
@@ -36,6 +37,7 @@ final class DiffusionBrowseTableView extends DiffusionView {
     array $handles,
     PhabricatorRepositoryCommit $commit = null,
     PhabricatorRepositoryCommitData $data = null) {
+    assert_instances_of($handles, 'PhabricatorObjectHandle');
 
     if ($commit) {
       $epoch = $commit->getEpoch();
@@ -86,22 +88,41 @@ final class DiffusionBrowseTableView extends DiffusionView {
     $rows = array();
     foreach ($this->paths as $path) {
 
-      if ($path->getFileType() == DifferentialChangeType::FILE_DIRECTORY) {
+      $file_type = $path->getFileType();
+      if ($file_type == DifferentialChangeType::FILE_DIRECTORY) {
         $browse_text = $path->getPath().'/';
         $dir_slash = '/';
 
         $browse_link = '<strong>'.$this->linkBrowse(
           $base_path.$path->getPath().$dir_slash,
           array(
-            'text' => $browse_text,
+            'html' => $this->renderPathIcon(
+              'dir',
+              $browse_text),
           )).'</strong>';
+      } else if ($file_type == DifferentialChangeType::FILE_SUBMODULE) {
+        $browse_text = $path->getPath().'/';
+        $browse_link =
+          '<strong>'.
+            $this->linkExternal(
+              $path->getHash(),
+              $path->getExternalURI(),
+              $this->renderPathIcon(
+                'ext',
+                $browse_text)).
+          '</strong>';
       } else {
+        if ($file_type == DifferentialChangeType::FILE_SYMLINK) {
+          $type = 'link';
+        } else {
+          $type = 'file';
+        }
         $browse_text = $path->getPath();
         $dir_slash = null;
         $browse_link = $this->linkBrowse(
           $base_path.$path->getPath().$dir_slash,
           array(
-            'text' => $browse_text,
+            'html' => $this->renderPathIcon($type, $browse_text),
           ));
       }
 
@@ -120,13 +141,13 @@ final class DiffusionBrowseTableView extends DiffusionView {
           'author'    => celerity_generate_unique_node_id(),
           'details'   => celerity_generate_unique_node_id(),
         );
-        $uri =
-          '/diffusion/'.$repository->getCallsign().'/lastmodified/'.
-          $request->getBranchURIComponent($request->getBranch()).
-          $base_path.$path->getPath();
-        if ($request->getRawCommit()) {
-          $uri .= ';'.$request->getRawCommit();
-        }
+
+        $uri = (string)$request->generateURI(
+          array(
+            'action' => 'lastmodified',
+            'path'   => $base_path.$path->getPath(),
+          ));
+
         $need_pull[$uri] = $dict;
         foreach ($dict as $k => $uniq) {
           $dict[$k] = '<span id="'.$uniq.'"></span>';
@@ -170,6 +191,18 @@ final class DiffusionBrowseTableView extends DiffusionView {
         'wide',
       ));
     return $view->render();
+  }
+
+  private function renderPathIcon($type, $text) {
+
+    require_celerity_resource('diffusion-icons-css');
+
+    return phutil_render_tag(
+      'span',
+      array(
+        'class' => 'diffusion-path-icon diffusion-path-icon-'.$type,
+      ),
+      phutil_escape_html($text));
   }
 
 }

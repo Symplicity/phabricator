@@ -25,6 +25,7 @@ final class PhabricatorObjectSelectorDialog {
   private $submitURI;
   private $searchURI;
   private $selectedFilter;
+  private $excluded;
 
   private $title;
   private $header;
@@ -46,7 +47,13 @@ final class PhabricatorObjectSelectorDialog {
     return $this;
   }
 
+  public function setExcluded($excluded_phid) {
+    $this->excluded = $excluded_phid;
+    return $this;
+  }
+
   public function setHandles(array $handles) {
+    assert_instances_of($handles, 'PhabricatorObjectHandle');
     $this->handles = $handles;
     return $this;
   }
@@ -189,6 +196,7 @@ final class PhabricatorObjectSelectorDialog {
         'results' => $results_id,
         'current' => $current_id,
         'form'    => $form_id,
+        'exclude' => $this->excluded,
         'uri'     => $this->searchURI,
         'handles' => $handle_views,
       ));

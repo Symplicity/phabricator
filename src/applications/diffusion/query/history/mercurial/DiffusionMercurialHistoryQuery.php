@@ -1,7 +1,7 @@
 <?php
 
 /*
- * Copyright 2011 Facebook, Inc.
+ * Copyright 2012 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,23 +23,66 @@ final class DiffusionMercurialHistoryQuery extends DiffusionHistoryQuery {
 
     $repository = $drequest->getRepository();
     $path = $drequest->getPath();
-    $commit_hash = $drequest->getCommit();
+    $commit_hash = $drequest->getStableCommitName();
 
     $path = DiffusionPathIDQuery::normalizePath($path);
 
+    // NOTE: Using '' as a default path produces the correct behavior if HEAD
+    // is a merge commit; using '.' does not (the merge commit is not included
+    // in the log).
+    $default_path = '';
+
     list($stdout) = $repository->execxLocalCommand(
-      'log --template %s --limit %d --branch %s --rev %s:0 -- %s',
-      '{node}\\n',
+      'log --debug --template %s --limit %d --branch %s --rev %s:0 -- %s',
+      '{node};{parents}\\n',
       ($this->getOffset() + $this->getLimit()), // No '--skip' in Mercurial.
       $drequest->getBranch(),
       $commit_hash,
-      nonempty(ltrim($path, '/'), '.'));
+      nonempty(ltrim($path, '/'), $default_path));
 
-    $hashes = explode("\n", $stdout);
-    $hashes = array_filter($hashes);
-    $hashes = array_slice($hashes, $this->getOffset());
+    $lines = explode("\n", trim($stdout));
+    $lines = array_slice($lines, $this->getOffset());
 
-    return $this->loadHistoryForCommitIdentifiers($hashes);
+    $hash_list = array();
+    $parent_map = array();
+
+    $last = null;
+    foreach (array_reverse($lines) as $line) {
+      list($hash, $parents) = explode(';', $line);
+      $parents = trim($parents);
+      if (!$parents) {
+        if ($last === null) {
+          $parent_map[$hash] = array('...');
+        } else {
+          $parent_map[$hash] = array($last);
+        }
+      } else {
+        $parents = preg_split('/\s+/', $parents);
+        foreach ($parents as $parent) {
+          list($plocal, $phash) = explode(':', $parent);
+          if (!preg_match('/^0+$/', $phash)) {
+            $parent_map[$hash][] = $phash;
+          }
+        }
+        // This may happen for the zeroth commit in repository, both hashes
+        // are "000000000...".
+        if (empty($parent_map[$hash])) {
+          $parent_map[$hash] = array('...');
+        }
+      }
+
+      // The rendering code expects the first commit to be "mainline", like
+      // Git. Flip the order so it does the right thing.
+      $parent_map[$hash] = array_reverse($parent_map[$hash]);
+
+      $hash_list[] = $hash;
+      $last = $hash;
+    }
+
+    $hash_list = array_reverse($hash_list);
+    $this->parents = $parent_map;
+
+    return $this->loadHistoryForCommitIdentifiers($hash_list);
   }
 
 }

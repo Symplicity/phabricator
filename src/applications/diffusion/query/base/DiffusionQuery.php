@@ -33,7 +33,7 @@ abstract class DiffusionQuery {
     $map = array(
       PhabricatorRepositoryType::REPOSITORY_TYPE_GIT        => 'Git',
       PhabricatorRepositoryType::REPOSITORY_TYPE_MERCURIAL  => 'Mercurial',
-      PhabricatorRepositoryType::REPOSITORY_TYPE_SVN        => 'SVN',
+      PhabricatorRepositoryType::REPOSITORY_TYPE_SVN        => 'Svn',
     );
 
     $name = idx($map, $repository->getVersionControlSystem());
@@ -53,4 +53,102 @@ abstract class DiffusionQuery {
   }
 
   abstract protected function executeQuery();
+
+
+/* -(  Query Utilities  )---------------------------------------------------- */
+
+
+  final protected function loadCommitsByIdentifiers(array $identifiers) {
+    if (!$identifiers) {
+      return array();
+    }
+
+    $commits = array();
+    $commit_data = array();
+
+    $drequest = $this->getRequest();
+    $repository = $drequest->getRepository();
+
+    $commits = id(new PhabricatorRepositoryCommit())->loadAllWhere(
+      'repositoryID = %d AND commitIdentifier IN (%Ls)',
+        $repository->getID(),
+      $identifiers);
+    $commits = mpull($commits, null, 'getCommitIdentifier');
+
+    // Reorder the commits in identifier order so we preserve nth-parent
+    // relationships when the identifiers are the parents of a merge commit.
+    $commits = array_select_keys($commits, $identifiers);
+
+    if (!$commits) {
+      return array();
+    }
+
+    $commit_data = id(new PhabricatorRepositoryCommitData())->loadAllWhere(
+      'commitID in (%Ld)',
+      mpull($commits, 'getID'));
+    $commit_data = mpull($commit_data, null, 'getCommitID');
+
+    foreach ($commits as $commit) {
+      if (idx($commit_data, $commit->getID())) {
+        $commit->attachCommitData($commit_data[$commit->getID()]);
+      }
+    }
+
+    return $commits;
+  }
+
+  final protected function loadHistoryForCommitIdentifiers(array $identifiers) {
+    if (!$identifiers) {
+      return array();
+    }
+
+    $drequest = $this->getRequest();
+    $repository = $drequest->getRepository();
+    $commits = self::loadCommitsByIdentifiers($identifiers);
+
+
+    $path = $drequest->getPath();
+
+    $conn_r = $repository->establishConnection('r');
+
+    $path_normal = DiffusionPathIDQuery::normalizePath($path);
+    $paths = queryfx_all(
+      $conn_r,
+      'SELECT id, path FROM %T WHERE pathHash IN (%Ls)',
+      PhabricatorRepository::TABLE_PATH,
+      array(md5($path_normal)));
+    $paths = ipull($paths, 'id', 'path');
+    $path_id = idx($paths, $path_normal);
+
+    $path_changes = queryfx_all(
+      $conn_r,
+      'SELECT * FROM %T WHERE commitID IN (%Ld) AND pathID = %d',
+      PhabricatorRepository::TABLE_PATHCHANGE,
+      mpull($commits, 'getID'),
+      $path_id);
+    $path_changes = ipull($path_changes, null, 'commitID');
+
+    $history = array();
+    foreach ($identifiers as $identifier) {
+      $item = new DiffusionPathChange();
+      $item->setCommitIdentifier($identifier);
+      $commit = idx($commits, $identifier);
+      if ($commit) {
+        $item->setCommit($commit);
+        try {
+          $item->setCommitData($commit->getCommitData());
+        } catch (Exception $ex) {
+          // Ignore, commit just doesn't have data.
+        }
+        $change = idx($path_changes, $commit->getID());
+        if ($change) {
+          $item->setChangeType($change['changeType']);
+          $item->setFileType($change['fileType']);
+        }
+      }
+      $history[] = $item;
+    }
+
+    return $history;
+  }
 }

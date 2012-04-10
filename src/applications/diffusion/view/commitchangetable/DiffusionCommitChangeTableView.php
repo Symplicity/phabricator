@@ -21,6 +21,7 @@ final class DiffusionCommitChangeTableView extends DiffusionView {
   private $pathChanges;
 
   public function setPathChanges(array $path_changes) {
+    assert_instances_of($path_changes, 'DiffusionPathChange');
     $this->pathChanges = $path_changes;
     return $this;
   }
@@ -33,9 +34,6 @@ final class DiffusionCommitChangeTableView extends DiffusionView {
     // TODO: Copy Away and Move Away are rendered junkily still.
 
     foreach ($this->pathChanges as $change) {
-      $change_verb = DifferentialChangeType::getFullNameForChangeType(
-        $change->getChangeType());
-
       $path = $change->getPath();
       $hash = substr(md5($path), 0, 8);
       if ($change->getFileType() == DifferentialChangeType::FILE_DIRECTORY) {

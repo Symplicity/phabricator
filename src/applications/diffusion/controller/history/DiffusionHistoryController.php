@@ -35,19 +35,12 @@ final class DiffusionHistoryController extends DiffusionController {
       $history_query->needChildChanges(true);
     }
 
-    $history = $history_query->loadHistory();
-
-    $phids = array();
-    foreach ($history as $item) {
-      $data = $item->getCommitData();
-      if ($data) {
-        if ($data->getCommitDetail('authorPHID')) {
-          $phids[$data->getCommitDetail('authorPHID')] = true;
-        }
-      }
+    $show_graph = !strlen($drequest->getPath());
+    if ($show_graph) {
+      $history_query->needParents(true);
     }
-    $phids = array_keys($phids);
-    $handles = id(new PhabricatorObjectHandleData($phids))->loadHandles();
+
+    $history = $history_query->loadHistory();
 
     $pager = new AphrontPagerView();
     $pager->setPageSize($page_size);
@@ -87,8 +80,16 @@ final class DiffusionHistoryController extends DiffusionController {
 
     $history_table = new DiffusionHistoryTableView();
     $history_table->setDiffusionRequest($drequest);
-    $history_table->setHandles($handles);
     $history_table->setHistory($history);
+
+    $phids = $history_table->getRequiredHandlePHIDs();
+    $handles = id(new PhabricatorObjectHandleData($phids))->loadHandles();
+    $history_table->setHandles($handles);
+
+    if ($show_graph) {
+      $history_table->setParents($history_query->getParents());
+      $history_table->setIsHead($offset == 0);
+    }
 
     $history_panel = new AphrontPanelView();
     $history_panel->setHeader('History');

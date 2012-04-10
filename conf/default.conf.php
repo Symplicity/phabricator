@@ -60,6 +60,15 @@ return array(
   'security.hmac-key' => '[D\t~Y7eNmnQGJ;rnH6aF;m2!vJ8@v8C=Cs:aQS\.Qw',
 
 
+// -- Customization --------------------------------------------------------- //
+
+  // If you want to use a custom logo (e.g., for your company or organization),
+  // copy 'webroot/rsrc/image/custom/example_template.png' to
+  // 'webroot/rsrc/image/custom/custom.png' and set this to the URI you want it
+  // to link to (like http://www.yourcompany.com/).
+  'phabricator.custom.logo'   => null,
+
+
 // -- DarkConsole ----------------------------------------------------------- //
 
   // DarkConsole is a administrative debugging/profiling tool built into
@@ -97,6 +106,10 @@ return array(
 
 // --  MySQL  --------------------------------------------------------------- //
 
+  // Class providing database configuration. It must implement
+  // DatabaseConfigurationProvider.
+  'mysql.configuration-provider' => 'DefaultDatabaseConfigurationProvider',
+
   // The username to use when connecting to MySQL.
   'mysql.user' => 'root',
 
@@ -110,6 +123,11 @@ return array(
 
   // The number of times to try reconnecting to the MySQL database
   'mysql.connection-retries' => 3,
+
+  // Phabricator supports PHP extensions MySQL and MySQLi. It is possible to
+  // implement also other access mechanism (e.g. PDO_MySQL). The class must
+  // extend AphrontMySQLDatabaseConnectionBase.
+  'mysql.implementation' => 'AphrontMySQLDatabaseConnection',
 
 
 // -- Email ----------------------------------------------------------------- //
@@ -556,6 +574,19 @@ return array(
     'image/vnd.microsoft.icon'  => 'image/x-icon',
   ),
 
+  // List of mime types which can be used as the source for an <img /> tag.
+  // This should be a subset of 'files.viewable-mime-types' and exclude files
+  // like text.
+  'files.image-mime-types' => array(
+    'image/jpeg'                => true,
+    'image/jpg'                 => true,
+    'image/png'                 => true,
+    'image/gif'                 => true,
+    'image/x-ico'               => true,
+    'image/x-icon'              => true,
+    'image/vnd.microsoft.icon'  => true,
+  ),
+
   // Phabricator can proxy images from other servers so you can paste the URI
   // to a funny picture of a cat into the comment box and have it show up as an
   // image. However, this means the webserver Phabricator is running on will
@@ -788,6 +819,10 @@ return array(
   // and performance improve with it off) but turn it on in development. (These
   // settings are the defaults.)
   'celerity.force-disk-reads' => false,
+
+  // Minify static resources by removing whitespace and comments. You should
+  // enable this in production, but disable it in development.
+  'celerity.minify' => false,
 
   // You can respond to various application events by installing listeners,
   // which will receive callbacks when interesting things occur. Specify a list

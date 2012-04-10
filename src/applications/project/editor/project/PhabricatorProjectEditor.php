@@ -35,6 +35,7 @@ final class PhabricatorProjectEditor {
   }
 
   public function applyTransactions(array $transactions) {
+    assert_instances_of($transactions, 'PhabricatorProjectTransaction');
     if (!$this->user) {
       throw new Exception('Call setUser() before save()!');
     }
@@ -157,6 +158,7 @@ final class PhabricatorProjectEditor {
       default:
         throw new Exception("Unknown transaction type '{$type}'!");
     }
+    return $this;
   }
 
   private function applyTransactionEffect(

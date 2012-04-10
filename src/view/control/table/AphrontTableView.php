@@ -27,6 +27,12 @@ final class AphrontTableView extends AphrontView {
   protected $className;
   protected $columnVisibility = array();
 
+  protected $sortURI;
+  protected $sortParam;
+  protected $sortSelected;
+  protected $sortReverse;
+  protected $sortValues;
+
   public function __construct(array $data) {
     $this->data = $data;
   }
@@ -66,21 +72,49 @@ final class AphrontTableView extends AphrontView {
     return $this;
   }
 
+  /**
+   * Parse a sorting parameter:
+   *
+   *   list($sort, $reverse) = AphrontTableView::parseSortParam($sort_param);
+   *
+   * @param string  Sort request parameter.
+   * @return pair   Sort value, sort direction.
+   */
+  public static function parseSort($sort) {
+    return array(ltrim($sort, '-'), preg_match('/^-/', $sort));
+  }
+
+  public function makeSortable(
+    PhutilURI $base_uri,
+    $param,
+    $selected,
+    $reverse,
+    array $sort_values) {
+
+    $this->sortURI        = $base_uri;
+    $this->sortParam      = $param;
+    $this->sortSelected   = $selected;
+    $this->sortReverse    = $reverse;
+    $this->sortValues     = array_values($sort_values);
+
+    return $this;
+  }
+
   public function render() {
     require_celerity_resource('aphront-table-view-css');
 
-    $class = $this->className;
-    if ($class !== null) {
-      $class = ' class="aphront-table-view '.$class.'"';
+    $table_class = $this->className;
+    if ($table_class !== null) {
+      $table_class = ' class="aphront-table-view '.$table_class.'"';
     } else {
-      $class = ' class="aphront-table-view"';
+      $table_class = ' class="aphront-table-view"';
     }
-    $table = array('<table'.$class.'>');
+    $table = array('<table'.$table_class.'>');
 
     $col_classes = array();
     foreach ($this->columnClasses as $key => $class) {
       if (strlen($class)) {
-        $col_classes[] = ' class="'.$class.'"';
+        $col_classes[] = $class;
       } else {
         $col_classes[] = null;
       }
@@ -88,19 +122,77 @@ final class AphrontTableView extends AphrontView {
 
     $visibility = array_values($this->columnVisibility);
     $headers = $this->headers;
+    $sort_values = $this->sortValues;
     if ($headers) {
       while (count($headers) > count($visibility)) {
         $visibility[] = true;
+      }
+      while (count($headers) > count($sort_values)) {
+        $sort_values[] = null;
       }
       $table[] = '<tr>';
       foreach ($headers as $col_num => $header) {
         if (!$visibility[$col_num]) {
           continue;
         }
-        $class = idx($col_classes, $col_num);
+
+        $classes = array();
+
+        if (!empty($col_classes[$col_num])) {
+          $classes[] = $col_classes[$col_num];
+        }
+
+        if ($sort_values[$col_num] !== null) {
+          $classes[] = 'aphront-table-view-sortable';
+
+          $sort_value = $sort_values[$col_num];
+          $sort_glyph = "\xE2\x86\x93";
+          if ($sort_value == $this->sortSelected) {
+            if ($this->sortReverse) {
+              $sort_glyph = "\xE2\x86\x91";
+            } else if (!$this->sortReverse) {
+              $sort_value = '-'.$sort_value;
+            }
+            $classes[] = 'aphront-table-view-sortable-selected';
+          }
+
+          $sort_glyph = phutil_render_tag(
+            'span',
+            array(
+              'class' => 'aphront-table-view-sort-glyph',
+            ),
+            $sort_glyph);
+
+          $header = phutil_render_tag(
+            'a',
+            array(
+              'href'  => $this->sortURI->alter($this->sortParam, $sort_value),
+              'class' => 'aphront-table-view-sort-link',
+            ),
+            $sort_glyph.' '.$header);
+        }
+
+        if ($classes) {
+          $class = ' class="'.implode(' ', $classes).'"';
+        } else {
+          $class = null;
+        }
+
         $table[] = '<th'.$class.'>'.$header.'</th>';
       }
       $table[] = '</tr>';
+    }
+
+    foreach ($col_classes as $key => $value) {
+
+      if (($sort_values[$key] !== null) &&
+          ($sort_values[$key] == $this->sortSelected)) {
+        $value = trim($value.' sorted-column');
+      }
+
+      if ($value !== null) {
+        $col_classes[$key] = ' class="'.$value.'"';
+      }
     }
 
     $data = $this->data;
@@ -145,7 +237,7 @@ final class AphrontTableView extends AphrontView {
         ++$row_num;
       }
     } else {
-      $colspan = max(count($headers), 1);
+      $colspan = max(count(array_filter($visibility)), 1);
       $table[] =
         '<tr class="no-data"><td colspan="'.$colspan.'">'.
           coalesce($this->noDataString, 'No data available.').

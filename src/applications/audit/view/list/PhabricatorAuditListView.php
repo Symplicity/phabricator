@@ -23,13 +23,17 @@ final class PhabricatorAuditListView extends AphrontView {
   private $authorityPHIDs = array();
   private $noDataString;
   private $commits;
+  private $user;
+  private $showDescriptions = true;
 
   public function setAudits(array $audits) {
+    assert_instances_of($audits, 'PhabricatorRepositoryAuditRequest');
     $this->audits = $audits;
     return $this;
   }
 
   public function setHandles(array $handles) {
+    assert_instances_of($handles, 'PhabricatorObjectHandle');
     $this->handles = $handles;
     return $this;
   }
@@ -49,7 +53,18 @@ final class PhabricatorAuditListView extends AphrontView {
   }
 
   public function setCommits(array $commits) {
+    assert_instances_of($commits, 'PhabricatorRepositoryCommit');
     $this->commits = mpull($commits, null, 'getPHID');
+    return $this;
+  }
+
+  public function setUser(PhabricatorUser $user) {
+    $this->user = $user;
+    return $this;
+  }
+
+  public function setShowDescriptions($show_descriptions) {
+    $this->showDescriptions = $show_descriptions;
     return $this;
   }
 
@@ -84,6 +99,7 @@ final class PhabricatorAuditListView extends AphrontView {
   }
 
   public function render() {
+    $user = $this->user;
 
     $authority = array_fill_keys($this->authorityPHIDs, true);
 
@@ -120,11 +136,24 @@ final class PhabricatorAuditListView extends AphrontView {
         $reasons,
       );
 
-      if (empty($authority[$audit->getAuditorPHID()])) {
-        $rowc[] = null;
-      } else {
-        $rowc[] = 'highlighted';
+      $row_class = null;
+
+      $has_authority = !empty($authority[$audit->getAuditorPHID()]);
+      if ($has_authority) {
+        $commit_author = $this->commits[$commit_phid]->getAuthorPHID();
+
+        // You don't have authority over package and project audits on your own
+        // commits.
+
+        $auditor_is_user = ($audit->getAuditorPHID() == $user->getPHID());
+        $user_is_author = ($commit_author == $user->getPHID());
+
+        if ($auditor_is_user || !$user_is_author) {
+          $row_class = 'highlighted';
+        }
       }
+
+      $rowc[] = $row_class;
     }
 
     $table = new AphrontTableView($rows);
@@ -139,16 +168,16 @@ final class PhabricatorAuditListView extends AphrontView {
     $table->setColumnClasses(
       array(
         'pri',
-        (($this->commits === null) ? '' : 'wide'),
+        ($this->showDescriptions ? 'wide' : ''),
         '',
         '',
-        (($this->commits === null) ? 'wide' : ''),
+        ($this->showDescriptions ? '' : 'wide'),
       ));
     $table->setRowClasses($rowc);
     $table->setColumnVisibility(
       array(
-        true,
-        ($this->commits !== null),
+        $this->showDescriptions,
+        $this->showDescriptions,
         true,
         true,
         true,

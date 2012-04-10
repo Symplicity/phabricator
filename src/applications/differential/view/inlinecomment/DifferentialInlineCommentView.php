@@ -42,6 +42,7 @@ final class DifferentialInlineCommentView extends AphrontView {
   }
 
   public function setHandles(array $handles) {
+    assert_instances_of($handles, 'PhabricatorObjectHandle');
     $this->handles = $handles;
     return $this;
   }
@@ -58,6 +59,7 @@ final class DifferentialInlineCommentView extends AphrontView {
 
   public function setPreview($preview) {
     $this->preview = $preview;
+    return $this;
   }
 
   public function render() {
@@ -136,6 +138,8 @@ final class DifferentialInlineCommentView extends AphrontView {
       }
     }
 
+    $anchor_name = 'inline-'.$inline->getID();
+
     if ($this->editable && !$this->preview) {
       $links[] = javelin_render_tag(
         'a',
@@ -153,6 +157,16 @@ final class DifferentialInlineCommentView extends AphrontView {
           'sigil'       => 'differential-inline-delete',
         ),
         'Delete');
+    } else if ($this->preview) {
+      $links[] = javelin_render_tag(
+        'a',
+        array(
+          'meta'        => array(
+            'anchor' => $anchor_name,
+          ),
+          'sigil'       => 'differential-inline-preview-jump',
+        ),
+        'Not Visible');
     }
 
     if ($links) {
@@ -178,15 +192,18 @@ final class DifferentialInlineCommentView extends AphrontView {
       }
     }
 
-    $anchor_name = 'inline-'.$inline->getID();
-
-    $anchor = phutil_render_tag(
-      'a',
-      array(
-        'name' => $anchor_name,
-        'id'   => $anchor_name,
-      ),
-      '');
+    if ($this->preview) {
+      $anchor = null;
+    } else {
+      $anchor = phutil_render_tag(
+        'a',
+        array(
+          'name'    => $anchor_name,
+          'id'      => $anchor_name,
+          'class'   => 'differential-inline-comment-anchor',
+        ),
+        '');
+    }
 
     $classes = array(
       'differential-inline-comment',

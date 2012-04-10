@@ -63,7 +63,9 @@ final class PhabricatorDirectoryMainController
 
   }
 
-  private function buildMainResponse($nav, $projects) {
+  private function buildMainResponse($nav, array $projects) {
+    assert_instances_of($projects, 'PhabricatorProject');
+
     if (PhabricatorEnv::getEnvConfig('maniphest.enabled')) {
       $unbreak_panel = $this->buildUnbreakNowPanel();
       $triage_panel = $this->buildNeedsTriagePanel($projects);
@@ -73,6 +75,8 @@ final class PhabricatorDirectoryMainController
       $triage_panel = null;
       $tasks_panel = null;
     }
+
+    $flagged_panel = $this->buildFlaggedPanel();
 
     $jump_panel = $this->buildJumpPanel();
     $revision_panel = $this->buildRevisionPanel();
@@ -87,6 +91,7 @@ final class PhabricatorDirectoryMainController
       $triage_panel,
       $revision_panel,
       $tasks_panel,
+      $flagged_panel,
       $audit_panel,
       $commit_panel,
     );
@@ -128,7 +133,8 @@ final class PhabricatorDirectoryMainController
       ));
   }
 
-  private function buildFeedResponse($nav, $projects) {
+  private function buildFeedResponse($nav, array $projects) {
+    assert_instances_of($projects, 'PhabricatorProject');
 
     $subnav = new AphrontSideNavFilterView();
     $subnav->setBaseURI(new PhutilURI('/feed/'));
@@ -136,21 +142,28 @@ final class PhabricatorDirectoryMainController
     $subnav->addFilter('all',       'All Activity', '/feed/');
     $subnav->addFilter('projects',  'My Projects');
 
+    $nav->appendChild($subnav);
+
     $filter = $subnav->selectFilter($this->subfilter, 'all');
 
     switch ($filter) {
       case 'all':
-        $phids = array();
+        $view = $this->buildFeedView(array());
         break;
       case 'projects':
-        $phids = mpull($projects, 'getPHID');
+        if ($projects) {
+          $phids = mpull($projects, 'getPHID');
+          $view = $this->buildFeedView($phids);
+        } else {
+          $view = new AphrontErrorView();
+          $view->setSeverity(AphrontErrorView::SEVERITY_NODATA);
+          $view->setTitle('No Projects');
+          $view->appendChild('You have not joined any projects.');
+        }
         break;
     }
 
-    $view = $this->buildFeedView($phids);
     $subnav->appendChild($view);
-
-    $nav->appendChild($subnav);
 
     return $this->buildStandardPageResponse(
       $nav,
@@ -193,7 +206,46 @@ final class PhabricatorDirectoryMainController
     return $panel;
   }
 
+  private function buildFlaggedPanel() {
+    $user = $this->getRequest()->getUser();
+
+    $flag_query = id(new PhabricatorFlagQuery())
+      ->withOwnerPHIDs(array($user->getPHID()))
+      ->needHandles(true)
+      ->setLimit(10);
+
+    $flags = $flag_query->execute();
+
+    if (!$flags) {
+      return $this->renderMiniPanel(
+        'No Flags',
+        "You haven't flagged anything.");
+    }
+
+    $panel = new AphrontPanelView();
+    $panel->setHeader('Flagged Objects');
+    $panel->setCaption("Objects you've flagged.");
+
+    $flag_view = new PhabricatorFlagListView();
+    $flag_view->setFlags($flags);
+    $flag_view->setUser($user);
+    $panel->appendChild($flag_view);
+
+    $panel->addButton(
+      phutil_render_tag(
+        'a',
+        array(
+          'href'  => '/flag/',
+          'class' => 'grey button',
+        ),
+        "View All Flags \xC2\xBB"));
+
+    return $panel;
+  }
+
   private function buildNeedsTriagePanel(array $projects) {
+    assert_instances_of($projects, 'PhabricatorProject');
+
     $user = $this->getRequest()->getUser();
     $user_phid = $user->getPHID();
 
@@ -213,7 +265,7 @@ final class PhabricatorDirectoryMainController
       return $this->renderMiniPanel(
         'No "Needs Triage" Tasks',
         'No tasks in <a href="/project/">projects you are a member of</a> '.
-        'need triage.</p>');
+        'need triage.');
     }
 
     $panel = new AphrontPanelView();
@@ -328,11 +380,14 @@ final class PhabricatorDirectoryMainController
     return $panel;
   }
 
-
   private function buildTaskListView(array $tasks) {
+    assert_instances_of($tasks, 'ManiphestTask');
     $user = $this->getRequest()->getUser();
 
-    $phids = array_filter(mpull($tasks, 'getOwnerPHID'));
+    $phids = array_merge(
+      array_filter(mpull($tasks, 'getOwnerPHID')),
+      array_mergev(mpull($tasks, 'getProjectPHIDs')));
+
     $handles = id(new PhabricatorObjectHandleData($phids))->loadHandles();
 
     $view = new ManiphestTaskListView();
@@ -480,13 +535,15 @@ final class PhabricatorDirectoryMainController
     $nav_buttons[] = array(
       'Differential',
       '/differential/',
-      'differential');
+      'differential',
+      'Code Reviews');
 
     if (PhabricatorEnv::getEnvConfig('maniphest.enabled')) {
       $nav_buttons[] = array(
         'Maniphest',
         '/maniphest/',
-        'maniphest');
+        'maniphest',
+        'Tasks');
       $nav_buttons[] = array(
         'Create Task',
         '/maniphest/task/create/',
@@ -496,34 +553,47 @@ final class PhabricatorDirectoryMainController
     $nav_buttons[] = array(
       'Upload File',
       '/file/',
-      'upload-file');
+      'upload-file',
+      'Share Files');
     $nav_buttons[] = array(
       'Create Paste',
       '/paste/',
-      'create-paste');
+      'create-paste',
+      'Share Text');
 
 
     if (PhabricatorEnv::getEnvConfig('phriction.enabled')) {
       $nav_buttons[] = array(
-        'Browse Wiki',
+        'Phriction',
         '/w/',
-        'phriction');
+        'phriction',
+        'Browse Wiki');
     }
 
     $nav_buttons[] = array(
-      'Browse Code',
+      'Diffusion',
       '/diffusion/',
-      'diffusion');
+      'diffusion',
+      'Browse Code');
 
     $nav_buttons[] = array(
-      'Audit Code',
+      'Audit',
       '/audit/',
-      'audit');
+      'audit',
+      'Audit Code');
 
     $view = new AphrontNullView();
     $view->appendChild('<div class="phabricator-app-buttons">');
     foreach ($nav_buttons as $info) {
-      list($name, $uri, $icon) = $info;
+      // Subtitle is optional.
+      list($name, $uri, $icon, $subtitle) = array_merge($info, array(null));
+
+      if ($subtitle) {
+        $subtitle =
+          '<div class="phabricator-app-subtitle">'.
+            phutil_escape_html($subtitle).
+          '</div>';
+      }
 
       $button = phutil_render_tag(
         'a',
@@ -543,7 +613,7 @@ final class PhabricatorDirectoryMainController
           'href' => $uri,
           'class' => 'phabricator-button-caption',
         ),
-        phutil_escape_html($name));
+        phutil_escape_html($name).$subtitle);
 
       $view->appendChild(
         '<div class="phabricator-app-button">'.
@@ -576,6 +646,7 @@ final class PhabricatorDirectoryMainController
     $query = new PhabricatorAuditQuery();
     $query->withAuditorPHIDs($phids);
     $query->withStatus(PhabricatorAuditQuery::STATUS_OPEN);
+    $query->withAwaitingUser($user);
     $query->needCommitData(true);
     $query->setLimit(10);
 

@@ -21,7 +21,6 @@ abstract class PhabricatorFeedStory {
   private $data;
 
   private $handles;
-  private $objects;
   private $framed;
 
   final public function __construct(PhabricatorFeedStoryData $data) {
@@ -44,12 +43,8 @@ abstract class PhabricatorFeedStory {
   }
 
   final public function setHandles(array $handles) {
+    assert_instances_of($handles, 'PhabricatorObjectHandle');
     $this->handles = $handles;
-    return $this;
-  }
-
-  final public function setObjects(array $objects) {
-    $this->objects = $objects;
     return $this;
   }
 
@@ -69,10 +64,6 @@ abstract class PhabricatorFeedStory {
     $handle->setName("Unloaded Object '{$phid}'");
 
     return $handle;
-  }
-
-  final protected function getObjects() {
-    return $this->objects;
   }
 
   final public function getStoryData() {

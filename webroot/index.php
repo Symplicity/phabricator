@@ -20,6 +20,14 @@ $__start__ = microtime(true);
 
 error_reporting(E_ALL | E_STRICT);
 
+$required_version = '5.2.3';
+if (version_compare(PHP_VERSION, $required_version) < 0) {
+  phabricator_fatal_config_error(
+    "You are running PHP version '".PHP_VERSION."', which is older than ".
+    "the minimum version, '{$required_version}'. Update to at least ".
+    "'{$required_version}'.");
+}
+
 phabricator_detect_insane_memory_limit();
 
 ini_set('memory_limit', -1);
@@ -36,11 +44,6 @@ if (!$env) {
     "The 'PHABRICATOR_ENV' environmental variable is not defined. Modify ".
     "your httpd.conf to include 'SetEnv PHABRICATOR_ENV <env>', where '<env>' ".
     "is one of 'development', 'production', or a custom environment.");
-}
-
-if (!function_exists('mysql_connect')) {
-  phabricator_fatal_config_error(
-    "The PHP MySQL extension is not installed. This extension is required.");
 }
 
 if (!isset($_REQUEST['__path__'])) {
@@ -106,9 +109,7 @@ $path = $_REQUEST['__path__'];
 switch ($host) {
   default:
     $config_key = 'aphront.default-application-configuration-class';
-    $config_class = PhabricatorEnv::getEnvConfig($config_key);
-    PhutilSymbolLoader::loadClass($config_class);
-    $application = newv($config_class, array());
+    $application = PhabricatorEnv::newObjectFromConfig($config_key);
     break;
 }
 
@@ -192,7 +193,9 @@ function setup_aphront_basics() {
     $root = $_SERVER['PHUTIL_LIBRARY_ROOT'];
   }
 
-  ini_set('include_path', $libraries_root.':'.ini_get('include_path'));
+  ini_set(
+    'include_path',
+    $libraries_root.PATH_SEPARATOR.ini_get('include_path'));
   @include_once $root.'libphutil/src/__phutil_library_init__.php';
   if (!@constant('__LIBPHUTIL__')) {
     echo "ERROR: Unable to load libphutil. Put libphutil/ next to ".

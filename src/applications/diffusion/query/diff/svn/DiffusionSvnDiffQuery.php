@@ -22,14 +22,13 @@ final class DiffusionSvnDiffQuery extends DiffusionDiffQuery {
     $drequest = $this->getRequest();
     $repository = $drequest->getRepository();
 
-    if (!$drequest->getRawCommit()) {
-      $effective_commit = $this->getEffectiveCommit();
-      if (!$effective_commit) {
-        return null;
-      }
-      // TODO: Sketchy side effect.
-      $drequest->setCommit($effective_commit);
+    $effective_commit = $this->getEffectiveCommit();
+    if (!$effective_commit) {
+      return null;
     }
+
+    $drequest = clone $drequest;
+    $drequest->setCommit($effective_commit);
 
     $path_change_query = DiffusionPathChangeQuery::newFromDiffusionRequest(
       $drequest);
@@ -99,6 +98,7 @@ final class DiffusionSvnDiffQuery extends DiffusionDiffQuery {
     $futures = array_filter($futures);
 
     foreach (Futures($futures) as $key => $future) {
+      $stdout = '';
       try {
         list($stdout) = $future->resolvex();
       } catch (CommandException $e) {

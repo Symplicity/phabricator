@@ -47,6 +47,7 @@ abstract class AphrontApplicationConfiguration {
 
   final public function setConsole($console) {
     $this->console = $console;
+    return $this;
   }
 
   final public function buildController() {
@@ -61,7 +62,10 @@ abstract class AphrontApplicationConfiguration {
         // If we failed to match anything but don't have a trailing slash, try
         // to add a trailing slash and issue a redirect if that resolves.
         list($controller_class, $uri_data) = $mapper->mapPath($path.'/');
-        if ($controller_class) {
+
+        // NOTE: For POST, just 404 instead of redirecting, since the redirect
+        // will be a GET without parameters.
+        if ($controller_class && !$request->isHTTPPost()) {
           $uri = $request->getRequestURI()->setPath($path.'/');
           return $this->buildRedirectController($uri);
         }

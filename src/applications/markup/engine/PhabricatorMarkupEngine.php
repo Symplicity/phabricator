@@ -124,8 +124,8 @@ class PhabricatorMarkupEngine {
       $rules[] = new PhabricatorRemarkupRuleYoutube();
     }
 
-    $rules[] = new PhabricatorRemarkupRulePhriction();
     $rules[] = new PhutilRemarkupRuleHyperlink();
+    $rules[] = new PhabricatorRemarkupRulePhriction();
 
     $rules[] = new PhabricatorRemarkupRuleDifferentialHandle();
     $rules[] = new PhabricatorRemarkupRuleManiphestHandle();
@@ -146,6 +146,7 @@ class PhabricatorMarkupEngine {
     $rules[] = new PhutilRemarkupRuleEscapeHTML();
     $rules[] = new PhutilRemarkupRuleBold();
     $rules[] = new PhutilRemarkupRuleItalic();
+    $rules[] = new PhutilRemarkupRuleDel();
 
     $blocks = array();
     $blocks[] = new PhutilRemarkupEngineRemarkupQuotesBlockRule();

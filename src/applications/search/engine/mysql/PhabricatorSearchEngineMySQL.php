@@ -1,7 +1,7 @@
 <?php
 
 /*
- * Copyright 2011 Facebook, Inc.
+ * Copyright 2012 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -175,23 +175,13 @@ final class PhabricatorSearchEngineMySQL extends PhabricatorSearchEngine {
     $q = $query->getQuery();
 
     if (strlen($q)) {
-      if (preg_match('/[+\-"<>()*~]/', $q)) {
-        $join[] = qsprintf(
-          $conn_r,
-          "{$t_field} field ON field.phid = document.phid");
-        $where[] = str_replace('\\"', '"', qsprintf(
-          $conn_r,
-          'MATCH(corpus) AGAINST (%s IN BOOLEAN MODE)',
-          $q));
-      } else {
-        $join[] = qsprintf(
-          $conn_r,
-          "{$t_field} field ON field.phid = document.phid");
-        $where[] = qsprintf(
-          $conn_r,
-          'MATCH(corpus) AGAINST (%s)',
-          $q);
-      }
+      $join[] = qsprintf(
+        $conn_r,
+        "{$t_field} field ON field.phid = document.phid");
+      $where[] = qsprintf(
+        $conn_r,
+        'MATCH(corpus) AGAINST (%s IN BOOLEAN MODE)',
+        $q);
 
       // When searching for a string, promote user listings above other
       // listings.
@@ -210,6 +200,11 @@ final class PhabricatorSearchEngineMySQL extends PhabricatorSearchEngine {
           'field.field = %s',
           $field);
       }
+    }
+
+    $exclude = $query->getParameter('exclude');
+    if ($exclude) {
+      $where[] = qsprintf($conn_r, 'document.phid != %s', $exclude);
     }
 
     if ($query->getParameter('type')) {

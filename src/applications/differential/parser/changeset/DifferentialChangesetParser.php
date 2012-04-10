@@ -54,6 +54,7 @@ final class DifferentialChangesetParser {
   private $lineWidth = 80;
   private $isTopLevel;
   private $coverage;
+  private $markupEngine;
 
   const CACHE_VERSION = 4;
 
@@ -168,6 +169,7 @@ final class DifferentialChangesetParser {
   }
 
   public function setHandles(array $handles) {
+    assert_instances_of($handles, 'PhabricatorObjectHandle');
     $this->handles = $handles;
     return $this;
   }
@@ -227,7 +229,7 @@ final class DifferentialChangesetParser {
         'text'  => (string)substr($lines[$cursor], 1),
         'line'  => $new_line,
       );
-      if ($type == '\\' && $cursor > 1) {
+      if ($type == '\\') {
         $type = $types[$cursor - 1];
         $data['text'] = ltrim($data['text']);
       }
@@ -337,9 +339,14 @@ final class DifferentialChangesetParser {
             break;
         }
         if ($similar) {
-          $o_desc['type'] = null;
-          $n_desc['type'] = null;
-          $skip_intra[count($old)] = true;
+          if ($o_desc['type'] == '\\') {
+            // These are similar because they're "No newline at end of file"
+            // comments.
+          } else {
+            $o_desc['type'] = null;
+            $n_desc['type'] = null;
+            $skip_intra[count($old)] = true;
+          }
         } else {
           $changed = true;
         }
@@ -1167,6 +1174,9 @@ final class DifferentialChangesetParser {
     $feedback_mask,
     array $old_comments,
     array $new_comments) {
+    foreach (array_merge($old_comments, $new_comments) as $comments) {
+      assert_instances_of($comments, 'PhabricatorInlineCommentInterface');
+    }
 
     $context_not_available = null;
     if ($this->missingOld || $this->missingNew) {
@@ -1176,7 +1186,7 @@ final class DifferentialChangesetParser {
           'sigil' => 'context-target',
         ),
         '<td colspan="5" class="show-more">'.
-            'Context not available.'.
+          'Context not available.'.
         '</td>');
     }
 
@@ -1345,7 +1355,7 @@ final class DifferentialChangesetParser {
           if ($this->old[$ii]['type'] == '\\') {
             $o_text = $this->old[$ii]['text'];
             $o_attr = ' class="comment"';
-          } elseif (empty($this->new[$ii])) {
+          } else if (empty($this->new[$ii])) {
             $o_attr = ' class="old old-full"';
           } else {
             $o_attr = ' class="old"';
@@ -1379,7 +1389,7 @@ final class DifferentialChangesetParser {
           if ($this->new[$ii]['type'] == '\\') {
             $n_text = $this->new[$ii]['text'];
             $n_attr = ' class="comment"';
-          } elseif (empty($this->old[$ii])) {
+          } else if (empty($this->old[$ii])) {
             $n_attr = ' class="new new-full"';
           } else {
             $n_attr = ' class="new"';

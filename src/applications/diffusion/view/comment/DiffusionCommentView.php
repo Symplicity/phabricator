@@ -23,6 +23,9 @@ final class DiffusionCommentView extends AphrontView {
   private $commentNumber;
   private $handles;
   private $isPreview;
+  private $pathMap;
+
+  private $inlineComments;
 
   private $engine;
 
@@ -42,12 +45,24 @@ final class DiffusionCommentView extends AphrontView {
   }
 
   public function setHandles(array $handles) {
+    assert_instances_of($handles, 'PhabricatorObjectHandle');
     $this->handles = $handles;
     return $this;
   }
 
   public function setIsPreview($is_preview) {
     $this->isPreview = $is_preview;
+    return $this;
+  }
+
+  public function setInlineComments(array $inline_comments) {
+    assert_instances_of($inline_comments, 'PhabricatorInlineCommentInterface');
+    $this->inlineComments = $inline_comments;
+    return $this;
+  }
+
+  public function setPathMap(array $path_map) {
+    $this->pathMap = $path_map;
     return $this;
   }
 
@@ -97,19 +112,11 @@ final class DiffusionCommentView extends AphrontView {
     $author = $this->getHandle($comment->getActorPHID());
     $author_link = $author->renderLink();
 
+    $action = $comment->getAction();
+    $verb = PhabricatorAuditActionConstants::getActionPastTenseVerb($action);
+
     $actions = array();
-    switch ($comment->getAction()) {
-      case PhabricatorAuditActionConstants::ACCEPT:
-        $actions[] = "{$author_link} accepted this commit.";
-        break;
-      case PhabricatorAuditActionConstants::CONCERN:
-        $actions[] = "{$author_link} raised concerns with this commit.";
-        break;
-      case PhabricatorAuditActionConstants::COMMENT:
-      default:
-        $actions[] = "{$author_link} commented on this commit.";
-        break;
-    }
+    $actions[] = "{$author_link} ".phutil_escape_html($verb)." this commit.";
 
     foreach ($actions as $key => $action) {
       $actions[$key] = '<div>'.$action.'</div>';
@@ -122,10 +129,47 @@ final class DiffusionCommentView extends AphrontView {
     $comment = $this->comment;
     $engine = $this->getEngine();
 
-    return
-      '<div class="phabricator-remarkup">'.
-        $engine->markupText($comment->getContent()).
-      '</div>';
+    if (!strlen($comment->getContent()) && empty($this->inlineComments)) {
+      return null;
+    } else {
+      return
+        '<div class="phabricator-remarkup">'.
+          $engine->markupText($comment->getContent()).
+          $this->renderSingleView($this->renderInlines()).
+        '</div>';
+    }
+  }
+
+  private function renderInlines() {
+    if (!$this->inlineComments) {
+      return null;
+    }
+
+    $inlines_by_path = mgroup($this->inlineComments, 'getPathID');
+
+    $view = new PhabricatorInlineSummaryView();
+    foreach ($inlines_by_path as $path_id => $inlines) {
+      $path = idx($this->pathMap, $path_id);
+      if ($path === null) {
+        continue;
+      }
+
+      $items = array();
+      foreach ($inlines as $inline) {
+        $items[] = array(
+          'id'      => $inline->getID(),
+          'line'    => $inline->getLineNumber(),
+          'length'  => $inline->getLineLength(),
+          'content' => PhabricatorInlineSummaryView::renderCommentContent(
+            $inline,
+            $this->getEngine()),
+        );
+      }
+
+      $view->addCommentGroup($path, $items);
+    }
+
+    return $view;
   }
 
   private function getEngine() {
@@ -150,8 +194,5 @@ final class DiffusionCommentView extends AphrontView {
 
     return $classes;
   }
-
-
-
 
 }

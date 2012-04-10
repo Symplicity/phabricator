@@ -25,6 +25,7 @@ final class ManiphestTaskSummaryView extends ManiphestView {
   private $handles;
   private $user;
   private $showBatchControls;
+  private $showSubpriorityControls;
 
   public function setTask(ManiphestTask $task) {
     $this->task = $task;
@@ -32,6 +33,7 @@ final class ManiphestTaskSummaryView extends ManiphestView {
   }
 
   public function setHandles(array $handles) {
+    assert_instances_of($handles, 'PhabricatorObjectHandle');
     $this->handles = $handles;
     return $this;
   }
@@ -46,6 +48,24 @@ final class ManiphestTaskSummaryView extends ManiphestView {
     return $this;
   }
 
+  public function setShowSubpriorityControls($show_subpriority_controls) {
+    $this->showSubpriorityControls = $show_subpriority_controls;
+    return $this;
+  }
+
+  public static function getPriorityClass($priority) {
+    $classes = array(
+      ManiphestTaskPriority::PRIORITY_UNBREAK_NOW => 'pri-unbreak',
+      ManiphestTaskPriority::PRIORITY_TRIAGE => 'pri-triage',
+      ManiphestTaskPriority::PRIORITY_HIGH => 'pri-high',
+      ManiphestTaskPriority::PRIORITY_NORMAL => 'pri-normal',
+      ManiphestTaskPriority::PRIORITY_LOW => 'pri-low',
+      ManiphestTaskPriority::PRIORITY_WISH => 'pri-wish',
+    );
+
+    return idx($classes, $priority);
+  }
+
   public function render() {
 
     if (!$this->user) {
@@ -57,16 +77,7 @@ final class ManiphestTaskSummaryView extends ManiphestView {
 
     require_celerity_resource('maniphest-task-summary-css');
 
-    $classes = array(
-      ManiphestTaskPriority::PRIORITY_UNBREAK_NOW => 'pri-unbreak',
-      ManiphestTaskPriority::PRIORITY_TRIAGE => 'pri-triage',
-      ManiphestTaskPriority::PRIORITY_HIGH => 'pri-high',
-      ManiphestTaskPriority::PRIORITY_NORMAL => 'pri-normal',
-      ManiphestTaskPriority::PRIORITY_LOW => 'pri-low',
-      ManiphestTaskPriority::PRIORITY_WISH => 'pri-wish',
-    );
-
-    $pri_class = idx($classes, $task->getPriority());
+    $pri_class = self::getPriorityClass($task->getPriority());
     $status_map = ManiphestTaskStatus::getTaskStatusMap();
 
     $batch = null;
@@ -85,15 +96,38 @@ final class ManiphestTaskSummaryView extends ManiphestView {
         '</td>';
     }
 
+    $projects_view = new ManiphestTaskProjectsView();
+    $projects_view->setHandles(
+      array_select_keys(
+        $this->handles,
+        $task->getProjectPHIDs()));
+
+    $control_class = null;
+    $control_sigil = null;
+    if ($this->showSubpriorityControls) {
+      $control_class = 'maniphest-active-handle';
+      $control_sigil = 'maniphest-task-handle';
+    }
+
+    $handle = javelin_render_tag(
+      'td',
+      array(
+        'class' => 'maniphest-task-handle '.$pri_class.' '.$control_class,
+        'sigil' => $control_sigil,
+      ),
+      '');
+
     return javelin_render_tag(
       'table',
       array(
         'class' => 'maniphest-task-summary',
         'sigil' => 'maniphest-task',
+        'meta'  => array(
+          'taskID' => $task->getID(),
+        ),
       ),
       '<tr>'.
-        '<td class="maniphest-task-handle '.$pri_class.'">'.
-        '</td>'.
+        $handle.
         $batch.
         '<td class="maniphest-task-number">'.
           'T'.$task->getID().
@@ -114,11 +148,11 @@ final class ManiphestTaskSummaryView extends ManiphestView {
             ),
             phutil_escape_html($task->getTitle())).
         '</td>'.
-        '<td class="maniphest-task-priority">'.
-          ManiphestTaskPriority::getTaskPriorityName($task->getPriority()).
+        '<td class="maniphest-task-projects">'.
+          $projects_view->render().
         '</td>'.
         '<td class="maniphest-task-updated">'.
-          phabricator_datetime($task->getDateModified(), $this->user).
+          phabricator_date($task->getDateModified(), $this->user).
         '</td>'.
       '</tr>');
   }

@@ -1,7 +1,7 @@
 <?php
 
 /*
- * Copyright 2011 Facebook, Inc.
+ * Copyright 2012 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -23,11 +23,14 @@ final class PhabricatorDaemonLogEventsView extends AphrontView {
   private $user;
 
   public function setEvents(array $events) {
+    assert_instances_of($events, 'PhabricatorDaemonLogEvent');
     $this->events = $events;
+    return $this;
   }
 
   public function setCombinedLog($is_combined) {
     $this->combinedLog = $is_combined;
+    return $this;
   }
 
   public function setUser(PhabricatorUser $user) {

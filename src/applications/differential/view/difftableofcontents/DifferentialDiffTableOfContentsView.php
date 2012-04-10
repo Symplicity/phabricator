@@ -174,8 +174,13 @@ final class DifferentialDiffTableOfContentsView extends AphrontView {
 
       $rows[] =
         '<tr>'.
-          '<td class="differential-toc-char" title='.$chartitle.'>'.$char.
-          '</td>'.
+          phutil_render_tag(
+            'td',
+            array(
+              'class' => 'differential-toc-char',
+              'title' => $chartitle,
+            ),
+            $char).
           '<td class="differential-toc-prop">'.$pchar.'</td>'.
           '<td class="differential-toc-ftype">'.$desc.'</td>'.
           '<td class="differential-toc-file">'.$link.$lines.'</td>'.
@@ -200,7 +205,7 @@ final class DifferentialDiffTableOfContentsView extends AphrontView {
       $editor_link = $this->user->loadEditorLink(
         implode(' ', $paths),
         1, // line number
-        $this->repository);
+        $this->repository->getCallsign());
       if ($editor_link) {
         $editor_link = phutil_render_tag(
           'a',
@@ -213,7 +218,8 @@ final class DifferentialDiffTableOfContentsView extends AphrontView {
     }
 
     return
-      '<div class="differential-toc differential-panel">'.
+      '<div id="differential-review-toc" '.
+        'class="differential-toc differential-panel">'.
         $editor_link.
         '<h1>Table of Contents</h1>'.
         '<table>'.
@@ -278,4 +284,5 @@ final class DifferentialDiffTableOfContentsView extends AphrontView {
       ),
       phutil_escape_html($display_file));
   }
+
 }

@@ -18,7 +18,7 @@ formatting text in Remarkup.
 
 These are inline styles, and can be applied to most text:
 
-  **bold** //italic// ##monospaced## `monospaced`
+  **bold** //italic// ##monospaced## `monospaced` ~~deleted~~
   D123 T123 rX123           # Link to Objects
   {D123} {T123}             # Link to Objects (Full Name)
   {F123}                    # Embed Images
@@ -47,9 +47,10 @@ Format **basic text styles** like this:
   //italic text//
   ##monospaced text##
   `monospaced text`
+  ~~deleted text~~
 
-Those produce **bold text**, //italic text//, ##monospaced text## and
-`monospaced text`, respectively.
+Those produce **bold text**, //italic text//, ##monospaced text##,
+`monospaced text` and ~~deleted text~~, respectively.
 
 = Layout =
 
@@ -295,10 +296,13 @@ You can set file display options like this:
 
 Valid options are:
 
-  - **layout** left (default), center, right, inline
+  - **layout** left (default), center, right, inline, link (render a link
+    instead of a thumbnail for images)
   - **float** If layout is set to left or right, the image will be floated so
     text wraps around it.
   - **size** thumb (default), full
+  - **name** with `layout=link` or for non-images, use this name for the link
+    text
 
 = Embedding Media =
 

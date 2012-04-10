@@ -22,6 +22,7 @@ final class PhabricatorFeedBuilder {
   private $framed;
 
   public function __construct(array $stories) {
+    assert_instances_of($stories, 'PhabricatorFeedStory');
     $this->stories = $stories;
   }
 
@@ -44,14 +45,11 @@ final class PhabricatorFeedBuilder {
     $stories = $this->stories;
 
     $handles = array();
-    $objects = array();
     if ($stories) {
       $handle_phids = array_mergev(mpull($stories, 'getRequiredHandlePHIDs'));
       $object_phids = array_mergev(mpull($stories, 'getRequiredObjectPHIDs'));
       $handles = id(new PhabricatorObjectHandleData($handle_phids))
         ->loadHandles();
-      $objects = id(new PhabricatorObjectHandleData($object_phids))
-        ->loadObjects();
     }
 
     $null_view = new AphrontNullView();
@@ -59,16 +57,11 @@ final class PhabricatorFeedBuilder {
     require_celerity_resource('phabricator-feed-css');
 
     $last_date = null;
-    $today = phabricator_date(time(), $user);
     foreach ($stories as $story) {
       $story->setHandles($handles);
-      $story->setObjects($objects);
       $story->setFramed($this->framed);
 
-      $date = phabricator_date($story->getEpoch(), $user);
-      if ($date == $today) {
-        $date = 'Today';
-      }
+      $date = ucfirst(phabricator_relative_date($story->getEpoch(), $user));
 
       if ($date !== $last_date) {
         if ($last_date !== null) {

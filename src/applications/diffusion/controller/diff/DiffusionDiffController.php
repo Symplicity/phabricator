@@ -19,21 +19,43 @@
 final class DiffusionDiffController extends DiffusionController {
 
   public function willProcessRequest(array $data) {
-    $request = $this->getRequest();
-    if ($request->getStr('ref')) {
-      $parts = explode(';', $request->getStr('ref'));
-      $data['path'] = idx($parts, 0);
-      $data['commit'] = idx($parts, 1);
-    }
+    $data = $data + array(
+      'dblob' => $this->getRequest()->getStr('ref'),
+    );
+    $drequest = DiffusionRequest::newFromAphrontRequestDictionary($data);
 
-    $this->diffusionRequest = DiffusionRequest::newFromAphrontRequestDictionary(
-      $data);
+    $this->diffusionRequest = $drequest;
   }
 
   public function processRequest() {
     $drequest = $this->getDiffusionRequest();
     $request = $this->getRequest();
     $user = $request->getUser();
+
+    if (!$request->isAjax()) {
+
+      // This request came out of the dropdown menu, either "View Standalone"
+      // or "View Raw File".
+
+      $view = $request->getStr('view');
+      if ($view == 'r') {
+        $uri = $drequest->generateURI(
+          array(
+            'action' => 'browse',
+            'params' => array(
+              'view' => 'raw',
+            ),
+          ));
+      } else {
+        $uri = $drequest->generateURI(
+          array(
+            'action'  => 'change',
+          ));
+      }
+
+      return id(new AphrontRedirectResponse())->setURI($uri);
+    }
+
 
     $diff_query = DiffusionDiffQuery::newFromDiffusionRequest($drequest);
     $changeset = $diff_query->loadChangeset();
@@ -45,6 +67,8 @@ final class DiffusionDiffController extends DiffusionController {
     $parser = new DifferentialChangesetParser();
     $parser->setChangeset($changeset);
     $parser->setRenderingReference($diff_query->getRenderingReference());
+    $parser->setMarkupEngine(
+      PhabricatorMarkupEngine::newDiffusionMarkupEngine());
 
     $pquery = new DiffusionPathIDQuery(array($changeset->getFilename()));
     $ids = $pquery->loadPathIDs();

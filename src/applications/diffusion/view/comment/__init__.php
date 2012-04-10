@@ -8,9 +8,11 @@
 
 phutil_require_module('phabricator', 'applications/audit/constants/action');
 phutil_require_module('phabricator', 'applications/markup/engine');
+phutil_require_module('phabricator', 'infrastructure/diff/view/inline');
 phutil_require_module('phabricator', 'view/base');
 phutil_require_module('phabricator', 'view/layout/transaction');
 
+phutil_require_module('phutil', 'markup');
 phutil_require_module('phutil', 'utils');
 
 

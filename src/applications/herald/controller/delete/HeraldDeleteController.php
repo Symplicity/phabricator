@@ -40,17 +40,20 @@ final class HeraldDeleteController extends HeraldController {
     $request = $this->getRequest();
     $user = $request->getUser();
 
-    if ($user->getPHID() != $rule->getAuthorPHID() && !$user->getIsAdmin()) {
-      return new Aphront400Response();
+    // Anyone can delete a global rule, but only the rule owner can delete a
+    // personal one.
+    if ($rule->getRuleType() == HeraldRuleTypeConfig::RULE_TYPE_PERSONAL) {
+      if ($user->getPHID() != $rule->getAuthorPHID()) {
+        return new Aphront400Response();
+      }
     }
 
     if ($request->isFormPost()) {
-      $rule->delete();
-      if ($request->isAjax()) {
-        return new AphrontRedirectResponse();
-      } else {
-        return id(new AphrontRedirectResponse())->setURI('/herald/');
-      }
+      $rule->openTransaction();
+        $rule->logEdit($user->getPHID(), 'delete');
+        $rule->delete();
+      $rule->saveTransaction();
+      return id(new AphrontReloadResponse())->setURI('/herald/');
     }
 
     $dialog = new AphrontDialogView();

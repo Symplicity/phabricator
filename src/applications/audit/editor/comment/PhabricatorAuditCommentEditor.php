@@ -83,36 +83,102 @@ final class PhabricatorAuditCommentEditor {
         $commit->getPHID());
 
     $action = $comment->getAction();
-    $status_map = PhabricatorAuditActionConstants::getStatusNameMap();
-    $status = idx($status_map, $action, null);
 
-    // Status may be empty for updates which don't affect status, like
-    // "comment".
-    $have_any_requests = false;
-    foreach ($requests as $request) {
-      if (empty($audit_phids[$request->getAuditorPHID()])) {
-        continue;
-      }
-      $have_any_requests = true;
-      if ($status) {
-        $request->setAuditStatus($status);
-        $request->save();
-      }
-    }
 
-    if (!$have_any_requests) {
+    // TODO: We should validate the action, currently we allow anyone to, e.g.,
+    // close an audit if they muck with form parameters. I'll followup with this
+    // and handle the no-effect cases (e.g., closing and already-closed audit).
+
+
+    $user_is_author = ($user->getPHID() == $commit->getAuthorPHID());
+
+    if ($action == PhabricatorAuditActionConstants::CLOSE) {
+      // "Close" means wipe out all the concerns.
+      $concerned_status = PhabricatorAuditStatusConstants::CONCERNED;
+      foreach ($requests as $request) {
+        if ($request->getAuditStatus() == $concerned_status) {
+          $request->setAuditStatus(PhabricatorAuditStatusConstants::CLOSED);
+          $request->save();
+        }
+      }
+    } else {
+      $have_any_requests = false;
+      foreach ($requests as $request) {
+        if (empty($audit_phids[$request->getAuditorPHID()])) {
+          continue;
+        }
+
+        $request_is_for_user = ($request->getAuditorPHID() == $user->getPHID());
+
+        $have_any_requests = true;
+        $new_status = null;
+        switch ($action) {
+          case PhabricatorAuditActionConstants::COMMENT:
+            // Comments don't change audit statuses.
+            break;
+          case PhabricatorAuditActionConstants::ACCEPT:
+            if (!$user_is_author || $request_is_for_user) {
+              // When modifying your own commits, you act only on behalf of
+              // yourself, not your packages/projects -- the idea being that
+              // you can't accept your own commits.
+              $new_status = PhabricatorAuditStatusConstants::ACCEPTED;
+            }
+            break;
+          case PhabricatorAuditActionConstants::CONCERN:
+            if (!$user_is_author || $request_is_for_user) {
+              // See above.
+              $new_status = PhabricatorAuditStatusConstants::CONCERNED;
+            }
+            break;
+          case PhabricatorAuditActionConstants::RESIGN:
+            // NOTE: Resigning resigns ONLY your user request, not the requests
+            // of any projects or packages you are a member of.
+            if ($request_is_for_user) {
+              $new_status = PhabricatorAuditStatusConstants::RESIGNED;
+            }
+            break;
+          default:
+            throw new Exception("Unknown action '{$action}'!");
+        }
+        if ($new_status !== null) {
+          $request->setAuditStatus($new_status);
+          $request->save();
+        }
+      }
+
       // If the user has no current authority over any audit trigger, make a
       // new one to represent their audit state.
-      $request = id(new PhabricatorRepositoryAuditRequest())
-        ->setCommitPHID($commit->getPHID())
-        ->setAuditorPHID($user->getPHID())
-        ->setAuditStatus(
-            $status
-              ? $status
-              : PhabricatorAuditStatusConstants::AUDIT_NOT_REQUIRED)
-        ->setAuditReasons(array("Voluntary Participant"))
-        ->save();
-      $requests[] = $request;
+      if (!$have_any_requests) {
+        $new_status = null;
+        switch ($action) {
+          case PhabricatorAuditActionConstants::COMMENT:
+            $new_status = PhabricatorAuditStatusConstants::AUDIT_NOT_REQUIRED;
+            break;
+          case PhabricatorAuditActionConstants::ACCEPT:
+            $new_status = PhabricatorAuditStatusConstants::ACCEPTED;
+            break;
+          case PhabricatorAuditActionConstants::CONCERN:
+            $new_status = PhabricatorAuditStatusConstants::CONCERNED;
+            break;
+          case PhabricatorAuditActionConstants::RESIGN:
+            // If you're on an audit because of a package, we write an explicit
+            // resign row to remove it from your queue.
+            $new_status = PhabricatorAuditStatusConstants::RESIGNED;
+            break;
+          case PhabricatorAuditActionConstants::CLOSE:
+            // Impossible to reach this block with 'close'.
+          default:
+            throw new Exception("Unknown or invalid action '{$action}'!");
+        }
+
+        $request = id(new PhabricatorRepositoryAuditRequest())
+          ->setCommitPHID($commit->getPHID())
+          ->setAuditorPHID($user->getPHID())
+          ->setAuditStatus($new_status)
+          ->setAuditReasons(array("Voluntary Participant"))
+          ->save();
+        $requests[] = $request;
+      }
     }
 
     $commit->updateAuditStatus($requests);
@@ -120,7 +186,7 @@ final class PhabricatorAuditCommentEditor {
 
     $this->publishFeedStory($comment, array_keys($audit_phids));
     PhabricatorSearchCommitIndexer::indexCommit($commit);
-    $this->sendMail($comment, $other_comments);
+    $this->sendMail($comment, $other_comments, $inline_comments);
   }
 
 
@@ -136,9 +202,9 @@ final class PhabricatorAuditCommentEditor {
     $phids[$user->getPHID()] = true;
 
     // The user can audit on behalf of all packages they own.
-    $owned_packages = id(new PhabricatorOwnersOwner())->loadAllWhere(
-      'userPHID = %s',
+    $owned_packages = PhabricatorOwnersOwner::loadAffiliatedPackages(
       $user->getPHID());
+
     if ($owned_packages) {
       $packages = id(new PhabricatorOwnersPackage())->loadAllWhere(
         'id IN (%Ld)',
@@ -189,7 +255,11 @@ final class PhabricatorAuditCommentEditor {
 
   private function sendMail(
     PhabricatorAuditComment $comment,
-    array $other_comments) {
+    array $other_comments,
+    array $inline_comments) {
+    assert_instances_of($other_comments, 'PhabricatorAuditComment');
+    assert_instances_of($inline_comments, 'PhabricatorInlineCommentInterface');
+
     $commit = $this->commit;
 
     $data = $commit->loadCommitData();
@@ -205,6 +275,8 @@ final class PhabricatorAuditCommentEditor {
     $map = array(
       PhabricatorAuditActionConstants::CONCERN  => 'Raised Concern',
       PhabricatorAuditActionConstants::ACCEPT   => 'Accepted',
+      PhabricatorAuditActionConstants::RESIGN   => 'Resigned',
+      PhabricatorAuditActionConstants::CLOSE    => 'Closed',
     );
     $verb = idx($map, $comment->getAction(), 'Commented On');
 
@@ -221,7 +293,8 @@ final class PhabricatorAuditCommentEditor {
       $comment,
       "{$name}: {$summary}",
       $handle,
-      $reply_handler);
+      $reply_handler,
+      $inline_comments);
 
     $email_to = array();
 
@@ -231,8 +304,8 @@ final class PhabricatorAuditCommentEditor {
     }
 
     $email_cc = array();
-    foreach ($other_comments as $comment) {
-      $email_cc[] = $comment->getActorPHID();
+    foreach ($other_comments as $other_comment) {
+      $email_cc[] = $other_comment->getActorPHID();
     }
 
     $phids = array_merge($email_to, $email_cc);
@@ -265,9 +338,8 @@ final class PhabricatorAuditCommentEditor {
   }
 
   public static function newReplyHandlerForCommit($commit) {
-    $handler_class = PhabricatorEnv::getEnvConfig(
+    $reply_handler = PhabricatorEnv::newObjectFromConfig(
       'metamta.diffusion.reply-handler');
-    $reply_handler = newv($handler_class, array());
     $reply_handler->setMailReceiver($commit);
     return $reply_handler;
   }
@@ -276,7 +348,9 @@ final class PhabricatorAuditCommentEditor {
     PhabricatorAuditComment $comment,
     $cname,
     PhabricatorObjectHandle $handle,
-    PhabricatorMailReplyHandler $reply_handler) {
+    PhabricatorMailReplyHandler $reply_handler,
+    array $inline_comments) {
+    assert_instances_of($inline_comments, 'PhabricatorInlineCommentInterface');
 
     $commit = $this->commit;
     $user = $this->user;
@@ -292,7 +366,36 @@ final class PhabricatorAuditCommentEditor {
       $body[] = $comment->getContent();
     }
 
+    if ($inline_comments) {
+      $block = array();
+
+      $path_map = id(new DiffusionPathQuery())
+        ->withPathIDs(mpull($inline_comments, 'getPathID'))
+        ->execute();
+      $path_map = ipull($path_map, 'path', 'id');
+
+      foreach ($inline_comments as $inline) {
+        $path = idx($path_map, $inline->getPathID());
+        if ($path === null) {
+          continue;
+        }
+
+        $start = $inline->getLineNumber();
+        $len   = $inline->getLineLength();
+        if ($len) {
+          $range = $start.'-'.($start + $len);
+        } else {
+          $range = $start;
+        }
+
+        $content = $inline->getContent();
+        $block[] = "{$path}:{$range} {$content}";
+      }
+      $body[] = "INLINE COMMENTS\n  ".implode("\n  ", $block);
+    }
+
     $body[] = "COMMIT\n  ".PhabricatorEnv::getProductionURI($handle->getURI());
+
 
     $reply_instructions = $reply_handler->getReplyHandlerInstructions();
     if ($reply_instructions) {

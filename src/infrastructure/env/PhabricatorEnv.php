@@ -30,6 +30,37 @@ final class PhabricatorEnv {
     return idx(self::$env, $key, $default);
   }
 
+  public static function newObjectFromConfig($key, $args = array()) {
+    $class = self::getEnvConfig($key);
+    $object = newv($class, $args);
+    $instanceof = idx(self::getRequiredClasses(), $key);
+    if (!($object instanceof $instanceof)) {
+      throw new Exception("Config setting '$key' must be an instance of ".
+        "'$instanceof', is '".get_class($object)."'.");
+    }
+    return $object;
+  }
+
+  public static function getRequiredClasses() {
+    return array(
+      'metamta.mail-adapter' => 'PhabricatorMailImplementationAdapter',
+      'metamta.maniphest.reply-handler' => 'PhabricatorMailReplyHandler',
+      'metamta.differential.reply-handler' => 'PhabricatorMailReplyHandler',
+      'metamta.diffusion.reply-handler' => 'PhabricatorMailReplyHandler',
+      'storage.engine-selector' => 'PhabricatorFileStorageEngineSelector',
+      'search.engine-selector' => 'PhabricatorSearchEngineSelector',
+      'differential.field-selector' => 'DifferentialFieldSelector',
+      'maniphest.custom-task-extensions-class' => 'ManiphestTaskExtensions',
+      'aphront.default-application-configuration-class' =>
+        'AphrontApplicationConfiguration',
+      'controller.oauth-registration' =>
+        'PhabricatorOAuthRegistrationController',
+      'mysql.implementation' => 'AphrontMySQLDatabaseConnectionBase',
+      'differential.attach-task-class' => 'DifferentialTasksAttacher',
+      'mysql.configuration-provider' => 'DatabaseConfigurationProvider',
+    );
+  }
+
   public static function envConfigExists($key) {
     return array_key_exists($key, self::$env);
   }
@@ -69,7 +100,7 @@ final class PhabricatorEnv {
   }
 
   public static function getDoclink($resource) {
-    return 'http://phabricator.com/docs/phabricator/'.$resource;
+    return 'http://www.phabricator.com/docs/phabricator/'.$resource;
   }
 
 

@@ -25,6 +25,7 @@ final class ManiphestTransactionEditor {
   private $auxiliaryFields = array();
 
   public function setAuxiliaryFields(array $fields) {
+    assert_instances_of($fields, 'ManiphestAuxiliaryFieldSpecification');
     $this->auxiliaryFields = $fields;
     return $this;
   }
@@ -34,12 +35,15 @@ final class ManiphestTransactionEditor {
     return $this;
   }
 
-  public function applyTransactions($task, array $transactions) {
+  public function applyTransactions(ManiphestTask $task, array $transactions) {
+    assert_instances_of($transactions, 'ManiphestTransaction');
 
     $email_cc = $task->getCCPHIDs();
 
     $email_to = array();
     $email_to[] = $task->getOwnerPHID();
+
+    $pri_changed = $this->isCreate($transactions);
 
     foreach ($transactions as $key => $transaction) {
       $type = $transaction->getTransactionType();
@@ -151,6 +155,7 @@ final class ManiphestTransactionEditor {
             break;
           case ManiphestTransactionType::TYPE_PRIORITY:
             $task->setPriority($new);
+            $pri_changed = true;
             break;
           case ManiphestTransactionType::TYPE_ATTACH:
             $task->setAttached($new);
@@ -176,6 +181,13 @@ final class ManiphestTransactionEditor {
         $transaction->setNewValue($new);
       }
 
+    }
+
+    if ($pri_changed) {
+      $subpriority = ManiphestTransactionEditor::getNextSubpriority(
+        $task->getPriority(),
+        null);
+      $task->setSubpriority($subpriority);
     }
 
     $task->save();
@@ -284,16 +296,16 @@ final class ManiphestTransactionEditor {
   }
 
   public function buildReplyHandler(ManiphestTask $task) {
-    $handler_class = PhabricatorEnv::getEnvConfig(
+    $handler_object = PhabricatorEnv::newObjectFromConfig(
       'metamta.maniphest.reply-handler');
-
-    $handler_object = newv($handler_class, array());
     $handler_object->setMailReceiver($task);
 
     return $handler_object;
   }
 
   private function publishFeedStory(ManiphestTask $task, array $transactions) {
+    assert_instances_of($transactions, 'ManiphestTransaction');
+
     $actions = array(ManiphestAction::ACTION_UPDATE);
     $comments = null;
     foreach ($transactions as $transaction) {
@@ -347,6 +359,7 @@ final class ManiphestTransactionEditor {
   }
 
   private function isCreate(array $transactions) {
+    assert_instances_of($transactions, 'ManiphestTransaction');
     $is_create = false;
     foreach ($transactions as $transaction) {
       $type = $transaction->getTransactionType();
@@ -360,6 +373,8 @@ final class ManiphestTransactionEditor {
   }
 
   private function getMailTags(array $transactions) {
+    assert_instances_of($transactions, 'ManiphestTransaction');
+
     $tags = array();
     foreach ($transactions as $xaction) {
       switch ($xaction->getTransactionType()) {
@@ -384,5 +399,28 @@ final class ManiphestTransactionEditor {
 
     return array_unique($tags);
   }
+
+  public static function getNextSubpriority($pri, $sub) {
+
+    if ($sub === null) {
+      $next = id(new ManiphestTask())->loadOneWhere(
+        'priority = %d ORDER BY subpriority ASC LIMIT 1',
+        $pri);
+      if ($next) {
+        return $next->getSubpriority() - ((double)(2 << 16));
+      }
+    } else {
+      $next = id(new ManiphestTask())->loadOneWhere(
+        'priority = %d AND subpriority > %s ORDER BY subpriority ASC LIMIT 1',
+        $pri,
+        $sub);
+      if ($next) {
+        return ($sub + $next->getSubpriority()) / 2;
+      }
+    }
+
+    return (double)(2 << 32);
+  }
+
 
 }

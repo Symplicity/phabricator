@@ -79,6 +79,7 @@ final class HeraldRule extends HeraldDAO {
   }
 
   private static function flagDisabledUserRules(array $rules) {
+    assert_instances_of($rules, 'HeraldRule');
 
     $users = array();
     foreach ($rules as $rule) {
@@ -124,6 +125,7 @@ final class HeraldRule extends HeraldDAO {
   }
 
   public function attachConditions(array $conditions) {
+    assert_instances_of($conditions, 'HeraldCondition');
     $this->conditions = $conditions;
     return $this;
   }
@@ -144,6 +146,7 @@ final class HeraldRule extends HeraldDAO {
 
   public function attachActions(array $actions) {
     // TODO: validate actions have been attached.
+    assert_instances_of($actions, 'HeraldAction');
     $this->actions = $actions;
     return $this;
   }
@@ -163,38 +166,32 @@ final class HeraldRule extends HeraldDAO {
     return $edits;
   }
 
-  public function attachEdits(array $edits) {
-    $this->edits = $edits;
-    return $this;
-  }
-
-  public function getEdits() {
-    if ($this->edits === null) {
-      throw new Exception("Attach edits before accessing them!");
-    }
-    return $this->edits;
-  }
-
-  public function saveEdit($editor_phid) {
-    $edit = new HeraldRuleEdit();
-    $edit->setRuleID($this->getID());
-    $edit->setEditorPHID($editor_phid);
-    $edit->save();
+  public function logEdit($editor_phid, $action) {
+    id(new HeraldRuleEdit())
+      ->setRuleID($this->getID())
+      ->setRuleName($this->getName())
+      ->setEditorPHID($editor_phid)
+      ->setAction($action)
+      ->save();
   }
 
   public function saveConditions(array $conditions) {
+    assert_instances_of($conditions, 'HeraldCondition');
     return $this->saveChildren(
       id(new HeraldCondition())->getTableName(),
       $conditions);
   }
 
   public function saveActions(array $actions) {
+    assert_instances_of($actions, 'HeraldAction');
     return $this->saveChildren(
       id(new HeraldAction())->getTableName(),
       $actions);
   }
 
   protected function saveChildren($table_name, array $children) {
+    assert_instances_of($children, 'HeraldDAO');
+
     if (!$this->getID()) {
       throw new Exception("Save rule before saving children.");
     }

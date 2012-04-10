@@ -46,7 +46,8 @@ final class PhabricatorSearchController
         $query_str = $request->getStr('query');
 
         $pref_jump = PhabricatorUserPreferences::PREFERENCE_SEARCHBAR_JUMP;
-        if ($user && $user->loadPreferences()->getPreference($pref_jump, 1)) {
+        if ($request->getStr('jump') != 'no' &&
+            $user && $user->loadPreferences()->getPreference($pref_jump, 1)) {
           $response = PhabricatorJumpNavHandler::jumpPostResponse($query_str);
         } else {
           $response = null;
@@ -168,6 +169,14 @@ final class PhabricatorSearchController
       ->setUser($user)
       ->setAction('/search/')
       ->appendChild(
+        phutil_render_tag(
+          'input',
+          array(
+            'type' => 'hidden',
+            'name' => 'jump',
+            'value' => 'no',
+          )))
+      ->appendChild(
         id(new AphrontFormTextControl())
           ->setLabel('Search')
           ->setName('query')
@@ -238,6 +247,41 @@ final class PhabricatorSearchController
 
       $results = $pager->sliceResults($results);
 
+      if (!$request->getInt('page')) {
+        $jump = null;
+        $query_str = $query->getQuery();
+        $match = null;
+        if (preg_match('/^r([A-Z]+)(\S*)$/', $query_str, $match)) {
+          $repository = id(new PhabricatorRepository())
+            ->loadOneWhere('callsign = %s', $match[1]);
+          if ($match[2] == '') {
+            $jump = $repository;
+          } else if ($repository) {
+            $jump = id(new PhabricatorRepositoryCommit())->loadOneWhere(
+              'repositoryID = %d AND commitIdentifier = %s',
+              $repository->getID(),
+              $match[2]);
+            if (!$jump) {
+              try {
+                $jump = id(new PhabricatorRepositoryCommit())->loadOneWhere(
+                  'repositoryID = %d AND commitIdentifier LIKE %>',
+                  $repository->getID(),
+                  $match[2]);
+              } catch (AphrontQueryCountException $ex) {
+                // Ambiguous, no jump.
+              }
+            }
+          }
+        } else if (preg_match('/^d(\d+)$/i', $query_str, $match)) {
+          $jump = id(new DifferentialRevision())->load($match[1]);
+        } else if (preg_match('/^t(\d+)$/i', $query_str, $match)) {
+          $jump = id(new ManiphestTask())->load($match[1]);
+        }
+        if ($jump) {
+          array_unshift($results, $jump->getPHID());
+        }
+      }
+
       if ($results) {
 
         $loader = new PhabricatorObjectHandleData($results);
@@ -248,7 +292,7 @@ final class PhabricatorSearchController
           $view = new PhabricatorSearchResultView();
           $view->setHandle($handle);
           $view->setQuery($query);
-          $view->setObject($objects[$phid]);
+          $view->setObject(idx($objects, $phid));
           $results[] = $view->render();
         }
         $results =

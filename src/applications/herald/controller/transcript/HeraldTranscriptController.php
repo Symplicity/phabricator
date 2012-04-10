@@ -26,10 +26,6 @@ final class HeraldTranscriptController extends HeraldController {
   private $filter;
   private $handles;
 
-  public function getFilter() {
-    return 'transcript';
-  }
-
   public function willProcessRequest(array $data) {
     $this->id = $data['id'];
     $map = $this->getFilterMap();
@@ -69,6 +65,15 @@ final class HeraldTranscriptController extends HeraldController {
         ->loadHandles();
       $this->handles = $handles;
 
+      if ($xscript->getDryRun()) {
+        $notice = new AphrontErrorView();
+        $notice->setSeverity(AphrontErrorView::SEVERITY_NOTICE);
+        $notice->setTitle('Dry Run');
+        $notice->appendChild(
+          'This was a dry run to test Herald rules, no actions were executed.');
+        $nav->appendChild($notice);
+      }
+
       $apply_xscript_panel = $this->buildApplyTranscriptPanel(
         $xscript);
       $nav->appendChild($apply_xscript_panel);
@@ -82,21 +87,12 @@ final class HeraldTranscriptController extends HeraldController {
       $nav->appendChild($object_xscript_panel);
     }
 
-/*
-
-  TODO
-
-    $notice = null;
-    if ($xscript->getDryRun()) {
-      $notice =
-        <tools:notice title="Dry Run">
-          This was a dry run to test Herald rules, no actions were executed.
-        </tools:notice>;
-    }
-*/
+    $main_nav = $this->renderNav();
+    $main_nav->selectFilter('transcript');
+    $main_nav->appendChild($nav);
 
     return $this->buildStandardPageResponse(
-      $nav,
+      $main_nav,
       array(
         'title' => 'Transcript',
       ));
@@ -293,24 +289,29 @@ final class HeraldTranscriptController extends HeraldController {
   private function buildApplyTranscriptPanel($xscript) {
     $handles = $this->handles;
 
-    $action_names = HeraldActionConfig::getActionMessageMapForRuleType(
-      HeraldRuleTypeConfig::RULE_TYPE_GLOBAL);
+    $action_names = HeraldActionConfig::getActionMessageMapForRuleType(null);
 
     $rows = array();
     foreach ($xscript->getApplyTranscripts() as $apply_xscript) {
-      // TODO: Hacks, this is an approximate guess at the target type.
-      $target = (array)$apply_xscript->getTarget();
-      if (!$target) {
-        if ($apply_xscript->getAction() == HeraldActionConfig::ACTION_NOTHING) {
+
+      $target = $apply_xscript->getTarget();
+      switch ($apply_xscript->getAction()) {
+        case HeraldActionConfig::ACTION_NOTHING:
           $target = '';
-        } else {
-          $target = '<empty>';
-        }
-      } else {
-        foreach ($target as $k => $phid) {
-          $target[$k] = $handles[$phid]->getName();
-        }
-        $target = implode("\n", $target);
+          break;
+        case HeraldActionConfig::ACTION_FLAG:
+          $target = PhabricatorFlagColor::getColorName($target);
+          break;
+        default:
+          if ($target) {
+            foreach ($target as $k => $phid) {
+              $target[$k] = $handles[$phid]->getName();
+            }
+            $target = implode("\n", $target);
+          } else {
+            $target = '<empty>';
+          }
+          break;
       }
       $target = phutil_escape_html($target);
 

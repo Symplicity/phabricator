@@ -167,15 +167,14 @@ JX.behavior('differential-edit-inline-comments', function(config) {
       } else {
         root = e.getNode('differential-changeset');
 
-        var data = e.getNodeData('differential-inline-comment');
+        var comment = e.getNode('differential-inline-comment');
+        var data = JX.Stratcom.getData(comment);
         var change = e.getNodeData('differential-changeset');
 
-        var prefix;
-        if (data.on_right) {
-          prefix = 'C' + (change.left) + 'NL';
-        } else {
-          prefix = 'C' + (change.right) + 'OL';
-        }
+        var id_part  = data.on_right ? change.right : change.left;
+        var th = comment.parentNode.previousSibling;
+        var new_part = isNewFile(th) ? 'N' : 'O';
+        var prefix = 'C' + id_part + new_part + 'L';
 
         origin = JX.$(prefix + data.number);
         target = JX.$(prefix + (parseInt(data.number, 10) +

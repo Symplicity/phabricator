@@ -217,14 +217,16 @@ final class HeraldDifferentialRevisionAdapter extends HeraldObjectAdapter {
         return mpull($packages, 'getPHID');
       case HeraldFieldConfig::FIELD_AFFECTED_PACKAGE_OWNER:
         $packages = $this->loadAffectedPackages();
-        $owners = PhabricatorOwnersOwner::loadAllForPackages($packages);
-        return mpull($owners, 'getUserPHID');
+        return PhabricatorOwnersOwner::loadAffiliatedUserPHIDs(
+          mpull($packages, 'getID'));
       default:
         throw new Exception("Invalid field '{$field}'.");
     }
   }
 
   public function applyHeraldEffects(array $effects) {
+    assert_instances_of($effects, 'HeraldEffect');
+
     $result = array();
     if ($this->explicitCCs) {
       $effect = new HeraldEffect();
@@ -251,6 +253,11 @@ final class HeraldDifferentialRevisionAdapter extends HeraldObjectAdapter {
             $effect,
             true,
             'OK, did nothing.');
+          break;
+        case HeraldActionConfig::ACTION_FLAG:
+          $result[] = parent::applyFlagEffect(
+            $effect,
+            $this->revision->getPHID());
           break;
         case HeraldActionConfig::ACTION_EMAIL:
         case HeraldActionConfig::ACTION_ADD_CC:

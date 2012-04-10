@@ -16,62 +16,19 @@
  * limitations under the License.
  */
 
-abstract class DiffusionFileContentQuery {
+abstract class DiffusionFileContentQuery extends DiffusionQuery {
 
-  private $request;
   private $needsBlame;
   private $fileContent;
 
-  final private function __construct() {
-    // <private>
-  }
-
   final public static function newFromDiffusionRequest(
     DiffusionRequest $request) {
-
-    $repository = $request->getRepository();
-
-    switch ($repository->getVersionControlSystem()) {
-      case PhabricatorRepositoryType::REPOSITORY_TYPE_GIT:
-        $class = 'DiffusionGitFileContentQuery';
-        break;
-      case PhabricatorRepositoryType::REPOSITORY_TYPE_MERCURIAL:
-        $class = 'DiffusionMercurialFileContentQuery';
-        break;
-      case PhabricatorRepositoryType::REPOSITORY_TYPE_SVN:
-        $class = 'DiffusionSvnFileContentQuery';
-        break;
-      default:
-        throw new Exception("Unsupported VCS!");
-    }
-
-    PhutilSymbolLoader::loadClass($class);
-    $query = new $class();
-
-    $query->request = $request;
-
-    return $query;
-  }
-
-  public function getSupportsBlameOnBlame() {
-    return false;
-  }
-
-  public function getPrevRev($rev) {
-    // TODO: support git once the 'parent' info of a commit is saved
-    // to the database.
-    throw new Exception("Unsupported VCS!");
-  }
-
-  final protected function getRequest() {
-    return $this->request;
+    return parent::newQueryObject(__CLASS__, $request);
   }
 
   final public function loadFileContent() {
     $this->fileContent = $this->executeQuery();
   }
-
-  abstract protected function executeQuery();
 
   final public function getRawData() {
     return $this->fileContent->getCorpus();
@@ -87,23 +44,33 @@ abstract class DiffusionFileContentQuery {
     if (!$this->getNeedsBlame()) {
       $text_list = explode("\n", rtrim($raw_data));
     } else {
+      $lines = array();
       foreach (explode("\n", rtrim($raw_data)) as $k => $line) {
-        list($rev_id, $author, $text) = $this->tokenizeLine($line);
+        $lines[$k] = $this->tokenizeLine($line);
 
+        list($rev_id, $author, $text) = $lines[$k];
         $text_list[$k] = $text;
         $rev_list[$k] = $rev_id;
+      }
 
-        if (!isset($blame_dict[$rev_id]) &&
-            !isset($blame_dict[$rev_id]['author'] )) {
+      $rev_list = $this->processRevList($rev_list);
+
+      foreach ($lines as $k => $line) {
+        list($rev_id, $author, $text) = $line;
+        $rev_id = $rev_list[$k];
+
+        if (!isset($blame_dict[$rev_id])) {
           $blame_dict[$rev_id]['author'] = $author;
         }
       }
 
       $repository = $this->getRequest()->getRepository();
 
-      $commits = id(new PhabricatorRepositoryCommit())->loadAllWhere(
-        'repositoryID = %d AND commitIdentifier IN (%Ls)', $repository->getID(),
-        array_unique($rev_list));
+      $commits = id(new PhabricatorAuditCommitQuery())
+        ->withIdentifiers(
+          $repository->getID(),
+          array_unique($rev_list))
+        ->execute();
 
       foreach ($commits as $commit) {
         $blame_dict[$commit->getCommitIdentifier()]['epoch'] =
@@ -142,9 +109,14 @@ abstract class DiffusionFileContentQuery {
 
   public function setNeedsBlame($needs_blame) {
     $this->needsBlame = $needs_blame;
+    return $this;
   }
 
   public function getNeedsBlame() {
     return $this->needsBlame;
+  }
+
+  protected function processRevList(array $rev_list) {
+    return $rev_list;
   }
 }

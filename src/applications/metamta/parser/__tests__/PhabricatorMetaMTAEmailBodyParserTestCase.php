@@ -1,7 +1,7 @@
 <?php
 
 /*
- * Copyright 2011 Facebook, Inc.
+ * Copyright 2012 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -22,13 +22,15 @@ final class PhabricatorMetaMTAEmailBodyParserTestCase
   public function testQuotedTextStripping() {
     $bodies = $this->getEmailBodies();
     foreach ($bodies as $body) {
-      $parser = new PhabricatorMetaMTAEmailBodyParser($body);
-      $stripped = $parser->stripQuotedText();
+      $parser = new PhabricatorMetaMTAEmailBodyParser();
+      $stripped = $parser->stripTextBody($body);
       $this->assertEqual("OKAY", $stripped);
     }
   }
 
   private function getEmailBodies() {
+    $trailing_space = ' ';
+
     return array(
 <<<EOEMAIL
 OKAY
@@ -74,6 +76,33 @@ OKAY
 
 > ...
 EOEMAIL
+,
+<<<EOEMAIL
+OKAY
+
+Sent from my HTC smartphone on the Now Network from Sprint!
+
+-Reply message ----- From: "somebody (someone)" <
+somebody@somewhere.com>
+To: <somebody@somewhere.com>
+Subject: Some Text Date: Mon, Apr 2, 2012 1:42 pm
+> ...
+EOEMAIL
+,
+<<<EOEMAIL
+OKAY
+
+--{$trailing_space}
+Abraham Lincoln
+Supreme Galactic Emperor
+EOEMAIL
+,
+<<<EOEMAIL
+OKAY
+
+Sent from my iPhone
+EOEMAIL
+,
     );
   }
 

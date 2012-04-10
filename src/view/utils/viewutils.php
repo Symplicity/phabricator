@@ -1,7 +1,7 @@
 <?php
 
 /*
- * Copyright 2011 Facebook, Inc.
+ * Copyright 2012 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -17,28 +17,64 @@
  */
 
 function phabricator_date($epoch, $user) {
-  return __phabricator_format_local_time(
+  return phabricator_format_local_time(
     $epoch,
     $user,
-    'M j Y');
+    _phabricator_date_format($epoch));
+}
+
+function phabricator_on_relative_date($epoch, $user) {
+  return phabricator_relative_date($epoch, $user, true);
+}
+
+function phabricator_relative_date($epoch, $user, $on = false) {
+  static $today;
+  static $yesterday;
+
+  if (!$today || !$yesterday) {
+    $now = time();
+    $today = phabricator_date($now, $user);
+    $yesterday = phabricator_date($now - 86400, $user);
+  }
+
+  $date = phabricator_date($epoch, $user);
+
+  if ($date === $today) {
+    return 'today';
+  }
+
+  if ($date === $yesterday) {
+    return 'yesterday';
+  }
+
+  return (($on ? 'on ' : '').$date);
 }
 
 function phabricator_time($epoch, $user) {
-  return __phabricator_format_local_time(
+  return phabricator_format_local_time(
     $epoch,
     $user,
     'g:i A');
 }
 
 function phabricator_datetime($epoch, $user) {
-  return __phabricator_format_local_time(
+  return phabricator_format_local_time(
     $epoch,
     $user,
-    'M j Y, g:i A');
+    _phabricator_date_format($epoch).', g:i A');
+}
+
+function _phabricator_date_format($epoch) {
+  $format = 'M j Y';
+  $now = time();
+  if ($epoch <= $now && $epoch > $now - 30 * 24 * 60 * 60) {
+    $format = 'D, M j';
+  }
+  return $format;
 }
 
 /**
- * Internal date rendering method. Do not call this directly; instead, call
+ * This function does not usually need to be called directly. Instead, call
  * @{function:phabricator_date}, @{function:phabricator_time}, or
  * @{function:phabricator_datetime}.
  *
@@ -47,7 +83,7 @@ function phabricator_datetime($epoch, $user) {
  * @param string Date format, as per DateTime class.
  * @return string Formatted, local date/time.
  */
-function __phabricator_format_local_time($epoch, $user, $format) {
+function phabricator_format_local_time($epoch, $user, $format) {
   if (!$epoch) {
     // If we're missing date information for something, the DateTime class will
     // throw an exception when we try to construct an object. Since this is a

@@ -10,8 +10,14 @@
   max-width: 1162px;
 }
 
-/* Spooky haunted panel which floats on the bottom of the screen. */
-.differential-haunted-panel .differential-add-comment-panel {
+/*  Spooky haunted panel which floats on the bottom of the screen.
+    Haunt modes are:
+
+      - Mode 1: Just the comment box.
+      - Mode 2: Comment box, comment preview, and inline comment previews.
+*/
+.differential-haunt-mode-1 .differential-add-comment-panel,
+.differential-haunt-mode-2 .differential-add-comment-panel {
   position: fixed;
   width: 100%;
   bottom: 0;
@@ -28,15 +34,20 @@
 
 }
 
-.differential-haunted-panel .differential-add-comment-panel h1 {
+.differential-haunt-mode-2 .differential-add-comment-panel {
+  max-height: 75%;
+}
+
+.differential-haunt-mode-1 .differential-add-comment-panel h1,
+.differential-haunt-mode-2 .differential-add-comment-panel h1 {
   display: none;
 }
 
-.differential-haunted-panel .aphront-panel-preview {
+.differential-haunt-mode-1 .aphront-panel-preview {
   display: none;
 }
 
-.differential-haunted-panel {
+.differential-haunt-mode-1 {
   padding-bottom: 250px;
 }
 
@@ -93,56 +104,3 @@
 .phabricator-transaction-view .differential-comment-action-request_review {
   border-color:     #cc9966;
 }
-
-.differential-inline-summary th,
-.differential-inline-summary td {
-  vertical-align: top;
-  padding: 0 0 6px;
-}
-
-.differential-inline-summary th {
-  padding-top: 16px;
-  color: #666666;
-  font-weight: bold;
-}
-
-.differential-inline-summary tr > th:first-child {
-  padding-top: 2px;
-}
-
-
-.differential-inline-summary td.inline-line-number {
-  color: #444444;
-  white-space: nowrap;
-  text-align: left;
-  font-weight: bold;
-  padding: 0 4px;
-  width: 90px;
-}
-
-.differential-inline-summary td.inline-line-number .num {
-  display: block;
-  position: relative;
-  padding-left:   15px;
-  padding-right:  5px;
-  width: 70px; /* Need lots of width for 23,950-23,951 */
-}
-
-.differential-inline-summary td.inline-which-diff {
-  padding: 0 8px 0 0;
-  color: #666666;
-}
-
-.differential-inline-summary td.inline-line-number a:hover {
-  background: #3b5998;
-  color: white;
-  text-decoration: none;
-}
-
-.differential-inline-summary-section {
-  margin: .75em 0 .5em;
-  font-size: 11px;
-  border-bottom: 1px solid #dddddd;
-  color: #666666;
-}
-

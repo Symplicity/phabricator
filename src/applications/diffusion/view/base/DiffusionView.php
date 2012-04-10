@@ -1,7 +1,7 @@
 <?php
 
 /*
- * Copyright 2011 Facebook, Inc.
+ * Copyright 2012 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -41,72 +41,47 @@ abstract class DiffusionView extends AphrontView {
       return $text;
     }
 
-    $drequest = $this->getDiffusionRequest();
-
-    if ($commit_identifier) {
-      $commit = ';'.$commit_identifier;
-    } else if ($drequest->getRawCommit()) {
-      $commit = ';'.$drequest->getCommitURIComponent($drequest->getRawCommit());
-    } else {
-      $commit = null;
-    }
-
-    $repository = $drequest->getRepository();
-    $callsign = $repository->getCallsign();
-
-    $branch = $drequest->getBranchURIComponent($drequest->getBranch());
-    $path = $branch.($path ? $path : $drequest->getPath());
+    $href = $this->getDiffusionRequest()->generateURI(
+      array(
+        'action'  => 'change',
+        'path'    => $path,
+        'commit'  => $commit_identifier,
+      ));
 
     return phutil_render_tag(
       'a',
       array(
-        'href' => "/diffusion/{$callsign}/change/{$path}{$commit}",
+        'href' => $href,
       ),
       $text);
   }
 
   final public function linkHistory($path) {
-    $drequest = $this->getDiffusionRequest();
-
-    if ($drequest->getRawCommit()) {
-      $commit = ';'.$drequest->getCommitURIComponent($drequest->getRawCommit());
-    } else {
-      $commit = null;
-    }
-
-    $repository = $drequest->getRepository();
-    $callsign = $repository->getCallsign();
-
-    $branch = $drequest->getBranchURIComponent($drequest->getBranch());
-    $path = $branch.$path;
-
-    $text = 'History';
+    $href = $this->getDiffusionRequest()->generateURI(
+      array(
+        'action' => 'history',
+        'path'   => $path,
+      ));
 
     return phutil_render_tag(
       'a',
       array(
-        'href' => "/diffusion/{$callsign}/history/{$path}{$commit}",
+        'href' => $href,
       ),
-      $text);
+      'History');
   }
 
   final public function linkBrowse($path, array $details = array()) {
-    $drequest = $this->getDiffusionRequest();
 
-    $raw_commit = idx($details, 'commit', $drequest->getRawCommit());
-    if ($raw_commit) {
-      $commit = ';'.$drequest->getCommitURIComponent($raw_commit);
-    } else {
-      $commit = null;
-    }
+    $href = $this->getDiffusionRequest()->generateURI(
+      $details + array(
+        'action' => 'browse',
+        'path'   => $path,
+      ));
 
-    $repository = $drequest->getRepository();
-    $callsign = $repository->getCallsign();
-
-    $branch = $drequest->getBranchURIComponent($drequest->getBranch());
-    $path = $branch.$path;
-
-    if (isset($details['text'])) {
+    if (isset($details['html'])) {
+      $text = $details['html'];
+    } else if (isset($details['text'])) {
       $text = phutil_escape_html($details['text']);
     } else {
       $text = 'Browse';
@@ -115,7 +90,23 @@ abstract class DiffusionView extends AphrontView {
     return phutil_render_tag(
       'a',
       array(
-        'href' => "/diffusion/{$callsign}/browse/{$path}{$commit}",
+        'href' => $href,
+      ),
+      $text);
+  }
+
+  final public function linkExternal($hash, $uri, $text) {
+    $href = id(new PhutilURI('/diffusion/external/'))
+      ->setQueryParams(
+        array(
+          'uri' => $uri,
+          'id'  => $hash,
+        ));
+
+    return phutil_render_tag(
+      'a',
+      array(
+        'href' => $href,
       ),
       $text);
   }
@@ -124,7 +115,8 @@ abstract class DiffusionView extends AphrontView {
 
     switch ($repository->getVersionControlSystem()) {
       case PhabricatorRepositoryType::REPOSITORY_TYPE_GIT:
-        $commit_name = substr($commit, 0, 16);
+      case PhabricatorRepositoryType::REPOSITORY_TYPE_MERCURIAL:
+        $commit_name = substr($commit, 0, 12);
         break;
       default:
         $commit_name = $commit;

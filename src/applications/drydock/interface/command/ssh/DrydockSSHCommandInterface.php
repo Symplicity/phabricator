@@ -22,8 +22,11 @@ final class DrydockSSHCommandInterface extends DrydockCommandInterface {
     $argv = func_get_args();
     $full_command = call_user_func_array('csprintf', $argv);
 
+    // NOTE: The "-t -t" is for psuedo-tty allocation so we can "sudo" on some
+    // systems, but maybe more trouble than it's worth?
+
     return new ExecFuture(
-      'ssh -o StrictHostKeyChecking=no -i %s %s@%s -- %s',
+      'ssh -t -t -o StrictHostKeyChecking=no -i %s %s@%s -- %s',
       $this->getConfig('ssh-keyfile'),
       $this->getConfig('user'),
       $this->getConfig('host'),

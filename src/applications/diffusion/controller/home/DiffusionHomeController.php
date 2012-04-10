@@ -61,8 +61,8 @@ final class DiffusionHomeController extends DiffusionController {
     $repository = new PhabricatorRepository();
 
     $repositories = $repository->loadAll();
-    foreach ($repositories as $key => $repository) {
-      if (!$repository->isTracked()) {
+    foreach ($repositories as $key => $repo) {
+      if (!$repo->isTracked()) {
         unset($repositories[$key]);
       }
     }
@@ -127,7 +127,7 @@ final class DiffusionHomeController extends DiffusionController {
         'Repository',
         'Description',
         'VCS',
-        'Size',
+        'Commits',
         'Last',
         'Date',
         'Time',

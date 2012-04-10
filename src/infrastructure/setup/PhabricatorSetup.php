@@ -75,9 +75,12 @@ final class PhabricatorSetup {
         $open_arcanist = false;
       }
 
-      $open_urandom = @fopen('/dev/urandom', 'r');
-      if (!$open_urandom) {
-        self::write("Unable to open /dev/urandom!\n");
+      $open_urandom = false;
+      try {
+        Filesystem::readRandomBytes(1);
+        $open_urandom = true;
+      } catch (FilesystemException $ex) {
+        self::write($ex->getMessage()."\n");
       }
 
       try {
@@ -233,8 +236,8 @@ final class PhabricatorSetup {
     // unreasonable and we don't need it from Apache, so do an explicit test
     // for CLI availability.
     list($err, $stdout, $stderr) = exec_manual(
-      '%s/scripts/setup/pcntl_available.php',
-      $root);
+      'php %s',
+      "{$root}/scripts/setup/pcntl_available.php");
     if ($err) {
       self::writeFailure();
       self::write("Unable to execute scripts/setup/pcntl_available.php to ".
@@ -452,7 +455,7 @@ final class PhabricatorSetup {
 
     self::writeHeader("MySQL DATABASE & STORAGE CONFIGURATION");
 
-    $conf = DatabaseConfigurationProvider::getConfiguration();
+    $conf = PhabricatorEnv::newObjectFromConfig('mysql.configuration-provider');
     $conn_user = $conf->getUser();
     $conn_pass = $conf->getPassword();
     $conn_host = $conf->getHost();
@@ -470,12 +473,15 @@ final class PhabricatorSetup {
 
     ini_set('mysql.connect_timeout', 2);
 
-    $conn_raw = new AphrontMySQLDatabaseConnection(
+    $conn_raw = PhabricatorEnv::newObjectFromConfig(
+      'mysql.implementation',
       array(
-        'user'      => $conn_user,
-        'pass'      => $conn_pass,
-        'host'      => $conn_host,
-        'database'  => null,
+        array(
+          'user'      => $conn_user,
+          'pass'      => $conn_pass,
+          'host'      => $conn_host,
+          'database'  => null,
+        ),
       ));
 
     try {
@@ -492,9 +498,22 @@ final class PhabricatorSetup {
       return;
     }
 
+    $engines = queryfx_all($conn_raw, 'SHOW ENGINES');
+    $engines = ipull($engines, 'Engine', 'Engine');
+    if (empty($engines['InnoDB'])) {
+      self::writeFailure();
+      self::write(
+        "Setup failure! The 'InnoDB' engine is not available. Enable ".
+        "InnoDB in your MySQL configuration. If you already created tables, ".
+        "MySQL incorrectly used some other engine. You need to convert ".
+        "them or drop and reinitialize them.");
+      return;
+    } else {
+      self::write(" okay  InnoDB is available.\n");
+    }
+
     $databases = queryfx_all($conn_raw, 'SHOW DATABASES');
-    $databases = ipull($databases, 'Database');
-    $databases = array_fill_keys($databases, true);
+    $databases = ipull($databases, 'Database', 'Database');
     if (empty($databases['phabricator_meta_data'])) {
       self::writeFailure();
       self::write(
@@ -734,6 +753,29 @@ final class PhabricatorSetup {
       self::write("[OKAY] Mail configuration OKAY\n");
     }
 
+    self::writeHeader('CONFIG CLASSES');
+    foreach (PhabricatorEnv::getRequiredClasses() as $key => $instanceof) {
+      $config = PhabricatorEnv::getEnvConfig($key);
+      if (!$config) {
+        self::writeNote("'$key' is not set.");
+      } else {
+        try {
+          $r = new ReflectionClass($config);
+          if (!$r->isSubclassOf($instanceof)) {
+            throw new Exception(
+              "Config setting '$key' must be an instance of '$instanceof'.");
+          } else if (!$r->isInstantiable()) {
+            throw new Exception("Config setting '$key' must be instantiable.");
+          }
+        } catch (Exception $ex) {
+          self::writeFailure();
+          self::write("Setup failure! ".$ex->getMessage());
+          return;
+        }
+      }
+    }
+    self::write("[OKAY] Config classes OKAY\n");
+
     self::writeHeader('SUCCESS!');
     self::write(
       "Congratulations! Your setup seems mostly correct, or at least fairly ".
@@ -786,7 +828,7 @@ final class PhabricatorSetup {
   public static function writeDoc($doc) {
     self::write(
       "\n".
-      '    http://phabricator.com/docs/phabricator/'.$doc.
+      '    http://www.phabricator.com/docs/phabricator/'.$doc.
       "\n\n");
   }
 

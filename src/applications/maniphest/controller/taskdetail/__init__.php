@@ -9,6 +9,8 @@
 phutil_require_module('phabricator', 'aphront/response/404');
 phutil_require_module('phabricator', 'applications/draft/storage/draft');
 phutil_require_module('phabricator', 'applications/files/storage/file');
+phutil_require_module('phabricator', 'applications/flag/constants/color');
+phutil_require_module('phabricator', 'applications/flag/query/flag');
 phutil_require_module('phabricator', 'applications/maniphest/constants/priority');
 phutil_require_module('phabricator', 'applications/maniphest/constants/status');
 phutil_require_module('phabricator', 'applications/maniphest/constants/transactiontype');
@@ -21,6 +23,8 @@ phutil_require_module('phabricator', 'applications/markup/engine');
 phutil_require_module('phabricator', 'applications/phid/constants');
 phutil_require_module('phabricator', 'applications/phid/handle/data');
 phutil_require_module('phabricator', 'infrastructure/celerity/api');
+phutil_require_module('phabricator', 'infrastructure/edges/constants/config');
+phutil_require_module('phabricator', 'infrastructure/edges/query/edge');
 phutil_require_module('phabricator', 'infrastructure/env');
 phutil_require_module('phabricator', 'infrastructure/javelin/api');
 phutil_require_module('phabricator', 'view/form/base');
@@ -34,6 +38,7 @@ phutil_require_module('phabricator', 'view/layout/contextbar');
 phutil_require_module('phabricator', 'view/layout/filepreview');
 phutil_require_module('phabricator', 'view/layout/headsup/action');
 phutil_require_module('phabricator', 'view/layout/headsup/actionlist');
+phutil_require_module('phabricator', 'view/layout/headsup/panel');
 phutil_require_module('phabricator', 'view/layout/panel');
 
 phutil_require_module('phutil', 'markup');

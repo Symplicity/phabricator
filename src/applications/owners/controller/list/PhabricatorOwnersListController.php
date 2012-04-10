@@ -171,7 +171,7 @@ final class PhabricatorOwnersListController
           ->setValue($request->getStr('name')))
       ->appendChild(
         id(new AphrontFormTokenizerControl())
-          ->setDatasource('/typeahead/common/users/')
+          ->setDatasource('/typeahead/common/usersorprojects/')
           ->setLimit(1)
           ->setName('owner')
           ->setLabel('Owner')
@@ -204,6 +204,7 @@ final class PhabricatorOwnersListController
   }
 
   private function renderPackageTable(array $packages, $header, $nodata) {
+    assert_instances_of($packages, 'PhabricatorOwnersPackage');
 
     if ($packages) {
       $package_ids = mpull($packages, 'getID');

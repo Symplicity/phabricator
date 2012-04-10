@@ -61,7 +61,7 @@ if (empty($options['f']) && empty($options['d'])) {
 $next_version = isset($options['v']) ? (int)$options['v'] : null;
 $max_version = isset($options['m']) ? (int)$options['m'] : null;
 
-$conf = DatabaseConfigurationProvider::getConfiguration();
+$conf = PhabricatorEnv::newObjectFromConfig('mysql.configuration-provider');
 
 if ($options['u']) {
   $conn_user = $options['u'];
@@ -83,12 +83,15 @@ if ($uri->getPort()) {
   $conn_bare_hostname = $conn_host;
 }
 
-$conn = new AphrontMySQLDatabaseConnection(
+$conn = PhabricatorEnv::newObjectFromConfig(
+  'mysql.implementation',
   array(
-    'user'      => $conn_user,
-    'pass'      => $conn_pass,
-    'host'      => $conn_host,
-    'database'  => null,
+    array(
+      'user'      => $conn_user,
+      'pass'      => $conn_pass,
+      'host'      => $conn_host,
+      'database'  => null,
+    ),
   ));
 
 try {

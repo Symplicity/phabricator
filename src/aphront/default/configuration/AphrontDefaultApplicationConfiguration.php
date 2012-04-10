@@ -206,6 +206,7 @@ class AphrontDefaultApplicationConfiguration
           'preview/(?P<id>\d+)/' => 'ManiphestTransactionPreviewController',
         ),
         'export/(?P<key>[^/]+)/' => 'ManiphestExportController',
+        'subpriority/' => 'ManiphestSubpriorityController',
       ),
 
       '/T(?P<id>\d+)' => 'ManiphestTaskDetailController',
@@ -247,30 +248,13 @@ class AphrontDefaultApplicationConfiguration
         '' => 'DiffusionHomeController',
         '(?P<callsign>[A-Z]+)/' => array(
           '' => 'DiffusionRepositoryController',
-          'repository/'.
-            '(?P<path>[^/]+)/'
-              => 'DiffusionRepositoryController',
-          'change/'.
-            '(?P<path>.*?)'.
-            '(?:[;](?P<commit>[a-z0-9]+))?'
-              => 'DiffusionChangeController',
-          'history/'.
-            '(?P<path>.*?)'.
-            '(?:[;](?P<commit>[a-z0-9]+))?'
-              => 'DiffusionHistoryController',
-          'browse/'.
-            '(?P<path>.*?)'.
-            '(?:[;](?P<commit>[a-z0-9]+))?'.
-            '(?:[$](?P<line>\d+(?:-\d+)?))?'
-              => 'DiffusionBrowseController',
-          'diff/'.
-            '(?P<path>.*?)'.
-            '(?:[;](?P<commit>[a-z0-9]+))?'
-              => 'DiffusionDiffController',
-          'lastmodified/'.
-            '(?P<path>.*?)'.
-            '(?:[;](?P<commit>[a-z0-9]+))?'
-              => 'DiffusionLastModifiedController',
+
+          'repository/(?P<dblob>.*)'    => 'DiffusionRepositoryController',
+          'change/(?P<dblob>.*)'        => 'DiffusionChangeController',
+          'history/(?P<dblob>.*)'       => 'DiffusionHistoryController',
+          'browse/(?P<dblob>.*)'        => 'DiffusionBrowseController',
+          'lastmodified/(?P<dblob>.*)'  => 'DiffusionLastModifiedController',
+          'diff/'                       => 'DiffusionDiffController',
         ),
         'inline/(?P<phid>[^/]+)/' => 'DiffusionInlineCommentController',
         'services/' => array(
@@ -280,6 +264,7 @@ class AphrontDefaultApplicationConfiguration
           ),
         ),
         'symbol/(?P<name>[^/]+)/' => 'DiffusionSymbolController',
+        'external/' => 'DiffusionExternalController',
       ),
 
       '/daemon/' => array(
@@ -298,19 +283,14 @@ class AphrontDefaultApplicationConfiguration
 
       '/herald/' => array(
         '' => 'HeraldHomeController',
-        'view/(?P<view>[^/]+)/' => array(
-          '' => 'HeraldHomeController',
-          '(?P<global>global)/' => 'HeraldHomeController'
-        ),
-        'new/(?:(?P<type>[^/]+)/)?' => 'HeraldNewController',
+        'view/(?P<content_type>[^/]+)/(?:(?P<rule_type>[^/]+)/)?'
+          => 'HeraldHomeController',
+        'new/(?:(?P<type>[^/]+)/(?:(?P<rule_type>[^/]+)/)?)?'
+          => 'HeraldNewController',
         'rule/(?:(?P<id>\d+)/)?' => 'HeraldRuleController',
-        'history/(?P<id>\d+)/' => 'HeraldRuleEditHistoryController',
+        'history/(?:(?P<id>\d+)/)?' => 'HeraldRuleEditHistoryController',
         'delete/(?P<id>\d+)/' => 'HeraldDeleteController',
         'test/' => 'HeraldTestConsoleController',
-        'all/' => array(
-          '' => 'HeraldAllRulesController',
-          'view/(?P<view>[^/]+)/' => 'HeraldAllRulesController',
-        ),
         'transcript/' => 'HeraldTranscriptListController',
         'transcript/(?P<id>\d+)/(?:(?P<filter>\w+)/)?'
           => 'HeraldTranscriptController',
@@ -419,6 +399,7 @@ class AphrontDefaultApplicationConfiguration
           'edit/(?P<id>\d+)/' => 'DrydockhostEditController',
         ),
         'lease/' => 'DrydockLeaseListController',
+        'log/' => 'DrydockLogController',
       ),
 
       '/chatlog/' => array(
@@ -429,13 +410,28 @@ class AphrontDefaultApplicationConfiguration
       ),
 
       '/aphlict/' => 'PhabricatorAphlictTestPageController',
+
+      '/flag/' => array(
+        '' => 'PhabricatorFlagListController',
+        'view/(?P<view>[^/]+)/' => 'PhabricatorFlagListController',
+        'edit/(?P<phid>[^/]+)/' => 'PhabricatorFlagEditController',
+        'delete/(?P<id>\d+)/' => 'PhabricatorFlagDeleteController',
+      ),
+
+      '/phortune/' => array(
+        'stripe/' => array(
+          'testpaymentform/' => 'PhortuneStripeTestPaymentFormController',
+        ),
+      ),
     );
   }
 
   protected function getResourceURIMapRules() {
     return array(
       '/res/' => array(
-        '(?P<package>pkg/)?(?P<hash>[a-f0-9]{8})/(?P<path>.+\.(?:css|js))'
+        '(?P<package>pkg/)?'.
+        '(?P<hash>[a-f0-9]{8})/'.
+        '(?P<path>.+\.(?:css|js|jpg|png|swf|gif))'
           => 'CelerityResourceController',
       ),
     );
@@ -456,8 +452,14 @@ class AphrontDefaultApplicationConfiguration
     $class    = phutil_escape_html(get_class($ex));
     $message  = phutil_escape_html($ex->getMessage());
 
+    $user = $this->getRequest()->getUser();
+    if (!$user) {
+      // If we hit an exception very early, we won't have a user.
+      $user = new PhabricatorUser();
+    }
+
     if (PhabricatorEnv::getEnvConfig('phabricator.show-stack-traces')) {
-      $trace = $this->renderStackTrace($ex->getTrace());
+      $trace = $this->renderStackTrace($ex->getTrace(), $user);
     } else {
       $trace = null;
     }
@@ -467,12 +469,6 @@ class AphrontDefaultApplicationConfiguration
         '<div class="exception-message">'.$message.'</div>'.
         $trace.
       '</div>';
-
-    $user = $this->getRequest()->getUser();
-    if (!$user) {
-      // If we hit an exception very early, we won't have a user.
-      $user = new PhabricatorUser();
-    }
 
     $dialog = new AphrontDialogView();
     $dialog
@@ -536,20 +532,17 @@ class AphrontDefaultApplicationConfiguration
       ));
   }
 
-  private function renderStackTrace($trace) {
+  private function renderStackTrace($trace, PhabricatorUser $user) {
 
     $libraries = PhutilBootloader::getInstance()->getAllLibraries();
 
     // TODO: Make this configurable?
-    $host = 'https://secure.phabricator.com';
+    $path = 'https://secure.phabricator.com/diffusion/%s/browse/master/src/';
 
-    $browse = array(
-      'arcanist' =>
-        $host.'/diffusion/ARC/browse/origin:master/src/',
-      'phutil' =>
-        $host.'/diffusion/PHU/browse/origin:master/src/',
-      'phabricator' =>
-        $host.'/diffusion/P/browse/origin:master/src/',
+    $callsigns = array(
+      'arcanist' => 'ARC',
+      'phutil' => 'PHU',
+      'phabricator' => 'P',
     );
 
     $rows = array();
@@ -576,14 +569,25 @@ class AphrontDefaultApplicationConfiguration
       }
 
       if ($file) {
-        if (isset($browse[$lib])) {
+        if (isset($callsigns[$lib])) {
+          $attrs = array('title' => $file);
+          try {
+            $attrs['href'] = $user->loadEditorLink(
+              '/src/'.$relative,
+              $part['line'],
+              $callsigns[$lib]);
+          } catch (Exception $ex) {
+            // The database can be inaccessible.
+          }
+          if (empty($attrs['href'])) {
+            $attrs['href'] = sprintf($path, $callsigns[$lib]).
+              str_replace(DIRECTORY_SEPARATOR, '/', $relative).
+              '$'.$part['line'];
+            $attrs['target'] = '_blank';
+          }
           $file_name = phutil_render_tag(
             'a',
-            array(
-              'href' => $browse[$lib].$relative.'$'.$part['line'],
-              'title' => $file,
-              'target' => '_blank',
-            ),
+            $attrs,
             phutil_escape_html($relative));
         } else {
           $file_name = phutil_render_tag(

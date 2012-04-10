@@ -26,6 +26,7 @@ final class PhabricatorFile extends PhabricatorFileDAO {
   protected $byteSize;
   protected $authorPHID;
   protected $secretKey;
+  protected $contentHash;
 
   protected $storageEngine;
   protected $storageFormat;
@@ -83,8 +84,7 @@ final class PhabricatorFile extends PhabricatorFileDAO {
 
   public static function newFromFileData($data, array $params = array()) {
 
-    $selector_class = PhabricatorEnv::getEnvConfig('storage.engine-selector');
-    $selector = newv($selector_class, array());
+    $selector = PhabricatorEnv::newObjectFromConfig('storage.engine-selector');
 
     $engines = $selector->selectStorageEngines($data, $params);
     if (!$engines) {
@@ -93,22 +93,24 @@ final class PhabricatorFile extends PhabricatorFileDAO {
 
     $data_handle = null;
     $engine_identifier = null;
+    $exceptions = array();
     foreach ($engines as $engine) {
+      $engine_class = get_class($engine);
       try {
         // Perform the actual write.
         $data_handle = $engine->writeFile($data, $params);
         if (!$data_handle || strlen($data_handle) > 255) {
           // This indicates an improperly implemented storage engine.
-          throw new Exception(
-            "Storage engine '{$engine}' executed writeFile() but did not ".
-            "return a valid handle ('{$data_handle}') to the data: it must ".
-            "be nonempty and no longer than 255 characters.");
+          throw new PhabricatorFileStorageConfigurationException(
+            "Storage engine '{$engine_class}' executed writeFile() but did ".
+            "not return a valid handle ('{$data_handle}') to the data: it ".
+            "must be nonempty and no longer than 255 characters.");
         }
 
         $engine_identifier = $engine->getEngineIdentifier();
         if (!$engine_identifier || strlen($engine_identifier) > 32) {
-          throw new Exception(
-            "Storage engine '{$engine}' returned an improper engine ".
+          throw new PhabricatorFileStorageConfigurationException(
+            "Storage engine '{$engine_class}' returned an improper engine ".
             "identifier '{$engine_identifier}': it must be nonempty ".
             "and no longer than 32 characters.");
         }
@@ -117,14 +119,24 @@ final class PhabricatorFile extends PhabricatorFileDAO {
         // places.
         break;
       } catch (Exception $ex) {
+        if ($ex instanceof PhabricatorFileStorageConfigurationException) {
+          // If an engine is outright misconfigured (or misimplemented), raise
+          // that immediately since it probably needs attention.
+          throw $ex;
+        }
+
         // If an engine doesn't work, keep trying all the other valid engines
         // in case something else works.
         phlog($ex);
+
+        $exceptions[] = $ex;
       }
     }
 
     if (!$data_handle) {
-      throw new Exception("All storage engines failed to write file!");
+      throw new PhutilAggregateException(
+        "All storage engines failed to write file:",
+        $exceptions);
     }
 
     $file_name = idx($params, 'name');
@@ -138,6 +150,7 @@ final class PhabricatorFile extends PhabricatorFileDAO {
     $file->setName($file_name);
     $file->setByteSize(strlen($data));
     $file->setAuthorPHID($authorPHID);
+    $file->setContentHash(PhabricatorHash::digest($data));
 
     $file->setStorageEngine($engine_identifier);
     $file->setStorageHandle($data_handle);
@@ -252,6 +265,16 @@ final class PhabricatorFile extends PhabricatorFileDAO {
 
   public function isViewableInBrowser() {
     return ($this->getViewableMimeType() !== null);
+  }
+
+  public function isViewableImage() {
+    if (!$this->isViewableInBrowser()) {
+      return false;
+    }
+
+    $mime_map = PhabricatorEnv::getEnvConfig('files.image-mime-types');
+    $mime_type = $this->getMimeType();
+    return idx($mime_map, $mime_type);
   }
 
   public function isTransformableImage() {

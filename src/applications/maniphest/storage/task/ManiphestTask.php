@@ -28,6 +28,7 @@ final class ManiphestTask extends ManiphestDAO {
 
   protected $status;
   protected $priority;
+  protected $subpriority;
 
   protected $title;
   protected $description;
@@ -119,7 +120,7 @@ final class ManiphestTask extends ManiphestDAO {
   public function loadAndAttachAuxiliaryAttributes() {
     if (!$this->getPHID()) {
       $this->auxiliaryAttributes = array();
-      return;
+      return $this;
     }
 
     $storage = id(new ManiphestTaskAuxiliaryStorage())->loadAllWhere(

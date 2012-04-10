@@ -260,34 +260,65 @@ final class ManiphestTaskListController extends ManiphestController {
 
       $selector = new AphrontNullView();
 
+      $group = $query->getParameter('group');
+      $order = $query->getParameter('order');
+      $is_draggable =
+        ($group == 'priority') ||
+        ($group == 'none' && $order == 'priority');
+
+      $lists = new AphrontNullView();
+      $lists->appendChild('<div class="maniphest-group-container">');
       foreach ($tasks as $group => $list) {
         $task_list = new ManiphestTaskListView();
         $task_list->setShowBatchControls(true);
+        if ($is_draggable) {
+          $task_list->setShowSubpriorityControls(true);
+        }
         $task_list->setUser($user);
         $task_list->setTasks($list);
         $task_list->setHandles($handles);
 
         $count = number_format(count($list));
-        $selector->appendChild(
-          '<h1 class="maniphest-task-group-header">'.
-            phutil_escape_html($group).' ('.$count.')'.
-          '</h1>');
-        $selector->appendChild($task_list);
+
+        $lists->appendChild(
+          javelin_render_tag(
+            'h1',
+            array(
+              'class' => 'maniphest-task-group-header',
+              'sigil' => 'task-group',
+              'meta'  => array(
+                'priority' => head($list)->getPriority(),
+              ),
+            ),
+            phutil_escape_html($group).' ('.$count.')'));
+
+        $lists->appendChild($task_list);
       }
+      $lists->appendChild('</div>');
+      $selector->appendChild($lists);
 
 
       $selector->appendChild($this->renderBatchEditor($query));
 
+      $form_id = celerity_generate_unique_node_id();
       $selector = phabricator_render_form(
         $user,
         array(
           'method' => 'POST',
           'action' => '/maniphest/batch/',
+          'id'     => $form_id,
         ),
         $selector->render());
 
       $list_container->appendChild($selector);
       $list_container->appendChild($pager);
+
+      Javelin::initBehavior(
+        'maniphest-subpriority-editor',
+        array(
+          'root'  => $form_id,
+          'uri'   =>  '/maniphest/subpriority/',
+        ));
     }
 
     $list_container->appendChild('</div>');
@@ -301,7 +332,7 @@ final class ManiphestTaskListController extends ManiphestController {
   }
 
   public static function loadTasks(PhabricatorSearchQuery $search_query) {
-
+    $any_project = false;
     $user_phids = $search_query->getParameter('userPHIDs', array());
     $project_phids = $search_query->getParameter('projectPHIDs', array());
     $task_ids = $search_query->getParameter('taskIDs', array());
@@ -357,12 +388,14 @@ final class ManiphestTaskListController extends ManiphestController {
         break;
       case 'projecttriage':
         $query->withPriority(ManiphestTaskPriority::PRIORITY_TRIAGE);
-        $query->withAnyProject(true);
+        $any_project = true;
         break;
       case 'projectall':
-        $query->withAnyProject(true);
+        $any_project = true;
         break;
     }
+
+    $query->withAnyProject($any_project);
 
     $order_map = array(
       'priority'  => ManiphestTaskQuery::ORDER_PRIORITY,
@@ -378,6 +411,7 @@ final class ManiphestTaskListController extends ManiphestController {
       'priority'  => ManiphestTaskQuery::GROUP_PRIORITY,
       'owner'     => ManiphestTaskQuery::GROUP_OWNER,
       'status'    => ManiphestTaskQuery::GROUP_STATUS,
+      'project'   => ManiphestTaskQuery::GROUP_PROJECT,
     );
     $query->setGroupBy(
       idx(
@@ -392,6 +426,15 @@ final class ManiphestTaskListController extends ManiphestController {
     $data = $query->execute();
     $total_row_count = $query->getRowCount();
 
+    $project_group_phids = array();
+    if ($search_query->getParameter('group') == 'project') {
+      foreach ($data as $task) {
+        foreach ($task->getProjectPHIDs() as $phid) {
+          $project_group_phids[] = $phid;
+        }
+      }
+    }
+
     $handle_phids = mpull($data, 'getOwnerPHID');
     $handle_phids = array_merge(
       $handle_phids,
@@ -399,14 +442,15 @@ final class ManiphestTaskListController extends ManiphestController {
       $user_phids,
       $xproject_phids,
       $owner_phids,
-      $author_phids);
+      $author_phids,
+      $project_group_phids,
+      array_mergev(mpull($data, 'getProjectPHIDs')));
     $handles = id(new PhabricatorObjectHandleData($handle_phids))
       ->loadHandles();
 
     switch ($search_query->getParameter('group')) {
       case 'priority':
         $data = mgroup($data, 'getPriority');
-        krsort($data);
 
         // If we have invalid priorities, they'll all map to "???". Merge
         // arrays to prevent them from overwriting each other.
@@ -423,7 +467,6 @@ final class ManiphestTaskListController extends ManiphestController {
         break;
       case 'status':
         $data = mgroup($data, 'getStatus');
-        ksort($data);
 
         $out = array();
         foreach ($data as $status => $tasks) {
@@ -443,14 +486,42 @@ final class ManiphestTaskListController extends ManiphestController {
             $out['Unassigned'] = $tasks;
           }
         }
-        if (isset($out['Unassigned'])) {
-          // If any tasks are unassigned, move them to the front of the list.
-          $data = array('Unassigned' => $out['Unassigned']) + $out;
-        } else {
-          $data = $out;
-        }
 
+        $data = $out;
         ksort($data);
+
+        // Move "Unassigned" to the top of the list.
+        if (isset($data['Unassigned'])) {
+          $data = array('Unassigned' => $out['Unassigned']) + $out;
+        }
+        break;
+      case 'project':
+        $grouped = array();
+        foreach ($data as $task) {
+          $phids = $task->getProjectPHIDs();
+          if ($project_phids && $any_project !== true) {
+            // If the user is filtering on "Bugs", don't show a "Bugs" group
+            // with every result since that's silly (the query also does this
+            // on the backend).
+            $phids = array_diff($phids, $project_phids);
+          }
+          if ($phids) {
+            foreach ($phids as $phid) {
+              $grouped[$handles[$phid]->getName()][$task->getID()] = $task;
+            }
+          } else {
+            $grouped['No Project'][$task->getID()] = $task;
+          }
+        }
+        $data = $grouped;
+        ksort($data);
+
+        // Move "No Project" to the end of the list.
+        if (isset($data['No Project'])) {
+          $noproject = $data['No Project'];
+          unset($data['No Project']);
+          $data += array('No Project' => $noproject);
+        }
         break;
       default:
         $data = array(
@@ -527,6 +598,7 @@ final class ManiphestTaskListController extends ManiphestController {
       'p' => 'priority',
       's' => 'status',
       'o' => 'owner',
+      'j' => 'project',
     );
     if (empty($groups[$group])) {
       $group = 'p';
@@ -543,6 +615,7 @@ final class ManiphestTaskListController extends ManiphestController {
           'p' => 'Priority',
           'o' => 'Owner',
           's' => 'Status',
+          'j' => 'Project',
           'n' => 'None',
         ));
 

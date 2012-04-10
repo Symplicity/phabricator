@@ -1,7 +1,7 @@
 <?php
 
 /*
- * Copyright 2011 Facebook, Inc.
+ * Copyright 2012 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -20,8 +20,10 @@ error_reporting(E_ALL | E_STRICT);
 ini_set('display_errors', 1);
 
 $include_path = ini_get('include_path');
-ini_set('include_path', $include_path.':'.dirname(__FILE__).'/../../');
-@include_once 'libphutil/src/__phutil_library_init__.php';
+ini_set(
+  'include_path',
+  $include_path.PATH_SEPARATOR.dirname(__FILE__).'/../../');
+@include_once 'libphutil/scripts/__init_script__.php';
 if (!@constant('__LIBPHUTIL__')) {
   echo "ERROR: Unable to load libphutil. Update your PHP 'include_path' to ".
        "include the parent directory of libphutil/.\n";
@@ -33,9 +35,6 @@ phutil_load_library(dirname(__FILE__).'/../src/');
 // NOTE: This is dangerous in general, but we know we're in a script context and
 // are not vulnerable to CSRF.
 AphrontWriteGuard::allowDangerousUnguardedWrites(true);
-
-$include_path = ini_get('include_path');
-ini_set('include_path', $include_path.':'.dirname(__FILE__).'/../../');
 
 require_once dirname(dirname(__FILE__)).'/conf/__init_conf__.php';
 

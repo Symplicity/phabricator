@@ -45,9 +45,12 @@ final class DiffusionBrowseController extends DiffusionController {
       $empty_result = new DiffusionEmptyResultView();
       $empty_result->setDiffusionRequest($drequest);
       $empty_result->setBrowseQuery($browse_query);
+      $empty_result->setView($this->getRequest()->getStr('view'));
       $content[] = $empty_result;
 
     } else {
+
+      $readme = null;
 
       $phids = array();
       foreach ($results as $result) {
@@ -57,10 +60,52 @@ final class DiffusionBrowseController extends DiffusionController {
             $phids[$data->getCommitDetail('authorPHID')] = true;
           }
         }
-      }
-      $phids = array_keys($phids);
 
+        $path = $result->getPath();
+        if (preg_match('/^readme(|\.txt|\.remarkup)$/i', $path)) {
+          $readme = $result;
+        }
+      }
+
+      $phids = array_keys($phids);
       $handles = id(new PhabricatorObjectHandleData($phids))->loadHandles();
+
+      if ($readme) {
+        $readme_request = DiffusionRequest::newFromDictionary(
+          array(
+            'repository'  => $drequest->getRepository(),
+            'commit'      => $drequest->getStableCommitName(),
+            'path'        => $readme->getFullPath(),
+          ));
+
+        $content_query = DiffusionFileContentQuery::newFromDiffusionRequest(
+          $readme_request);
+        $content_query->loadFileContent();
+        $readme_content = $content_query->getRawData();
+
+        if (preg_match('/.txt$/', $readme->getPath())) {
+          $readme_content = phutil_escape_html($readme_content);
+          $readme_content = nl2br($readme_content);
+        } else {
+          // Markup extensionless files as remarkup so we get links and such.
+
+          $engine = PhabricatorMarkupEngine::newDiffusionMarkupEngine();
+          $readme_content = $engine->markupText($readme_content);
+
+          $readme_content = phutil_render_tag(
+            'div',
+            array(
+              'class' => 'phabricator-remarkup',
+            ),
+            $readme_content);
+        }
+
+        $readme_panel = new AphrontPanelView();
+        $readme_panel->setHeader('README');
+        $readme_panel->appendChild($readme_content);
+
+        $content[] = $readme_panel;
+      }
 
       $browse_table = new DiffusionBrowseTableView();
       $browse_table->setDiffusionRequest($drequest);
