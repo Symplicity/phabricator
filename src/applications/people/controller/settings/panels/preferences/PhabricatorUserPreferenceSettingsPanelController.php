@@ -55,7 +55,7 @@ EXAMPLE;
       'a',
       array(
         'href' => PhabricatorEnv::getDoclink(
-          'article/User_Guide:_Configuring_an_External_Editor.html'),
+          'article/User_Guide_Configuring_an_External_Editor.html'),
       ),
       'User Guide: Configuring an External Editor');
 
@@ -81,7 +81,7 @@ EXAMPLE;
         ->setCaption(
           'Link to edit files in external editor. '.
           '%f is replaced by filename, %l by line number, %r by repository '.
-          'callsign. '.
+          'callsign, %% by literal %. '.
           "For documentation, see {$editor_doc_link}.")
         ->setValue($preferences->getPreference($pref_editor)))
       ->appendChild(

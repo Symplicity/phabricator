@@ -57,6 +57,10 @@
   overflow:           hidden;
 }
 
+.differential-changeset-immutable .differential-diff th {
+  cursor: auto;
+}
+
 .differential-diff td.old {
   background:   #ffd0d0;
 }

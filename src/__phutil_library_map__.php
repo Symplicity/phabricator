@@ -450,6 +450,10 @@ phutil_register_library_map(array(
     'ManiphestExportController' => 'applications/maniphest/controller/export',
     'ManiphestReplyHandler' => 'applications/maniphest/replyhandler',
     'ManiphestReportController' => 'applications/maniphest/controller/report',
+    'ManiphestSavedQuery' => 'applications/maniphest/storage/savedquery',
+    'ManiphestSavedQueryDeleteController' => 'applications/maniphest/controller/savedquerydelete',
+    'ManiphestSavedQueryEditController' => 'applications/maniphest/controller/savedqueryedit',
+    'ManiphestSavedQueryListController' => 'applications/maniphest/controller/savedquerylist',
     'ManiphestSubpriorityController' => 'applications/maniphest/controller/subpriority',
     'ManiphestTask' => 'applications/maniphest/storage/task',
     'ManiphestTaskAuxiliaryStorage' => 'applications/maniphest/storage/auxiliary',
@@ -861,6 +865,8 @@ phutil_register_library_map(array(
     'PhabricatorSlowvoteOption' => 'applications/slowvote/storage/option',
     'PhabricatorSlowvotePoll' => 'applications/slowvote/storage/poll',
     'PhabricatorSlowvotePollController' => 'applications/slowvote/controller/poll',
+    'PhabricatorSlug' => 'infrastructure/util/slug',
+    'PhabricatorSlugTestCase' => 'infrastructure/util/slug/__tests__',
     'PhabricatorSortTableExample' => 'applications/uiexample/examples/sorttable',
     'PhabricatorStandardPageView' => 'view/page/standard',
     'PhabricatorStatusController' => 'applications/status/base',
@@ -1140,7 +1146,6 @@ phutil_register_library_map(array(
     'DarkConsoleRequestPlugin' => 'DarkConsolePlugin',
     'DarkConsoleServicesPlugin' => 'DarkConsolePlugin',
     'DarkConsoleXHProfPlugin' => 'DarkConsolePlugin',
-    'DefaultDatabaseConfigurationProvider' => 'DatabaseConfigurationProvider',
     'DifferentialActionHasNoEffectException' => 'DifferentialException',
     'DifferentialAddCommentView' => 'AphrontView',
     'DifferentialAffectedPath' => 'DifferentialDAO',
@@ -1337,6 +1342,10 @@ phutil_register_library_map(array(
     'ManiphestExportController' => 'ManiphestController',
     'ManiphestReplyHandler' => 'PhabricatorMailReplyHandler',
     'ManiphestReportController' => 'ManiphestController',
+    'ManiphestSavedQuery' => 'ManiphestDAO',
+    'ManiphestSavedQueryDeleteController' => 'ManiphestController',
+    'ManiphestSavedQueryEditController' => 'ManiphestController',
+    'ManiphestSavedQueryListController' => 'ManiphestController',
     'ManiphestSubpriorityController' => 'ManiphestController',
     'ManiphestTask' => 'ManiphestDAO',
     'ManiphestTaskAuxiliaryStorage' => 'ManiphestDAO',
@@ -1679,6 +1688,7 @@ phutil_register_library_map(array(
     'PhabricatorSlowvoteOption' => 'PhabricatorSlowvoteDAO',
     'PhabricatorSlowvotePoll' => 'PhabricatorSlowvoteDAO',
     'PhabricatorSlowvotePollController' => 'PhabricatorSlowvoteController',
+    'PhabricatorSlugTestCase' => 'PhabricatorTestCase',
     'PhabricatorSortTableExample' => 'PhabricatorUIExample',
     'PhabricatorStandardPageView' => 'AphrontPageView',
     'PhabricatorStatusController' => 'PhabricatorController',
@@ -1765,6 +1775,10 @@ phutil_register_library_map(array(
   ),
   'requires_interface' =>
   array(
+    'DefaultDatabaseConfigurationProvider' =>
+    array(
+      0 => 'DatabaseConfigurationProvider',
+    ),
     'DifferentialInlineComment' =>
     array(
       0 => 'PhabricatorInlineCommentInterface',
