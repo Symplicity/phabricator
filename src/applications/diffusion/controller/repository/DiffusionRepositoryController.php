@@ -93,6 +93,8 @@ final class DiffusionRepositoryController extends DiffusionController {
 
     $content[] = $browse_panel;
 
+    $content[] = $this->buildTagListTable($drequest);
+
     if ($drequest->getBranch() !== null) {
       $branch_query = DiffusionBranchQuery::newFromDiffusionRequest($drequest);
       $branches = $branch_query->loadBranches();
@@ -148,6 +150,60 @@ final class DiffusionRepositoryController extends DiffusionController {
     $panel = new AphrontPanelView();
     $panel->setHeader('Repository Properties');
     $panel->appendChild($table);
+
+    return $panel;
+  }
+
+  private function buildTagListTable(DiffusionRequest $drequest) {
+    $tag_limit = 25;
+
+    $query = DiffusionTagListQuery::newFromDiffusionRequest($drequest);
+    $query->setLimit($tag_limit + 1);
+    $tags = $query->loadTags();
+
+    if (!$tags) {
+      return null;
+    }
+
+    $more_tags = (count($tags) > $tag_limit);
+    $tags = array_slice($tags, 0, $tag_limit);
+
+    $commits = id(new PhabricatorAuditCommitQuery())
+      ->withIdentifiers(
+        $drequest->getRepository()->getID(),
+        mpull($tags, 'getCommitIdentifier'))
+      ->needCommitData(true)
+      ->execute();
+
+    $view = new DiffusionTagListView();
+    $view->setDiffusionRequest($drequest);
+    $view->setTags($tags);
+    $view->setUser($this->getRequest()->getUser());
+    $view->setCommits($commits);
+
+    $phids = $view->getRequiredHandlePHIDs();
+    $handles = id(new PhabricatorObjectHandleData($phids))->loadHandles();
+    $view->setHandles($handles);
+
+    $panel = new AphrontPanelView();
+    $panel->setHeader('Tags');
+
+    if ($more_tags) {
+      $panel->setCaption('Showing the '.$tag_limit.' most recent tags.');
+    }
+
+    $panel->addButton(
+      phutil_render_tag(
+        'a',
+        array(
+          'href' => $drequest->generateURI(
+            array(
+              'action' => 'tags',
+            )),
+          'class' => 'grey button',
+        ),
+        "Show All Tags \xC2\xBB"));
+    $panel->appendChild($view);
 
     return $panel;
   }

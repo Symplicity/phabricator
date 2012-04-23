@@ -56,9 +56,11 @@ abstract class DifferentialReviewRequestMail extends DifferentialMail {
         $body[] = null;
       }
 
-      $body[] = 'TEST PLAN';
-      $body[] = $this->formatText($revision->getTestPlan());
-      $body[] = null;
+      if ($revision->getTestPlan() != '') {
+        $body[] = 'TEST PLAN';
+        $body[] = $this->formatText($revision->getTestPlan());
+        $body[] = null;
+      }
     } else {
       if (strlen($this->getComments())) {
         $body[] = $this->formatText($this->getComments());
@@ -68,6 +70,17 @@ abstract class DifferentialReviewRequestMail extends DifferentialMail {
 
     $body[] = $this->renderRevisionDetailLink();
     $body[] = null;
+
+    $task_phids = $this->getManiphestTaskPHIDs();
+    if ($task_phids) {
+      $handles = id(new PhabricatorObjectHandleData($task_phids))
+        ->loadHandles();
+      $body[] = 'MANIPHEST TASKS';
+      foreach ($handles as $handle) {
+        $body[] = '  '.PhabricatorEnv::getProductionURI($handle->getURI());
+      }
+      $body[] = null;
+    }
 
     $changesets = $this->getChangesets();
     if ($changesets) {

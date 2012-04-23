@@ -69,6 +69,18 @@ return array(
   'phabricator.custom.logo'   => null,
 
 
+// -- Access Policies ------------------------------------------------------- //
+
+  // Phabricator allows you to set the visibility of objects (like repositories
+  // and source code) to "Public", which means anyone on the internet can see
+  // them, even without being logged in. This is great for open source, but
+  // some installs may never want to make anything public, so this policy is
+  // disabled by default. You can enable it here, which will let you set the
+  // policy for objects to "Public". With this option disabled, the most open
+  // policy is "All Users", which means users must be logged in to view things.
+  'policy.allow-public'         => false,
+
+
 // -- DarkConsole ----------------------------------------------------------- //
 
   // DarkConsole is a administrative debugging/profiling tool built into
@@ -506,6 +518,16 @@ return array(
   // The Phabricator "Client Secret" to use for Phabricator API access.
   'phabricator.application-secret'   => null,
 
+// -- Disqus Comments ------------------------------------------------------- //
+
+  // Should Phame users have Disqus comment widget, and if so what's the
+  // website shortname to use? For example, secure.phabricator.org uses
+  // "phabricator", which we registered with Disqus. If you aren't familiar
+  // with Disqus, see:
+  // Disqus quick start guide - http://docs.disqus.com/help/4/
+  // Information on shortnames - http://docs.disqus.com/help/68/
+  'disqus.shortname'            => null,
+
 // -- Recaptcha ------------------------------------------------------------- //
 
   // Is Recaptcha enabled? If disabled, captchas will not appear. You should
@@ -681,6 +703,10 @@ return array(
 
 
 // -- Search ---------------------------------------------------------------- //
+
+  // Phabricator supports Elastic Search; to use it, specify a host like
+  // 'http://elastic.example.com:9200/' here.
+  'search.elastic.host'     => null,
 
   // Phabricator uses a search engine selector to choose which search engine
   // to use when indexing and reconstructing documents, and when executing

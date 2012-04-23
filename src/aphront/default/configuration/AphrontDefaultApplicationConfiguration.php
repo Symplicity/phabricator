@@ -260,6 +260,7 @@ class AphrontDefaultApplicationConfiguration
           'browse/(?P<dblob>.*)'        => 'DiffusionBrowseController',
           'lastmodified/(?P<dblob>.*)'  => 'DiffusionLastModifiedController',
           'diff/'                       => 'DiffusionDiffController',
+          'tags/(?P<dblob>.*)'          => 'DiffusionTagListController',
         ),
         'inline/(?P<phid>[^/]+)/' => 'DiffusionInlineCommentController',
         'services/' => array(
@@ -390,6 +391,28 @@ class AphrontDefaultApplicationConfiguration
         'diff/(?P<id>\d+)/' => 'PhrictionDiffController',
       ),
 
+      '/phame/' => array(
+        ''                          => 'PhamePostListController',
+        'post/' => array(
+          ''                        => 'PhamePostListController',
+          'delete/(?P<phid>[^/]+)/' => 'PhamePostDeleteController',
+          'edit/(?P<phid>[^/]+)/'   => 'PhamePostEditController',
+          'new/'                    => 'PhamePostEditController',
+          'preview/'                => 'PhamePostPreviewController',
+          'view/(?P<phid>[^/]+)/'   => 'PhamePostViewController',
+        ),
+        'draft/' => array(
+          ''                        => 'PhameDraftListController',
+          'new/'                    => 'PhamePostEditController',
+        ),
+        'posts/' => array(
+          ''                        => 'PhamePostListController',
+          '(?P<bloggername>\w+)/'   => 'PhamePostListController',
+          '(?P<bloggername>\w+)/(?P<phametitle>.+/)'
+                                    => 'PhamePostViewController',
+        ),
+      ),
+
       '/calendar/' => array(
         '' => 'PhabricatorCalendarBrowseController',
       ),
@@ -451,17 +474,46 @@ class AphrontDefaultApplicationConfiguration
 
   public function handleException(Exception $ex) {
 
-    // Always log the unhandled exception.
-    phlog($ex);
-
-    $class    = phutil_escape_html(get_class($ex));
-    $message  = phutil_escape_html($ex->getMessage());
+    $is_serious = PhabricatorEnv::getEnvConfig('phabricator.serious-business');
 
     $user = $this->getRequest()->getUser();
     if (!$user) {
       // If we hit an exception very early, we won't have a user.
       $user = new PhabricatorUser();
     }
+
+    if ($ex instanceof PhabricatorPolicyException) {
+      $content =
+        '<div class="aphront-policy-exception">'.
+          phutil_escape_html($ex->getMessage()).
+        '</div>';
+
+      $dialog = new AphrontDialogView();
+      $dialog
+        ->setTitle(
+            $is_serious
+              ? 'Access Denied'
+              : "You Shall Not Pass")
+        ->setClass('aphront-access-dialog')
+        ->setUser($user)
+        ->appendChild($content);
+
+      if ($this->getRequest()->isAjax()) {
+        $dialog->addCancelButton('/', 'Close');
+      } else {
+        $dialog->addCancelButton('/', $is_serious ? 'OK' : 'Away With Thee');
+      }
+
+      $response = new AphrontDialogResponse();
+      $response->setDialog($dialog);
+      return $response;
+    }
+
+    // Always log the unhandled exception.
+    phlog($ex);
+
+    $class    = phutil_escape_html(get_class($ex));
+    $message  = phutil_escape_html($ex->getMessage());
 
     if (PhabricatorEnv::getEnvConfig('phabricator.show-stack-traces')) {
       $trace = $this->renderStackTrace($ex->getTrace(), $user);

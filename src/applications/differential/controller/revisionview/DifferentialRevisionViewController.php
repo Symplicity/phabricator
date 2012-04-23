@@ -174,7 +174,9 @@ final class DifferentialRevisionViewController extends DifferentialController {
           phutil_render_tag(
             'a',
             array(
-              'href' => $request_uri->alter('large', 'true'),
+              'href' => $request_uri
+                ->alter('large', 'true')
+                ->setFragment('differential-review-toc'),
             ),
             'Show All Files Inline').
         "</strong>");
@@ -475,17 +477,16 @@ final class DifferentialRevisionViewController extends DifferentialController {
     $actions = array(
       DifferentialAction::ACTION_COMMENT => true,
     );
-    $admin_actions = array();
 
     $viewer = $this->getRequest()->getUser();
     $viewer_phid = $viewer->getPHID();
-    $viewer_is_admin =  $viewer->getIsAdmin();
     $viewer_is_owner = ($viewer_phid == $revision->getAuthorPHID());
     $viewer_is_reviewer = in_array($viewer_phid, $revision->getReviewers());
     $viewer_did_accept = ($viewer_phid === $revision->loadReviewedBy());
+    $status = $revision->getStatus();
 
     if ($viewer_is_owner) {
-      switch ($revision->getStatus()) {
+      switch ($status) {
         case ArcanistDifferentialRevisionStatus::NEEDS_REVIEW:
           $actions[DifferentialAction::ACTION_ABANDON] = true;
           $actions[DifferentialAction::ACTION_RETHINK] = true;
@@ -507,20 +508,17 @@ final class DifferentialRevisionViewController extends DifferentialController {
           break;
       }
     } else {
-      switch ($revision->getStatus()) {
+      switch ($status) {
         case ArcanistDifferentialRevisionStatus::NEEDS_REVIEW:
-          $admin_actions[DifferentialAction::ACTION_ABANDON] = $viewer_is_admin;
           $actions[DifferentialAction::ACTION_ACCEPT] = true;
           $actions[DifferentialAction::ACTION_REJECT] = true;
           $actions[DifferentialAction::ACTION_RESIGN] = $viewer_is_reviewer;
           break;
         case ArcanistDifferentialRevisionStatus::NEEDS_REVISION:
-          $admin_actions[DifferentialAction::ACTION_ABANDON] = $viewer_is_admin;
           $actions[DifferentialAction::ACTION_ACCEPT] = true;
           $actions[DifferentialAction::ACTION_RESIGN] = $viewer_is_reviewer;
           break;
         case ArcanistDifferentialRevisionStatus::ACCEPTED:
-          $admin_actions[DifferentialAction::ACTION_ABANDON] = $viewer_is_admin;
           $actions[DifferentialAction::ACTION_REJECT] = true;
           $actions[DifferentialAction::ACTION_RESIGN] =
             $viewer_is_reviewer && !$viewer_did_accept;
@@ -529,21 +527,18 @@ final class DifferentialRevisionViewController extends DifferentialController {
         case ArcanistDifferentialRevisionStatus::ABANDONED:
           break;
       }
+      if ($status != ArcanistDifferentialRevisionStatus::COMMITTED) {
+        $actions[DifferentialAction::ACTION_CLAIM] = true;
+      }
     }
 
     $actions[DifferentialAction::ACTION_ADDREVIEWERS] = true;
     $actions[DifferentialAction::ACTION_ADDCCS] = true;
 
     $actions = array_keys(array_filter($actions));
-    $admin_actions = array_keys(array_filter($admin_actions));
     $actions_dict = array();
-
     foreach ($actions as $action) {
       $actions_dict[$action] = DifferentialAction::getActionVerb($action);
-    }
-    foreach ($admin_actions as $action) {
-      $actions_dict[$action] =
-        '(Admin) ' . DifferentialAction::getActionVerb($action);
     }
 
     return $actions_dict;
@@ -654,6 +649,8 @@ final class DifferentialRevisionViewController extends DifferentialController {
     foreach ($aux_fields as $key => $aux_field) {
       if (!$aux_field->shouldAppearOnRevisionView()) {
         unset($aux_fields[$key]);
+      } else {
+        $aux_field->setUser($this->getRequest()->getUser());
       }
     }
 

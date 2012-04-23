@@ -50,9 +50,25 @@ final class PhabricatorLoginController
       return id(new AphrontPlainTextResponse())->setContent($message);
     }
 
-    $next_uri = $this->getRequest()->getPath();
-    if ($next_uri == '/login/') {
+    $error_view = null;
+    if ($request->getCookie('phusr') && $request->getCookie('phsid')) {
+      // The session cookie is invalid, so clear it.
+      $request->clearCookie('phusr');
+      $request->clearCookie('phsid');
+
+      $error_view = new AphrontErrorView();
+      $error_view->setTitle('Invalid Session');
+      $error_view->setErrors(array(
+        "Your login session is invalid. Try logging in again. If that ".
+        "doesn't work, clear your browser cookies."
+      ));
+    }
+
+    $next_uri_path = $this->getRequest()->getPath();
+    if ($next_uri_path == '/login/') {
       $next_uri = '/';
+    } else {
+      $next_uri = $this->getRequest()->getRequestURI();
     }
 
     if (!$request->isFormPost()) {
@@ -143,8 +159,6 @@ final class PhabricatorLoginController
         $error_view = new AphrontErrorView();
         $error_view->setTitle('Login Failed');
         $error_view->setErrors($errors);
-      } else {
-        $error_view = null;
       }
 
       $form = new AphrontFormView();

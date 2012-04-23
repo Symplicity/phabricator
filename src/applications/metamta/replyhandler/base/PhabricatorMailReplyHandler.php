@@ -108,14 +108,6 @@ abstract class PhabricatorMailReplyHandler {
     $recipients = mpull($to_handles, null, 'getPHID') +
                   mpull($cc_handles, null, 'getPHID');
 
-    // This grouping is just so we can use the public reply-to for any
-    // recipients without a private reply-to, e.g. mailing lists.
-    $groups = array();
-    foreach ($recipients as $recipient) {
-      $private = $this->getPrivateReplyHandlerEmailAddress($recipient);
-      $groups[$private][] = $recipient;
-    }
-
     // When multiplexing mail, explicitly include To/Cc information in the
     // message body and headers.
     $add_headers = array();
@@ -131,13 +123,18 @@ abstract class PhabricatorMailReplyHandler {
       $add_headers['X-Phabricator-Cc'] = $this->formatPHIDList($cc_handles);
     }
 
-    foreach ($groups as $reply_to => $group) {
+    foreach ($recipients as $recipient) {
       $mail = clone $mail_template;
-      $mail->addTos(mpull($group, 'getPHID'));
+      $mail->addTos(array($recipient->getPHID()));
 
       $mail->setBody($body);
       foreach ($add_headers as $header => $value) {
         $mail->addHeader($header, $value);
+      }
+
+      $reply_to = null;
+      if (!$reply_to && $this->supportsPrivateReplies()) {
+        $reply_to = $this->getPrivateReplyHandlerEmailAddress($recipient);
       }
 
       if (!$reply_to && $this->supportsPublicReplies()) {

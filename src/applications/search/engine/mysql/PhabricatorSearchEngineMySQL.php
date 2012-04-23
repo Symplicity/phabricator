@@ -288,10 +288,7 @@ final class PhabricatorSearchEngineMySQL extends PhabricatorSearchEngine {
     $hits = queryfx_all(
       $conn_r,
       'SELECT
-          document.phid,
-          document.documentType,
-          document.documentTitle,
-          document.documentCreated
+          document.phid
         FROM %T document
           %Q
           %Q
@@ -305,7 +302,7 @@ final class PhabricatorSearchEngineMySQL extends PhabricatorSearchEngine {
       $offset,
       $limit);
 
-    return $hits;
+    return ipull($hits, 'phid');
   }
 
   protected function joinRelationship($conn, $query, $field, $type) {

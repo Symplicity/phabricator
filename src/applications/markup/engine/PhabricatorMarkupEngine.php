@@ -49,6 +49,13 @@ class PhabricatorMarkupEngine {
     ));
   }
 
+  public static function newPhameMarkupEngine() {
+    return self::newMarkupEngine(array(
+      'macros' => false,
+    ));
+  }
+
+
   public static function newDifferentialMarkupEngine(array $options = array()) {
     return self::newMarkupEngine(array(
       'custom-inline' => PhabricatorEnv::getEnvConfig(
@@ -168,7 +175,6 @@ class PhabricatorMarkupEngine {
     foreach ($blocks as $block) {
       if ($block instanceof PhutilRemarkupEngineRemarkupLiteralBlockRule) {
         $literal_rules = array();
-        $literal_rules[] = new PhutilRemarkupRuleHyperlink();
         $literal_rules[] = new PhutilRemarkupRuleEscapeHTML();
         $literal_rules[] = new PhutilRemarkupRuleLinebreaks();
         $block->setMarkupRules($literal_rules);
