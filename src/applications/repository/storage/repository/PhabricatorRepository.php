@@ -94,6 +94,9 @@ final class PhabricatorRepository extends PhabricatorRepositoryDAO {
 
   public function getRemoteURI() {
     $raw_uri = $this->getDetail('remote-uri');
+    if (!$raw_uri) {
+      return null;
+    }
 
     $vcs = $this->getVersionControlSystem();
     $is_git = ($vcs == PhabricatorRepositoryType::REPOSITORY_TYPE_GIT);
@@ -328,6 +331,10 @@ final class PhabricatorRepository extends PhabricatorRepositoryDAO {
     return $uri;
   }
 
+  public function getURI() {
+    return '/diffusion/'.$this->getCallsign().'/';
+  }
+
   private function isSSHProtocol($protocol) {
     return ($protocol == 'ssh' || $protocol == 'svn+ssh');
   }
@@ -373,6 +380,22 @@ final class PhabricatorRepository extends PhabricatorRepositoryDAO {
     }
 
     return 'r'.$this->getCallsign().$short_identifier;
+  }
+
+  public static function loadAllByPHIDOrCallsign(array $names) {
+    $repositories = array();
+    foreach ($names as $name) {
+      $repo = id(new PhabricatorRepository())->loadOneWhere(
+        'phid = %s OR callsign = %s',
+        $name,
+        $name);
+      if (!$repo) {
+        throw new Exception(
+          "No repository with PHID or callsign '{$name}' exists!");
+      }
+      $repositories[$repo->getID()] = $repo;
+    }
+    return $repositories;
   }
 
 }

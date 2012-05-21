@@ -33,6 +33,17 @@ final class DiffusionBrowseController extends DiffusionController {
         'view'   => 'browse',
       ));
 
+    if ($drequest->getTagContent()) {
+      $title = 'Tag: '.$drequest->getSymbolicCommit();
+
+      $tag_view = new AphrontPanelView();
+      $tag_view->setHeader(phutil_escape_html($title));
+      $tag_view->appendChild(
+        $this->markupText($drequest->getTagContent()));
+
+      $content[] = $tag_view;
+    }
+
     if (!$results) {
 
       if ($browse_query->getReasonForEmptyResultSet() ==
@@ -70,43 +81,6 @@ final class DiffusionBrowseController extends DiffusionController {
       $phids = array_keys($phids);
       $handles = id(new PhabricatorObjectHandleData($phids))->loadHandles();
 
-      if ($readme) {
-        $readme_request = DiffusionRequest::newFromDictionary(
-          array(
-            'repository'  => $drequest->getRepository(),
-            'commit'      => $drequest->getStableCommitName(),
-            'path'        => $readme->getFullPath(),
-          ));
-
-        $content_query = DiffusionFileContentQuery::newFromDiffusionRequest(
-          $readme_request);
-        $content_query->loadFileContent();
-        $readme_content = $content_query->getRawData();
-
-        if (preg_match('/.txt$/', $readme->getPath())) {
-          $readme_content = phutil_escape_html($readme_content);
-          $readme_content = nl2br($readme_content);
-        } else {
-          // Markup extensionless files as remarkup so we get links and such.
-
-          $engine = PhabricatorMarkupEngine::newDiffusionMarkupEngine();
-          $readme_content = $engine->markupText($readme_content);
-
-          $readme_content = phutil_render_tag(
-            'div',
-            array(
-              'class' => 'phabricator-remarkup',
-            ),
-            $readme_content);
-        }
-
-        $readme_panel = new AphrontPanelView();
-        $readme_panel->setHeader('README');
-        $readme_panel->appendChild($readme_content);
-
-        $content[] = $readme_panel;
-      }
-
       $browse_table = new DiffusionBrowseTableView();
       $browse_table->setDiffusionRequest($drequest);
       $browse_table->setHandles($handles);
@@ -120,14 +94,41 @@ final class DiffusionBrowseController extends DiffusionController {
 
     $content[] = $this->buildOpenRevisions();
 
+    $readme_content = $browse_query->renderReadme($results);
+    if ($readme_content) {
+      $readme_panel = new AphrontPanelView();
+      $readme_panel->setHeader('README');
+      $readme_panel->appendChild($readme_content);
+
+      $content[] = $readme_panel;
+    }
+
+
     $nav = $this->buildSideNav('browse', false);
     $nav->appendChild($content);
 
     return $this->buildStandardPageResponse(
       $nav,
       array(
-        'title' => basename($drequest->getPath()),
+        'title' => array(
+          nonempty(basename($drequest->getPath()), '/'),
+          $drequest->getRepository()->getCallsign().' Repository',
+        ),
       ));
+  }
+
+  private function markupText($text) {
+    $engine = PhabricatorMarkupEngine::newDiffusionMarkupEngine();
+    $text = $engine->markupText($text);
+
+    $text = phutil_render_tag(
+      'div',
+      array(
+        'class' => 'phabricator-remarkup',
+      ),
+      $text);
+
+    return $text;
   }
 
 }

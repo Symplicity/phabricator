@@ -34,6 +34,10 @@ final class DiffusionCommitController extends DiffusionController {
     $request = $this->getRequest();
     $user = $request->getUser();
 
+    if ($request->getStr('diff')) {
+      return $this->buildRawDiffResponse($drequest);
+    }
+
     $callsign = $drequest->getRepository()->getCallsign();
 
     $content = array();
@@ -228,6 +232,7 @@ final class DiffusionCommitController extends DiffusionController {
 
       $change_list = new DifferentialChangesetListView();
       $change_list->setChangesets($changesets);
+      $change_list->setVisibleChangesets($changesets);
       $change_list->setRenderingReferences($references);
       $change_list->setRenderURI('/diffusion/'.$callsign.'/diff/');
       $change_list->setRepository($repository);
@@ -351,6 +356,17 @@ final class DiffusionCommitController extends DiffusionController {
       $props['Branches'] = $branches;
     }
 
+
+    $tags = $this->buildTags($request);
+    if ($tags) {
+      $props['Tags'] = $tags;
+    }
+
+    $refs = $this->buildRefs($request);
+    if ($refs) {
+      $props['Refs'] = $refs;
+    }
+
     if ($task_phids) {
       $task_list = array();
       foreach ($task_phids as $phid) {
@@ -459,6 +475,22 @@ final class DiffusionCommitController extends DiffusionController {
           ->setID('audit-action')
           ->setOptions($actions))
       ->appendChild(
+        id(new AphrontFormTokenizerControl())
+          ->setLabel('Add Auditors')
+          ->setName('auditors')
+          ->setControlID('add-auditors')
+          ->setControlStyle('display: none')
+          ->setID('add-auditors-tokenizer')
+          ->setDisableBehavior(true))
+      ->appendChild(
+        id(new AphrontFormTokenizerControl())
+          ->setLabel('Add CCs')
+          ->setName('ccs')
+          ->setControlID('add-ccs')
+          ->setControlStyle('display: none')
+          ->setID('add-ccs-tokenizer')
+          ->setDisableBehavior(true))
+      ->appendChild(
         id(new AphrontFormTextAreaControl())
           ->setLabel('Comments')
           ->setName('content')
@@ -483,11 +515,37 @@ final class DiffusionCommitController extends DiffusionController {
 
     require_celerity_resource('phabricator-transaction-view-css');
 
-    Javelin::initBehavior('audit-preview', array(
+    Javelin::initBehavior(
+      'differential-add-reviewers-and-ccs',
+      array(
+        'dynamic' => array(
+          'add-auditors-tokenizer' => array(
+            'actions' => array('add_auditors' => 1),
+            'src' => '/typeahead/common/users/',
+            'row' => 'add-auditors',
+            'ondemand' => PhabricatorEnv::getEnvConfig('tokenizer.ondemand'),
+            'placeholder' => 'Type a user name...',
+          ),
+          'add-ccs-tokenizer' => array(
+            'actions' => array('add_ccs' => 1),
+            'src' => '/typeahead/common/mailable/',
+            'row' => 'add-ccs',
+            'ondemand' => PhabricatorEnv::getEnvConfig('tokenizer.ondemand'),
+            'placeholder' => 'Type a user or mailing list...',
+          ),
+        ),
+        'select' => 'audit-action',
+      ));
+
+    Javelin::initBehavior('differential-feedback-preview', array(
       'uri'       => '/audit/preview/'.$commit->getID().'/',
       'preview'   => 'audit-preview',
       'content'   => 'audit-content',
       'action'    => 'audit-action',
+      'previewTokenizers' => array(
+        'auditors' => 'add-auditors-tokenizer',
+        'ccs'      => 'add-ccs-tokenizer',
+      ),
     ));
 
     $preview_panel =
@@ -530,6 +588,8 @@ final class DiffusionCommitController extends DiffusionController {
 
     $actions = array();
     $actions[PhabricatorAuditActionConstants::COMMENT] = true;
+    $actions[PhabricatorAuditActionConstants::ADD_CCS] = true;
+    $actions[PhabricatorAuditActionConstants::ADD_AUDITORS] = true;
 
     // We allow you to accept your own commits. A use case here is that you
     // notice an issue with your own commit and "Raise Concern" as an indicator
@@ -544,8 +604,10 @@ final class DiffusionCommitController extends DiffusionController {
     // commit's author.
     if (!$user_is_author) {
       $may_resign = false;
+
+      $authority_map = array_fill_keys($this->auditAuthorityPHIDs, true);
       foreach ($audit_requests as $request) {
-        if (empty($this->auditAuthorityPHIDs[$request->getAuditorPHID()])) {
+        if (empty($authority_map[$request->getAuditorPHID()])) {
           continue;
         }
         $may_resign = true;
@@ -621,7 +683,8 @@ final class DiffusionCommitController extends DiffusionController {
   private function renderHeadsupActionList(
     PhabricatorRepositoryCommit $commit) {
 
-    $user = $this->getRequest()->getUser();
+    $request = $this->getRequest();
+    $user = $request->getUser();
 
     $actions = array();
 
@@ -670,11 +733,105 @@ final class DiffusionCommitController extends DiffusionController {
     $action->setClass('transcripts-herald');
     $actions[] = $action;
 
+    $action = new AphrontHeadsupActionView();
+    $action->setName('Download Raw Diff');
+    $action->setURI($request->getRequestURI()->alter('diff', true));
+    $action->setClass('action-download');
+    $actions[] = $action;
+
     $action_list = new AphrontHeadsupActionListView();
     $action_list->setActions($actions);
 
     return $action_list;
   }
 
+  private function buildTags(DiffusionRequest $request) {
+    $tag_limit = 10;
+
+    $tag_query = DiffusionCommitTagsQuery::newFromDiffusionRequest($request);
+    $tag_query->setLimit($tag_limit + 1);
+    $tags = $tag_query->loadTags();
+
+    if (!$tags) {
+      return null;
+    }
+
+    $has_more_tags = (count($tags) > $tag_limit);
+    $tags = array_slice($tags, 0, $tag_limit);
+
+    $tag_links = array();
+    foreach ($tags as $tag) {
+      $tag_links[] = phutil_render_tag(
+        'a',
+        array(
+          'href' => $request->generateURI(
+            array(
+              'action'  => 'browse',
+              'commit'  => $tag->getName(),
+            )),
+        ),
+        phutil_escape_html($tag->getName()));
+    }
+
+    if ($has_more_tags) {
+      $tag_links[] = phutil_render_tag(
+        'a',
+        array(
+          'href' => $request->generateURI(
+            array(
+              'action'  => 'tags',
+            )),
+        ),
+        "More tags\xE2\x80\xA6");
+    }
+
+    $tag_links = implode(', ', $tag_links);
+
+    return $tag_links;
+  }
+
+  private function buildRefs(DiffusionRequest $request) {
+    // Not turning this into a proper Query class since it's pretty simple,
+    // one-off, and Git-specific.
+
+    $type_git = PhabricatorRepositoryType::REPOSITORY_TYPE_GIT;
+
+    $repository = $request->getRepository();
+    if ($repository->getVersionControlSystem() != $type_git) {
+      return null;
+    }
+
+    list($stdout) = $repository->execxLocalCommand(
+      'log --format=%s -n 1 %s --',
+      '%d',
+      $request->getCommit());
+
+    return trim($stdout, "() \n");
+  }
+
+  private function buildRawDiffResponse(DiffusionRequest $drequest) {
+    $raw_query = DiffusionRawDiffQuery::newFromDiffusionRequest($drequest);
+    $raw_diff  = $raw_query->loadRawDiff();
+
+    $hash = PhabricatorHash::digest($raw_diff);
+
+    $file = id(new PhabricatorFile())->loadOneWhere(
+      'contentHash = %s LIMIT 1',
+      $hash);
+    if (!$file) {
+      // We're just caching the data; this is always safe.
+      $unguarded = AphrontWriteGuard::beginScopedUnguardedWrites();
+
+      $file = PhabricatorFile::newFromFileData(
+        $raw_diff,
+        array(
+          'name' => $drequest->getCommit().'.diff',
+        ));
+
+      unset($unguarded);
+    }
+
+    return id(new AphrontRedirectResponse())->setURI($file->getBestURI());
+  }
 
 }

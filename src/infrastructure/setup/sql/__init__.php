@@ -6,9 +6,4 @@
 
 
 
-phutil_require_module('phutil', 'filesystem/filefinder');
-phutil_require_module('phutil', 'moduleutils');
-phutil_require_module('phutil', 'utils');
 
-
-phutil_require_source('PhabricatorSQLPatchList.php');

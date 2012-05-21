@@ -238,7 +238,8 @@ final class DifferentialRevisionViewController extends DifferentialController {
     $comment_view->setVersusDiffID($diff_vs);
 
     $changeset_view = new DifferentialChangesetListView();
-    $changeset_view->setChangesets($visible_changesets);
+    $changeset_view->setChangesets($changesets);
+    $changeset_view->setVisibleChangesets($visible_changesets);
 
     if (!$viewer_is_anonymous) {
       $changeset_view->setInlineCommentControllerURI(
@@ -288,17 +289,18 @@ final class DifferentialRevisionViewController extends DifferentialController {
     $toc_view = new DifferentialDiffTableOfContentsView();
     $toc_view->setChangesets($changesets);
     $toc_view->setVisibleChangesets($visible_changesets);
+    $toc_view->setRenderingReferences($rendering_references);
     $toc_view->setUnitTestData(idx($props, 'arc:unit', array()));
     if ($repository) {
       $toc_view->setRepository($repository);
     }
     $toc_view->setDiff($target);
     $toc_view->setUser($user);
-    $toc_view->setStandaloneViewLink(empty($visible_changesets));
     $toc_view->setVsMap($vs_map);
     $toc_view->setRevisionID($revision->getID());
     $toc_view->setWhitespace($whitespace);
 
+    $comment_form = null;
     if (!$viewer_is_anonymous) {
       $draft = id(new PhabricatorDraft())->loadOneWhere(
         'authorPHID = %s AND draftKey = %s',
@@ -312,6 +314,7 @@ final class DifferentialRevisionViewController extends DifferentialController {
 
       $comment_form = new DifferentialAddCommentView();
       $comment_form->setRevision($revision);
+      $comment_form->setAuxFields($aux_fields);
       $comment_form->setActions($this->getRevisionCommentActions($revision));
       $comment_form->setActionURI('/differential/comment/save/');
       $comment_form->setUser($user);
@@ -324,6 +327,7 @@ final class DifferentialRevisionViewController extends DifferentialController {
       array(
         'haunt' => $pane_id,
       ));
+    Javelin::initBehavior('differential-user-select');
 
     $page_pane = id(new DifferentialPrimaryPaneView())
       ->setLineWidthFromChangesets($changesets)
@@ -499,9 +503,9 @@ final class DifferentialRevisionViewController extends DifferentialController {
           $actions[DifferentialAction::ACTION_ABANDON] = true;
           $actions[DifferentialAction::ACTION_REQUEST] = true;
           $actions[DifferentialAction::ACTION_RETHINK] = true;
-          $actions[DifferentialAction::ACTION_COMMIT] = true;
+          $actions[DifferentialAction::ACTION_CLOSE] = true;
           break;
-        case ArcanistDifferentialRevisionStatus::COMMITTED:
+        case ArcanistDifferentialRevisionStatus::CLOSED:
           break;
         case ArcanistDifferentialRevisionStatus::ABANDONED:
           $actions[DifferentialAction::ACTION_RECLAIM] = true;
@@ -523,11 +527,11 @@ final class DifferentialRevisionViewController extends DifferentialController {
           $actions[DifferentialAction::ACTION_RESIGN] =
             $viewer_is_reviewer && !$viewer_did_accept;
           break;
-        case ArcanistDifferentialRevisionStatus::COMMITTED:
+        case ArcanistDifferentialRevisionStatus::CLOSED:
         case ArcanistDifferentialRevisionStatus::ABANDONED:
           break;
       }
-      if ($status != ArcanistDifferentialRevisionStatus::COMMITTED) {
+      if ($status != ArcanistDifferentialRevisionStatus::CLOSED) {
         $actions[DifferentialAction::ACTION_CLAIM] = true;
       }
     }

@@ -31,10 +31,6 @@ return array(
   // you through setting up Phabricator.
   'phabricator.setup'           => false,
 
-  // The default PHID for users who haven't uploaded a profile image. It should
-  // be 50x50px.
-  'user.default-profile-image-phid' => 'PHID-FILE-4d61229816cfe6f2b2a3',
-
 // -- IMPORTANT! Security! -------------------------------------------------- //
 
   // IMPORTANT: By default, Phabricator serves files from the same domain the
@@ -81,6 +77,45 @@ return array(
   'policy.allow-public'         => false,
 
 
+// -- Logging --------------------------------------------------------------- //
+
+  // To enable the Phabricator access log, specify a path here. The Phabricator
+  // access log can provide more detailed information about Phabricator access
+  // than normal HTTP access logs (for instance, it can show logged-in users,
+  // controllers, and other application data). If not set, no log will be
+  // written.
+  //
+  // Make sure the PHP process can write to the log!
+  'log.access.path'             => null,
+
+  // Format for the access log. If not set, the default format will be used:
+  //
+  //  "[%D]\t%h\t%u\t%M\t%C\t%m\t%U\t%c\t%T"
+  //
+  // Available variables are:
+  //
+  //  - %c The HTTP response code.
+  //  - %C The controller which handled the request.
+  //  - %D The request date.
+  //  - %e Epoch timestamp.
+  //  - %h The webserver's host name.
+  //  - %p The PID of the server process.
+  //  - %R The HTTP referrer.
+  //  - %r The remote IP.
+  //  - %T The request duration, in microseconds.
+  //  - %U The request path.
+  //  - %u The logged-in user, if one is logged in.
+  //  - %M The HTTP method.
+  //  - %m For conduit, the Conduit method which was invoked.
+  //
+  // If a variable isn't available (for example, %m appears in the file format
+  // but the request is not a Conduit request), it will be rendered as "-".
+  //
+  // Note that the default format is subject to change in the future, so if you
+  // rely on the log's format, specify it explicitly.
+  'log.access.format'           => null,
+
+
 // -- DarkConsole ----------------------------------------------------------- //
 
   // DarkConsole is a administrative debugging/profiling tool built into
@@ -111,6 +146,9 @@ return array(
     'phabricator.csrf-key',
     'facebook.application-secret',
     'github.application-secret',
+    'google.application-secret',
+    'phabricator.application-secret',
+    'disqus.application-secret',
     'phabricator.mail-key',
     'security.hmac-key',
   ),
@@ -318,6 +356,14 @@ return array(
   // affects Diffusion.
   'metamta.diffusion.reply-handler' => 'PhabricatorAuditReplyHandler',
 
+  // Prefix prepended to mail sent by Package.
+  'metamta.package.subject-prefix' => '[Package]',
+
+  // See 'metamta.maniphest.reply-handler'. This does similar thing for package
+  // except that it only supports sending out mail and doesn't handle incoming
+  // email.
+  'metamta.package.reply-handler' => 'OwnersPackageReplyHandler',
+
   // By default, Phabricator generates unique reply-to addresses and sends a
   // separate email to each recipient when you enable reply handling. This is
   // more secure than using "From" to establish user identity, but can mean
@@ -494,6 +540,25 @@ return array(
   // The Google "Client Secret" to use for Google API access.
   'google.application-secret'   => null,
 
+// -- Disqus OAuth ---------------------------------------------------------- //
+
+  // Can users use Disqus credentials to login to Phabricator?
+  'disqus.auth-enabled'         => false,
+
+  // Can users use Disqus credentials to create new Phabricator accounts?
+  'disqus.registration-enabled' => true,
+
+  // Are Disqus accounts permanently linked to Phabricator accounts, or can
+  // the user unlink them?
+  'disqus.auth-permanent'       => false,
+
+  // The Disqus "Client ID" to use for Disqus API access.
+  'disqus.application-id'       => null,
+
+  // The Disqus "Client Secret" to use for Disqus API access.
+  'disqus.application-secret'   => null,
+
+
 // -- Phabricator OAuth ----------------------------------------------------- //
 
   // Meta-town -- Phabricator is itself an OAuth Provider
@@ -627,6 +692,7 @@ return array(
     'image/png'   => 'image/png',
     'image/gif'   => 'image/gif',
     'text/plain'  => 'text/plain; charset=utf-8',
+    'text/x-diff' => 'text/plain; charset=utf-8',
 
     // ".ico" favicon files, which have mime type diversity. See:
     // http://en.wikipedia.org/wiki/ICO_(file_format)#MIME_type
@@ -700,6 +766,27 @@ return array(
   // and S3, in that order, if they have valid configurations above and a file
   // fits within configured limits.
   'storage.engine-selector' => 'PhabricatorDefaultFileStorageEngineSelector',
+
+  // Set the size of the largest file a user may upload. This is used to render
+  // text like "Maximum file size: 10MB" on interfaces where users can upload
+  // files, and files larger than this size will be rejected.
+  //
+  // Specify this limit in bytes, or using a "K", "M", or "G" suffix.
+  //
+  // NOTE: Setting this to a large size is NOT sufficient to allow users to
+  // upload large files. You must also configure a number of other settings. To
+  // configure file upload limits, consult the article "Configuring File Upload
+  // Limits" in the documentation. Once you've configured some limit across all
+  // levels of the server, you can set this limit to an appropriate value and
+  // the UI will then reflect the actual configured limit.
+  'storage.upload-size-limit'   => null,
+
+  // Phabricator puts databases in a namespace, which defualts to "phabricator"
+  // -- for instance, the Differential database is named
+  // "phabricator_differential" by default. You can change this namespace if you
+  // want. Normally, you should not do this unless you are developing
+  // Phabricator and using namespaces to separate multiple sandbox datasets.
+  'storage.default-namespace'    => 'phabricator',
 
 
 // -- Search ---------------------------------------------------------------- //
@@ -879,6 +966,11 @@ return array(
   // Directory that phd (the Phabricator daemon control script) should use to
   // track running daemons.
   'phd.pid-directory' => '/var/tmp/phd',
+
+  // Number of "TaskMaster" daemons that "phd start" should start. You can
+  // raise this if you have a task backlog, or explicitly launch more with
+  // "phd launch <N> taskmaster".
+  'phd.start-taskmasters' => 4,
 
   // This value is an input to the hash function when building resource hashes.
   // It has no security value, but if you accidentally poison user caches (by

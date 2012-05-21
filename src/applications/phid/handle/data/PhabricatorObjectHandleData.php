@@ -149,6 +149,13 @@ final class PhabricatorObjectHandleData {
             $images = mpull($images, 'getBestURI', 'getPHID');
           }
 
+          // TODO: This probably should not be part of Handles anymore, only
+          // MetaMTA actually uses it.
+          $emails = id(new PhabricatorUserEmail())->loadAllWhere(
+            'userPHID IN (%Ls) AND isPrimary = 1',
+            $phids);
+          $emails = mpull($emails, 'getAddress', 'getUserPHID');
+
           foreach ($phids as $phid) {
             $handle = new PhabricatorObjectHandle();
             $handle->setPHID($phid);
@@ -159,16 +166,20 @@ final class PhabricatorObjectHandleData {
               $user = $users[$phid];
               $handle->setName($user->getUsername());
               $handle->setURI('/p/'.$user->getUsername().'/');
-              $handle->setEmail($user->getEmail());
+              $handle->setEmail(idx($emails, $phid));
               $handle->setFullName(
                 $user->getUsername().' ('.$user->getRealName().')');
               $handle->setAlternateID($user->getID());
               $handle->setComplete(true);
-              $handle->setDisabled($user->getIsDisabled());
+              $handle->setDisabled($user->getIsDisabled() ||
+                                   $user->getIsSystemAgent());
 
               $img_uri = idx($images, $user->getProfileImagePHID());
               if ($img_uri) {
                 $handle->setImageURI($img_uri);
+              } else {
+                $handle->setImageURI(
+                  PhabricatorUser::getDefaultProfileImageURI());
               }
             }
             $handles[$phid] = $handle;
@@ -222,7 +233,7 @@ final class PhabricatorObjectHandleData {
               $handle->setComplete(true);
 
               $status = $rev->getStatus();
-              if (($status == ArcanistDifferentialRevisionStatus::COMMITTED) ||
+              if (($status == ArcanistDifferentialRevisionStatus::CLOSED) ||
                   ($status == ArcanistDifferentialRevisionStatus::ABANDONED)) {
                 $closed = PhabricatorObjectHandleStatus::STATUS_CLOSED;
                 $handle->setStatus($closed);

@@ -33,26 +33,50 @@ final class DifferentialRevisionStatusFieldSpecification
 
     $status = $revision->getStatus();
     $info = null;
+    $local_vcs = $diff->getSourceControlSystem();
+    $backing_vcs = $diff->getBackingVersionControlSystem();
+    if (!$backing_vcs) {
+      $backing_vcs = $local_vcs;
+    }
 
     if ($status == ArcanistDifferentialRevisionStatus::ACCEPTED) {
-      switch ($diff->getSourceControlSystem()) {
-        case PhabricatorRepositoryType::REPOSITORY_TYPE_MERCURIAL:
-          $next_step = '<tt>hg push</tt>';
-          break;
-        case PhabricatorRepositoryType::REPOSITORY_TYPE_GIT:
-          $next_step = '<tt>arc land</tt>';
-          break;
-        case PhabricatorRepositoryType::REPOSITORY_TYPE_SVN:
-          $next_step = '<tt>arc commit</tt>';
-          break;
+      $next_step = null;
+      if ($local_vcs == $backing_vcs) {
+        switch ($local_vcs) {
+          case PhabricatorRepositoryType::REPOSITORY_TYPE_MERCURIAL:
+            $next_step = '<tt>hg push</tt>';
+            break;
+          case PhabricatorRepositoryType::REPOSITORY_TYPE_GIT:
+            $next_step = '<tt>arc land</tt>';
+            break;
+          case PhabricatorRepositoryType::REPOSITORY_TYPE_SVN:
+            $next_step = '<tt>arc commit</tt>';
+            break;
+        }
+      } else {
+        $next_step = '<tt>arc amend</tt>';
       }
       if ($next_step) {
         $info = ' &middot; Next step: '.$next_step;
       }
-
     } else if ($status == ArcanistDifferentialRevisionStatus::CLOSED) {
       $committed = $revision->getDateCommitted();
-      $info = ' ('.phabricator_datetime($committed, $this->getUser()).')';
+      if ($committed) {
+        $verb = null;
+        switch ($backing_vcs) {
+          case PhabricatorRepositoryType::REPOSITORY_TYPE_MERCURIAL:
+          case PhabricatorRepositoryType::REPOSITORY_TYPE_GIT:
+            $verb = 'Pushed';
+            break;
+          case PhabricatorRepositoryType::REPOSITORY_TYPE_SVN:
+            $verb = 'Committed';
+            break;
+        }
+        if ($verb) {
+          $when = phabricator_datetime($committed, $this->getUser());
+          $info = " ({$verb} {$when})";
+        }
+      }
     }
 
     $status =

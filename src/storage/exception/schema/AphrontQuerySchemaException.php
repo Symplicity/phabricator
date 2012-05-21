@@ -25,7 +25,7 @@ final class AphrontQuerySchemaException extends AphrontQueryException {
     $message .=
       "\n\n".
       "NOTE: This usually indicates that the MySQL schema has not been ".
-      "properly upgraded. Run scripts/sql/upgrade_schema.php to ensure your ".
+      "properly upgraded. Run 'bin/storage upgrade' to ensure your ".
       "schema is up to date.";
 
     parent::__construct($message);

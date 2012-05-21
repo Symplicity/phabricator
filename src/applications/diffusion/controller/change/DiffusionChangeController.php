@@ -31,17 +31,32 @@ final class DiffusionChangeController extends DiffusionController {
       return new Aphront404Response();
     }
 
+    $callsign = $drequest->getRepository()->getCallsign();
+    $changesets = array(
+      0 => $changeset,
+    );
+
     $changeset_view = new DifferentialChangesetListView();
-    $changeset_view->setChangesets(
-      array(
-        0 => $changeset,
-      ));
+    $changeset_view->setChangesets($changesets);
+    $changeset_view->setVisibleChangesets($changesets);
     $changeset_view->setRenderingReferences(
       array(
         0 => $diff_query->getRenderingReference(),
       ));
+
+    $raw_params = array(
+      'action' => 'browse',
+      'params' => array(
+        'view' => 'raw',
+      ),
+    );
+    $right_uri = $drequest->generateURI($raw_params);
+    $raw_params['params']['before'] = $drequest->getRawCommit();
+    $left_uri = $drequest->generateURI($raw_params);
+    $changeset_view->setRawFileURIs($left_uri, $right_uri);
+
     $changeset_view->setRenderURI(
-      '/diffusion/'.$drequest->getRepository()->getCallsign().'/diff/');
+      '/diffusion/'.$callsign.'/diff/');
     $changeset_view->setWhitespace(
       DifferentialChangesetParser::WHITESPACE_SHOW_ALL);
     $changeset_view->setUser($this->getRequest()->getUser());

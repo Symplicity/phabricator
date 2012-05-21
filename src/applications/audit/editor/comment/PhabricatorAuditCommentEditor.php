@@ -22,6 +22,8 @@ final class PhabricatorAuditCommentEditor {
   private $user;
 
   private $attachInlineComments;
+  private $auditors = array();
+  private $ccs = array();
 
   public function __construct(PhabricatorRepositoryCommit $commit) {
     $this->commit = $commit;
@@ -30,6 +32,16 @@ final class PhabricatorAuditCommentEditor {
 
   public function setUser(PhabricatorUser $user) {
     $this->user = $user;
+    return $this;
+  }
+
+  public function addAuditors(array $auditor_phids) {
+    $this->auditors = array_merge($this->auditors, $auditor_phids);
+    return $this;
+  }
+
+  public function addCCs(array $cc_phids) {
+    $this->ccs = array_merge($this->ccs, $cc_phids);
     return $this;
   }
 
@@ -61,11 +73,37 @@ final class PhabricatorAuditCommentEditor {
       ->setTargetPHID($commit->getPHID())
       ->save();
 
+    $content_blocks = array($comment->getContent());
+
     if ($inline_comments) {
       foreach ($inline_comments as $inline) {
         $inline->setAuditCommentID($comment->getID());
         $inline->save();
+        $content_blocks[] = $inline->getContent();
       }
+    }
+
+    $ccs = $this->ccs;
+    $auditors = $this->auditors;
+
+    $metadata = $comment->getMetadata();
+    $metacc = array();
+
+    // Find any "@mentions" in the content blocks.
+    $mention_ccs = PhabricatorMarkupEngine::extractPHIDsFromMentions(
+      $content_blocks);
+    if ($mention_ccs) {
+      $metacc = idx(
+        $metadata,
+        PhabricatorAuditComment::METADATA_ADDED_CCS,
+        array());
+      foreach ($mention_ccs as $cc_phid) {
+        $metacc[] = $cc_phid;
+      }
+    }
+
+    if ($metacc) {
+      $ccs = array_merge($ccs, $metacc);
     }
 
     // When a user submits an audit comment, we update all the audit requests
@@ -101,6 +139,30 @@ final class PhabricatorAuditCommentEditor {
           $request->save();
         }
       }
+    } else if ($action == PhabricatorAuditActionConstants::RESIGN) {
+      // "Resign" has unusual rules for writing user rows, only affects the
+      // user row (never package/project rows), and always affects the user
+      // row (other actions don't, if they were able to affect a package/project
+      // row).
+      $user_request = null;
+      foreach ($requests as $request) {
+        if ($request->getAuditorPHID() == $user->getPHID()) {
+          $user_request = $request;
+          break;
+        }
+      }
+      if (!$user_request) {
+        $user_request = id(new PhabricatorRepositoryAuditRequest())
+          ->setCommitPHID($commit->getPHID())
+          ->setAuditorPHID($user->getPHID())
+          ->setAuditReasons(array("Resigned"));
+      }
+
+      $user_request
+        ->setAuditStatus(PhabricatorAuditStatusConstants::RESIGNED)
+        ->save();
+
+      $requests[] = $user_request;
     } else {
       $have_any_requests = false;
       foreach ($requests as $request) {
@@ -114,7 +176,9 @@ final class PhabricatorAuditCommentEditor {
         $new_status = null;
         switch ($action) {
           case PhabricatorAuditActionConstants::COMMENT:
-            // Comments don't change audit statuses.
+          case PhabricatorAuditActionConstants::ADD_CCS:
+          case PhabricatorAuditActionConstants::ADD_AUDITORS:
+            // Commenting or adding cc's/auditors doesn't change status.
             break;
           case PhabricatorAuditActionConstants::ACCEPT:
             if (!$user_is_author || $request_is_for_user) {
@@ -128,13 +192,6 @@ final class PhabricatorAuditCommentEditor {
             if (!$user_is_author || $request_is_for_user) {
               // See above.
               $new_status = PhabricatorAuditStatusConstants::CONCERNED;
-            }
-            break;
-          case PhabricatorAuditActionConstants::RESIGN:
-            // NOTE: Resigning resigns ONLY your user request, not the requests
-            // of any projects or packages you are a member of.
-            if ($request_is_for_user) {
-              $new_status = PhabricatorAuditStatusConstants::RESIGNED;
             }
             break;
           default:
@@ -152,6 +209,8 @@ final class PhabricatorAuditCommentEditor {
         $new_status = null;
         switch ($action) {
           case PhabricatorAuditActionConstants::COMMENT:
+          case PhabricatorAuditActionConstants::ADD_CCS:
+          case PhabricatorAuditActionConstants::ADD_AUDITORS:
             $new_status = PhabricatorAuditStatusConstants::AUDIT_NOT_REQUIRED;
             break;
           case PhabricatorAuditActionConstants::ACCEPT:
@@ -159,11 +218,6 @@ final class PhabricatorAuditCommentEditor {
             break;
           case PhabricatorAuditActionConstants::CONCERN:
             $new_status = PhabricatorAuditStatusConstants::CONCERNED;
-            break;
-          case PhabricatorAuditActionConstants::RESIGN:
-            // If you're on an audit because of a package, we write an explicit
-            // resign row to remove it from your queue.
-            $new_status = PhabricatorAuditStatusConstants::RESIGNED;
             break;
           case PhabricatorAuditActionConstants::CLOSE:
             // Impossible to reach this block with 'close'.
@@ -181,12 +235,65 @@ final class PhabricatorAuditCommentEditor {
       }
     }
 
+    $requests_by_auditor = mpull($requests, null, 'getAuditorPHID');
+    $requests_phids = array_keys($requests_by_auditor);
+
+    $ccs = array_diff($ccs, $requests_phids);
+    $auditors = array_diff($auditors, $requests_phids);
+
+    if ($action == PhabricatorAuditActionConstants::ADD_CCS) {
+      if ($ccs) {
+        $metadata[PhabricatorAuditComment::METADATA_ADDED_CCS] = $ccs;
+        $comment->setMetaData($metadata);
+      } else {
+        $comment->setAction(PhabricatorAuditActionConstants::COMMENT);
+      }
+    }
+
+    if ($action == PhabricatorAuditActionConstants::ADD_AUDITORS) {
+      if ($auditors) {
+        $metadata[PhabricatorAuditComment::METADATA_ADDED_AUDITORS]
+          = $auditors;
+        $comment->setMetaData($metadata);
+      } else {
+        $comment->setAction(PhabricatorAuditActionConstants::COMMENT);
+      }
+    }
+
+    $comment->save();
+
+    if ($auditors) {
+      foreach ($auditors as $auditor_phid) {
+        $audit_requested = PhabricatorAuditStatusConstants::AUDIT_REQUESTED;
+        $requests[] = id (new PhabricatorRepositoryAuditRequest())
+          ->setCommitPHID($commit->getPHID())
+          ->setAuditorPHID($auditor_phid)
+          ->setAuditStatus($audit_requested)
+          ->setAuditReasons(
+            array('Added by ' . $user->getUsername()))
+          ->save();
+      }
+    }
+
+    if ($ccs) {
+      foreach ($ccs as $cc_phid) {
+        $audit_cc = PhabricatorAuditStatusConstants::CC;
+        $requests[] = id (new PhabricatorRepositoryAuditRequest())
+          ->setCommitPHID($commit->getPHID())
+          ->setAuditorPHID($cc_phid)
+          ->setAuditStatus($audit_cc)
+          ->setAuditReasons(
+            array('Added by ' . $user->getUsername()))
+          ->save();
+      }
+    }
+
     $commit->updateAuditStatus($requests);
     $commit->save();
 
     $this->publishFeedStory($comment, array_keys($audit_phids));
     PhabricatorSearchCommitIndexer::indexCommit($commit);
-    $this->sendMail($comment, $other_comments, $inline_comments);
+    $this->sendMail($comment, $other_comments, $inline_comments, $requests);
   }
 
 
@@ -256,7 +363,9 @@ final class PhabricatorAuditCommentEditor {
   private function sendMail(
     PhabricatorAuditComment $comment,
     array $other_comments,
-    array $inline_comments) {
+    array $inline_comments,
+    array $requests) {
+
     assert_instances_of($other_comments, 'PhabricatorAuditComment');
     assert_instances_of($inline_comments, 'PhabricatorInlineCommentInterface');
 
@@ -277,6 +386,8 @@ final class PhabricatorAuditCommentEditor {
       PhabricatorAuditActionConstants::ACCEPT   => 'Accepted',
       PhabricatorAuditActionConstants::RESIGN   => 'Resigned',
       PhabricatorAuditActionConstants::CLOSE    => 'Closed',
+      PhabricatorAuditActionConstants::ADD_CCS => 'Added CCs',
+      PhabricatorAuditActionConstants::ADD_AUDITORS => 'Added Auditors',
     );
     $verb = idx($map, $comment->getAction(), 'Commented On');
 
@@ -297,6 +408,7 @@ final class PhabricatorAuditCommentEditor {
       $inline_comments);
 
     $email_to = array();
+    $email_cc = array();
 
     $author_phid = $data->getCommitDetail('authorPHID');
     if ($author_phid) {
@@ -306,6 +418,12 @@ final class PhabricatorAuditCommentEditor {
     $email_cc = array();
     foreach ($other_comments as $other_comment) {
       $email_cc[] = $other_comment->getActorPHID();
+    }
+
+    foreach ($requests as $request) {
+      if ($request->getAuditStatus() == PhabricatorAuditStatusConstants::CC) {
+        $email_cc[] = $request->getAuditorPHID();
+      }
     }
 
     $phids = array_merge($email_to, $email_cc);

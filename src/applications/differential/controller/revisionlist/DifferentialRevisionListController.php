@@ -379,7 +379,7 @@ final class DifferentialRevisionListController extends DifferentialController {
             array(
               'all'       => 'All',
               'open'      => 'Open',
-              'committed' => 'Committed',
+              'closed'    => 'Closed',
               'abandoned' => 'Abandoned',
             ));
       case 'order':
@@ -406,8 +406,8 @@ final class DifferentialRevisionListController extends DifferentialController {
       case 'status':
         if ($params['status'] == 'open') {
           $query->withStatus(DifferentialRevisionQuery::STATUS_OPEN);
-        } else if ($params['status'] == 'committed') {
-          $query->withStatus(DifferentialRevisionQuery::STATUS_COMMITTED);
+        } else if ($params['status'] == 'closed') {
+          $query->withStatus(DifferentialRevisionQuery::STATUS_CLOSED);
         } else if ($params['status'] == 'abandoned') {
           $query->withStatus(DifferentialRevisionQuery::STATUS_ABANDONED);
         }
@@ -439,8 +439,7 @@ final class DifferentialRevisionListController extends DifferentialController {
           $user_phid);
 
         $view = id(clone $template)
-          ->setRevisions($active)
-          ->setNoDataString("You have no active revisions requiring action.");
+          ->setRevisions($active);
         $views[] = array(
           'title' => 'Action Required',
           'view'  => $view,
@@ -469,8 +468,7 @@ final class DifferentialRevisionListController extends DifferentialController {
         }
 
         $view = id(clone $template)
-          ->setRevisions($waiting)
-          ->setNoDataString("You have no active revisions waiting on others.");
+          ->setRevisions($waiting);
         $views[] = array(
           'title' => 'Waiting On Others',
           'view'  => $view,

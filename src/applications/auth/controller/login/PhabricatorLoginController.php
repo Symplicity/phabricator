@@ -117,9 +117,7 @@ final class PhabricatorLoginController
           }
         }
         if (!$user) {
-          $user = id(new PhabricatorUser())->loadOneWhere(
-            'username = %s',
-            $username_or_email);
+          $user = PhabricatorUser::loadOneWithEmailAddress($username_or_email);
         }
         if (!$errors && !$skip_password_check) {
           // Perform username/password tests only if we didn't get rate limited

@@ -64,6 +64,11 @@ final class PhabricatorOAuthProviderGitHub extends PhabricatorOAuthProvider {
     return 'https://github.com/login/oauth/access_token';
   }
 
+  protected function getTokenExpiryKey() {
+    // github access tokens do not have time-based expiry
+    return null;
+  }
+
   public function getTestURIs() {
     return array(
       'http://github.com',
@@ -79,7 +84,9 @@ final class PhabricatorOAuthProviderGitHub extends PhabricatorOAuthProvider {
   }
 
   public function setUserData($data) {
-    $this->userData = idx(json_decode($data, true), 'user');
+    $data = idx(json_decode($data, true), 'user');
+    $this->validateUserData($data);
+    $this->userData = $data;
     return $this;
   }
 
@@ -114,6 +121,10 @@ final class PhabricatorOAuthProviderGitHub extends PhabricatorOAuthProvider {
 
   public function retrieveUserRealName() {
     return idx($this->userData, 'name');
+  }
+
+  public function shouldDiagnoseAppLogin() {
+    return true;
   }
 
 }

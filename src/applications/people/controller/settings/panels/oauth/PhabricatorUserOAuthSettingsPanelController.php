@@ -205,10 +205,7 @@ final class PhabricatorUserOAuthSettingsPanelController
     $userinfo_uri = new PhutilURI($provider->getUserInfoURI());
     $token        = $oauth_info->getToken();
     try {
-      $userinfo_uri->setQueryParams(
-        array(
-          'access_token' => $token,
-        ));
+      $userinfo_uri->setQueryParam('access_token', $token);
       $user_data = @file_get_contents($userinfo_uri);
       $provider->setUserData($user_data);
       $provider->setAccessToken($token);
@@ -226,7 +223,12 @@ final class PhabricatorUserOAuthSettingsPanelController
         $error = 'Unable to retrieve image.';
       }
     } catch (Exception $e) {
-      $error = 'Unable to save image.';
+      if ($e instanceof PhabricatorOAuthProviderException) {
+        $error = sprintf('Unable to retrieve image from %s',
+                         $provider->getProviderName());
+      } else {
+        $error = 'Unable to save image.';
+      }
     }
     $notice = new AphrontErrorView();
     if ($error) {

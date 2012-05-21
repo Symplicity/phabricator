@@ -18,12 +18,21 @@
 
 /**
  * @group conduit
+ * @deprecated
  */
 final class ConduitAPI_differential_markcommitted_Method
   extends ConduitAPIMethod {
 
+  public function getMethodStatus() {
+    return self::METHOD_STATUS_DEPRECATED;
+  }
+
+  public function getMethodStatusDescription() {
+    return "Replaced by 'differential.close'.";
+  }
+
   public function getMethodDescription() {
-    return "Mark Differential revisions as committed.";
+    return "Mark a revision closed.";
   }
 
   public function defineParamTypes() {
@@ -50,13 +59,7 @@ final class ConduitAPI_differential_markcommitted_Method
       throw new ConduitException('ERR_NOT_FOUND');
     }
 
-    if ($revision->getStatus() ==
-        ArcanistDifferentialRevisionStatus::COMMITTED) {
-      // This can occur if someone runs 'mark-committed' and hits a race, or
-      // they have a remote hook installed but don't have the
-      // 'remote_hook_installed' flag set, or similar. In any case, just treat
-      // it as a no-op rather than adding another "X committed this revision"
-      // message to the revision comments.
+    if ($revision->getStatus() == ArcanistDifferentialRevisionStatus::CLOSED) {
       return;
     }
 
@@ -65,10 +68,8 @@ final class ConduitAPI_differential_markcommitted_Method
     $editor = new DifferentialCommentEditor(
       $revision,
       $request->getUser()->getPHID(),
-      DifferentialAction::ACTION_COMMIT);
+      DifferentialAction::ACTION_CLOSE);
     $editor->save();
-
-    return;
   }
 
 }

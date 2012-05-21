@@ -31,8 +31,11 @@ abstract class DiffusionRequest {
   protected $callsign;
   protected $path;
   protected $line;
+  protected $symbolicCommit;
   protected $commit;
   protected $branch;
+  protected $commitType = 'commit';
+  protected $tagContent;
 
   protected $repository;
   protected $repositoryCommit;
@@ -174,9 +177,10 @@ abstract class DiffusionRequest {
    * @task new
    */
   final private function initializeFromDictionary(array $data) {
-    $this->path       = idx($data, 'path');
-    $this->commit     = idx($data, 'commit');
-    $this->line       = idx($data, 'line');
+    $this->path           = idx($data, 'path');
+    $this->symbolicCommit = idx($data, 'commit');
+    $this->commit         = idx($data, 'commit');
+    $this->line           = idx($data, 'line');
 
     if ($this->getSupportsBranches()) {
       $this->branch = idx($data, 'branch');
@@ -206,8 +210,16 @@ abstract class DiffusionRequest {
     return $this->commit;
   }
 
+  public function getSymbolicCommit() {
+    return $this->symbolicCommit;
+  }
+
   public function getBranch() {
     return $this->branch;
+  }
+
+  public function getTagContent() {
+    return $this->tagContent;
   }
 
   public function loadCommit() {
@@ -339,6 +351,7 @@ abstract class DiffusionRequest {
     $path = "{$branch}{$path}";
 
     if (strlen($commit)) {
+      $commit = str_replace('$', '$$', $commit);
       $commit = ';'.phutil_escape_uri($commit);
     }
 
@@ -356,6 +369,7 @@ abstract class DiffusionRequest {
       case 'change':
       case 'lastmodified':
       case 'tags':
+      case 'branches':
         $req_callsign = true;
         break;
       case 'branch':
@@ -389,6 +403,7 @@ abstract class DiffusionRequest {
       case 'browse':
       case 'lastmodified':
       case 'tags':
+      case 'branches':
         $uri = "/diffusion/{$callsign}{$action}/{$path}{$commit}{$line}";
         break;
       case 'branch':
@@ -459,20 +474,30 @@ abstract class DiffusionRequest {
     // Consume the back part of the URI, up to the first "$". Use a negative
     // lookbehind to prevent matching '$$'. We double the '$' symbol when
     // encoding so that files with names like "money/$100" will survive.
-    if (preg_match('@(?<![$])[$]([\d-]+)$@', $blob, $matches)) {
+    $pattern = '@(?:(?:^|[^$])(?:[$][$])*)[$]([\d-]+)$@';
+    if (preg_match($pattern, $blob, $matches)) {
       $result['line'] = $matches[1];
       $blob = substr($blob, 0, -(strlen($matches[1]) + 1));
     }
 
-    // Consume the commit name, stopping on ';;'.
-    if (preg_match('@(?<!;);([a-z0-9]+)$@', $blob, $matches)) {
+    // We've consumed the line number if it exists, so unescape "$" in the
+    // rest of the string.
+    $blob = str_replace('$$', '$', $blob);
+
+    // Consume the commit name, stopping on ';;'. We allow any character to
+    // appear in commits names, as they can sometimes be symbolic names (like
+    // tag names or refs).
+    if (preg_match('@(?:(?:^|[^;])(?:;;)*);([^;].*)$@', $blob, $matches)) {
       $result['commit'] = $matches[1];
       $blob = substr($blob, 0, -(strlen($matches[1]) + 1));
     }
 
-    // Un-double our delimiter characters.
+    // We've consumed the commit if it exists, so unescape ";" in the rest
+    // of the string.
+    $blob = str_replace(';;', ';', $blob);
+
     if (strlen($blob)) {
-      $result['path'] = str_replace(array(';;', '$$'), array(';', '$'), $blob);
+      $result['path'] = $blob;
     }
 
     $parts = explode('/', $result['path']);
@@ -485,6 +510,18 @@ abstract class DiffusionRequest {
     }
 
     return $result;
+  }
+
+  protected function raiseCloneException() {
+    $host = php_uname('n');
+    $callsign = $this->getRepository()->getCallsign();
+    throw new DiffusionSetupException(
+      "The working copy for this repository ('{$callsign}') hasn't been ".
+      "cloned yet on this machine ('{$host}'). Make sure you've started the ".
+      "Phabricator daemons. If this problem persists for longer than a clone ".
+      "should take, check the daemon logs (in the Daemon Console) to see if ".
+      "there were errors cloning the repository. Consult the 'Diffusion User ".
+      "Guide' in the documentation for help setting up repositories.");
   }
 
 }

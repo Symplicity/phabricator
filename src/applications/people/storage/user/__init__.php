@@ -7,13 +7,16 @@
 
 
 phutil_require_module('phabricator', 'aphront/writeguard');
+phutil_require_module('phabricator', 'applications/files/storage/file');
 phutil_require_module('phabricator', 'applications/metamta/storage/mail');
 phutil_require_module('phabricator', 'applications/people/storage/base');
+phutil_require_module('phabricator', 'applications/people/storage/email');
 phutil_require_module('phabricator', 'applications/people/storage/log');
 phutil_require_module('phabricator', 'applications/people/storage/preferences');
 phutil_require_module('phabricator', 'applications/phid/constants');
 phutil_require_module('phabricator', 'applications/phid/storage/phid');
 phutil_require_module('phabricator', 'applications/search/index/indexer/user');
+phutil_require_module('phabricator', 'infrastructure/celerity/api');
 phutil_require_module('phabricator', 'infrastructure/env');
 phutil_require_module('phabricator', 'infrastructure/util/hash');
 phutil_require_module('phabricator', 'storage/qsprintf');

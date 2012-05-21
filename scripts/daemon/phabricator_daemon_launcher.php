@@ -2,7 +2,7 @@
 <?php
 
 /*
- * Copyright 2011 Facebook, Inc.
+ * Copyright 2012 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -34,7 +34,8 @@ function must_have_extension($ext) {
   }
 }
 
-switch (isset($argv[1]) ? $argv[1] : 'help') {
+$command = isset($argv[1]) ? $argv[1] : 'help';
+switch ($command) {
   case 'list':
     $err = $control->executeListCommand();
     exit($err);
@@ -48,90 +49,72 @@ switch (isset($argv[1]) ? $argv[1] : 'help') {
     $err = $control->executeStopCommand($pass_argv);
     exit($err);
 
-  case 'repository-launch-readonly':
-    $need_launch = phd_load_tracked_repositories_of_type('git');
-    if (!$need_launch) {
-      echo "There are no repositories with tracking enabled.\n";
-    } else {
-      will_launch($control);
-
-      foreach ($need_launch as $repository) {
-        $name = $repository->getName();
-        $callsign = $repository->getCallsign();
-        $desc = "'{$name}' ({$callsign})";
-        $phid = $repository->getPHID();
-
-        echo "Launching 'git fetch' daemon on the {$desc} repository...\n";
-        $control->launchDaemon(
-          'PhabricatorRepositoryGitFetchDaemon',
-          array(
-            $phid,
-          ));
-      }
+  case 'restart':
+    $err = $control->executeStopCommand(array());
+    if ($err) {
+      exit($err);
     }
+    /* Fall Through */
+  case 'start':
+    $running = $control->loadRunningDaemons();
+    if ($running) {
+      echo phutil_console_wrap(
+        "phd start: Unable to start daemons because daemons are already ".
+        "running.\n".
+        "You can view running daemons with 'phd status'.\n".
+        "You can stop running daemons with 'phd stop'.\n".
+        "You can use 'phd restart' to stop all daemons before starting new ".
+        "daemons.\n");
+      exit(1);
+    }
+
+    $daemons = array(
+      array('PhabricatorRepositoryPullLocalDaemon', array()),
+      array('PhabricatorGarbageCollectorDaemon', array()),
+    );
+
+    $taskmasters = PhabricatorEnv::getEnvConfig('phd.start-taskmasters');
+    for ($ii = 0; $ii < $taskmasters; $ii++) {
+      $daemons[] = array('PhabricatorTaskmasterDaemon', array());
+    }
+
+    will_launch($control);
+    foreach ($daemons as $spec) {
+      list($name, $argv) = $spec;
+      echo "Launching '{$name}'...\n";
+      $control->launchDaemon($name, $argv);
+    }
+
+    echo "Done.\n";
     break;
 
+  case 'repository-launch-readonly':
   case 'repository-launch-master':
+    if ($command == 'repository-launch-readonly') {
+      $daemon_args = array(
+        '--',
+        '--no-discovery',
+      );
+    } else {
+      $daemon_args = array();
+    }
+
     $need_launch = phd_load_tracked_repositories();
     if (!$need_launch) {
       echo "There are no repositories with tracking enabled.\n";
-    } else {
-      will_launch($control);
-
-      foreach ($need_launch as $repository) {
-        $name = $repository->getName();
-        $callsign = $repository->getCallsign();
-        $desc = "'{$name}' ({$callsign})";
-        $phid = $repository->getPHID();
-
-        switch ($repository->getVersionControlSystem()) {
-          case PhabricatorRepositoryType::REPOSITORY_TYPE_GIT:
-            echo "Launching 'git fetch' daemon on the {$desc} repository...\n";
-            $control->launchDaemon(
-              'PhabricatorRepositoryGitFetchDaemon',
-              array(
-                $phid,
-              ));
-            echo "Launching discovery daemon on the {$desc} repository...\n";
-            $control->launchDaemon(
-              'PhabricatorRepositoryGitCommitDiscoveryDaemon',
-              array(
-                $phid,
-              ));
-            break;
-          case PhabricatorRepositoryType::REPOSITORY_TYPE_SVN:
-            echo "Launching discovery daemon on the {$desc} repository...\n";
-            $control->launchDaemon(
-              'PhabricatorRepositorySvnCommitDiscoveryDaemon',
-              array(
-                $phid,
-              ));
-            break;
-          case PhabricatorRepositoryType::REPOSITORY_TYPE_MERCURIAL:
-            echo "Launching 'hg pull' daemon on the {$desc} repository...\n";
-            $control->launchDaemon(
-              'PhabricatorRepositoryMercurialPullDaemon',
-              array(
-                $phid,
-              ));
-            echo "Launching discovery daemon on the {$desc} repository...\n";
-            $control->launchDaemon(
-              'PhabricatorRepositoryMercurialCommitDiscoveryDaemon',
-              array(
-                $phid,
-              ));
-            break;
-
-        }
-      }
-
-      echo "Launching CommitTask daemon...\n";
-      $control->launchDaemon(
-        'PhabricatorRepositoryCommitTaskDaemon',
-        array());
-
-      echo "Done.\n";
+      exit(1);
     }
+
+    will_launch($control);
+
+    echo "Launching PullLocal daemon...\n";
+    $control->launchDaemon(
+      'PhabricatorRepositoryPullLocalDaemon',
+      $daemon_args);
+
+    echo "NOTE: '{$command}' is deprecated. Consult the documentation.\n";
+
+    echo "Done.\n";
     break;
 
   case 'launch':
@@ -222,18 +205,6 @@ switch (isset($argv[1]) ? $argv[1] : 'help') {
   default:
     $err = $control->executeHelpCommand();
     exit($err);
-}
-
-function phd_load_tracked_repositories_of_type($type) {
-  $repositories = phd_load_tracked_repositories();
-
-  foreach ($repositories as $key => $repository) {
-    if ($repository->getVersionControlSystem() != $type) {
-      unset($repositories[$key]);
-    }
-  }
-
-  return $repositories;
 }
 
 function phd_load_tracked_repositories() {

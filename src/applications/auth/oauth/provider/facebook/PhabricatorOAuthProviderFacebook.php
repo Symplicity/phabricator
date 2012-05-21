@@ -73,6 +73,10 @@ final class PhabricatorOAuthProviderFacebook extends PhabricatorOAuthProvider {
     return 'https://graph.facebook.com/oauth/access_token';
   }
 
+  protected function getTokenExpiryKey() {
+    return 'expires';
+  }
+
   public function getUserInfoURI() {
     return 'https://graph.facebook.com/me';
   }
@@ -82,7 +86,9 @@ final class PhabricatorOAuthProviderFacebook extends PhabricatorOAuthProvider {
   }
 
   public function setUserData($data) {
-    $this->userData = json_decode($data, true);
+    $data = json_decode($data, true);
+    $this->validateUserData($data);
+    $this->userData = $data;
     return $this;
   }
 
@@ -114,6 +120,10 @@ final class PhabricatorOAuthProviderFacebook extends PhabricatorOAuthProvider {
 
   public function retrieveUserRealName() {
     return $this->userData['name'];
+  }
+
+  public function shouldDiagnoseAppLogin() {
+    return true;
   }
 
 }

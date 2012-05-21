@@ -27,8 +27,6 @@ abstract class AphrontMySQLDatabaseConnectionBase
 
   private $nextError;
 
-  private static $connectionCache = array();
-
   abstract protected function connect();
   abstract protected function rawQuery($raw_query);
   abstract protected function fetchAssoc($result);
@@ -83,33 +81,14 @@ abstract class AphrontMySQLDatabaseConnectionBase
   private function closeConnection() {
     if ($this->connection) {
       $this->connection = null;
-      $key = $this->getConnectionCacheKey();
-      unset(self::$connectionCache[$key]);
     }
-  }
-
-  private function getConnectionCacheKey() {
-    $user = $this->getConfiguration('user');
-    $host = $this->getConfiguration('host');
-    $database = $this->getConfiguration('database');
-
-    return "{$user}:{$host}:{$database}";
   }
 
   private function establishConnection() {
-    $this->closeConnection();
-
-    $key = $this->getConnectionCacheKey();
-    if (isset(self::$connectionCache[$key])) {
-      $this->connection = self::$connectionCache[$key];
-      return;
-    }
-
     $start = microtime(true);
 
     $host = $this->getConfiguration('host');
     $database = $this->getConfiguration('database');
-
 
     $profiler = PhutilServiceProfiler::getInstance();
     $call_id = $profiler->beginServiceCall(
@@ -137,7 +116,6 @@ abstract class AphrontMySQLDatabaseConnectionBase
       }
     }
 
-    self::$connectionCache[$key] = $conn;
     $this->connection = $conn;
   }
 
@@ -247,7 +225,7 @@ abstract class AphrontMySQLDatabaseConnectionBase
         throw new AphrontQueryConnectionLostException($exmsg);
       case 1213: // Deadlock
       case 1205: // Lock wait timeout exceeded
-        throw new AphrontQueryRecoverableException($exmsg);
+        throw new AphrontQueryDeadlockException($exmsg);
       case 1062: // Duplicate Key
         // NOTE: In some versions of MySQL we get a key name back here, but
         // older versions just give us a key index ("key 2") so it's not
@@ -260,6 +238,7 @@ abstract class AphrontMySQLDatabaseConnectionBase
       case 1143: // Access denied to column
         throw new AphrontQueryAccessDeniedException($exmsg);
       case 1146: // No such table
+      case 1049: // No such database
       case 1054: // Unknown column "..." in field list
         throw new AphrontQuerySchemaException($exmsg);
       default:

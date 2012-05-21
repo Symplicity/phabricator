@@ -22,6 +22,7 @@ abstract class PhabricatorOAuthProvider {
   const PROVIDER_GITHUB      = 'github';
   const PROVIDER_GOOGLE      = 'google';
   const PROVIDER_PHABRICATOR = 'phabricator';
+  const PROVIDER_DISQUS      = 'disqus';
 
   private $accessToken;
 
@@ -45,7 +46,30 @@ abstract class PhabricatorOAuthProvider {
     return array();
   }
 
+  /**
+   * If the provider supports application login, the diagnostics page can try
+   * to test it. Most providers do not support this (Facebook does).
+   */
+  public function shouldDiagnoseAppLogin() {
+    return false;
+  }
+
   abstract public function getTokenURI();
+
+  /**
+   * Access tokens expire based on an implementation-specific key.
+   */
+  abstract protected function getTokenExpiryKey();
+  public function getTokenExpiryFromArray(array $data) {
+    $key = $this->getTokenExpiryKey();
+    if ($key) {
+      $expiry_value = idx($data, $key, 0);
+      if ($expiry_value) {
+        return time() + $expiry_value;
+      }
+    }
+    return 0;
+  }
 
   /**
    * If the provider needs extra stuff in the token request, return it here.
@@ -98,6 +122,19 @@ abstract class PhabricatorOAuthProvider {
     return $this->accessToken;
   }
 
+  /**
+   * Often used within setUserData to make sure $data is not completely
+   * junk. More granular validations of data might be necessary depending on
+   * the provider and are generally encouraged.
+   */
+  final protected function validateUserData($data) {
+    if (empty($data) || !is_array($data)) {
+      throw new PhabricatorOAuthProviderException();
+    }
+
+    return true;
+  }
+
   public static function newProvider($which) {
     switch ($which) {
       case self::PROVIDER_FACEBOOK:
@@ -112,6 +149,9 @@ abstract class PhabricatorOAuthProvider {
       case self::PROVIDER_PHABRICATOR:
         $class = 'PhabricatorOAuthProviderPhabricator';
         break;
+      case self::PROVIDER_DISQUS:
+        $class = 'PhabricatorOAuthProviderDisqus';
+        break;
       default:
         throw new Exception('Unknown OAuth provider.');
     }
@@ -125,6 +165,7 @@ abstract class PhabricatorOAuthProvider {
       self::PROVIDER_GITHUB,
       self::PROVIDER_GOOGLE,
       self::PROVIDER_PHABRICATOR,
+      self::PROVIDER_DISQUS,
     );
     $providers = array();
     foreach ($all as $provider) {

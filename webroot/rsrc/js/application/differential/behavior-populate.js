@@ -38,6 +38,26 @@ JX.behavior('differential-populate', function(config) {
   var highlight_class = null;
 
   JX.Stratcom.listen(
+    'click',
+    'differential-load',
+    function(e) {
+      var meta = e.getNodeData('differential-load');
+      JX.DOM.setContent(
+        JX.$(meta.id),
+        JX.$H('<div class="differential-loading">Loading...</div>'));
+      var data = {
+        ref : meta.ref,
+        whitespace : config.whitespace
+      };
+      new JX.Workflow(config.uri, data)
+        .setHandler(JX.bind(null, onresponse, meta.id))
+        .start();
+      if (meta.kill) {
+        e.kill();
+      }
+    });
+
+  JX.Stratcom.listen(
     ['mouseover', 'mouseout'],
     ['differential-changeset', 'tag:td'],
     function(e) {
@@ -45,7 +65,7 @@ JX.behavior('differential-populate', function(config) {
 
       // NOTE: Using className is not best practice, but the diff UI is perf
       // sensitive.
-      if (!t.className.match(/cov/)) {
+      if (!t.className.match(/cov|copy/)) {
         return;
       }
 
@@ -58,6 +78,8 @@ JX.behavior('differential-populate', function(config) {
       } else {
         highlight_class = null;
         var msg;
+        var align = 'E';
+        var sibling = 'previousSibling';
         if (t.className.match(/cov-C/)) {
           msg = 'Covered';
           highlight_class = 'source-cov-C';
@@ -67,14 +89,22 @@ JX.behavior('differential-populate', function(config) {
         } else if (t.className.match(/cov-N/)) {
           msg = 'Not Executable';
           highlight_class = 'source-cov-N';
+        } else {
+          var match = /new-copy|new-move/.exec(t.className);
+          if (match) {
+            align = 'N'; // TODO: 'W'
+            sibling = 'nextSibling';
+            msg = JX.Stratcom.getData(t).msg;
+            highlight_class = match[0];
+          }
         }
 
         if (msg) {
-          JX.Tooltip.show(t, 120, 'E', msg);
+          JX.Tooltip.show(t, 120, align, msg);
         }
 
         if (highlight_class) {
-          highlighted = t.previousSibling;
+          highlighted = t[sibling];
           JX.DOM.alterClass(highlighted, highlight_class, true);
         }
       }

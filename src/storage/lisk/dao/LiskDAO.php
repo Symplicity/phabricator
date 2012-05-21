@@ -43,7 +43,8 @@
  *
  * To create new Lisk objects, extend @{class:LiskDAO} and implement
  * @{method:establishLiveConnection}. It should return an
- * AphrontDatabaseConnection; this will tell Lisk where to save your objects.
+ * @{class:AphrontDatabaseConnection}; this will tell Lisk where to save your
+ * objects.
  *
  *   class Dog extends LiskDAO {
  *
@@ -57,6 +58,7 @@
  *
  * Now, you should create your table:
  *
+ *   lang=sql
  *   CREATE TABLE dog (
  *     id int unsigned not null auto_increment primary key,
  *     name varchar(32) not null,
@@ -65,17 +67,17 @@
  *     dateModified int unsigned not null
  *   );
  *
- * For each property in your class, add a column with the same name to the
- * table (see getConfiguration() for information about changing this mapping).
+ * For each property in your class, add a column with the same name to the table
+ * (see @{method:getConfiguration} for information about changing this mapping).
  * Additionally, you should create the three columns `id`,  `dateCreated` and
  * `dateModified`. Lisk will automatically manage these, using them to implement
  * autoincrement IDs and timestamps. If you do not want to use these features,
- * see getConfiguration() for information on disabling them. At a bare minimum,
- * you must normally have an `id` column which is a primary or unique key with a
- * numeric type, although you can change its name by overriding getIDKey() or
- * disable it entirely by overriding getIDKey() to return null. Note that many
- * methods rely on a single-part primary key and will no longer work (they will
- * throw) if you disable it.
+ * see @{method:getConfiguration} for information on disabling them. At a bare
+ * minimum, you must normally have an `id` column which is a primary or unique
+ * key with a numeric type, although you can change its name by overriding
+ * @{method:getIDKey} or disable it entirely by overriding @{method:getIDKey} to
+ * return null. Note that many methods rely on a single-part primary key and
+ * will no longer work (they will throw) if you disable it.
  *
  * As you add more properties to your class in the future, remember to add them
  * to the database table as well.
@@ -88,7 +90,7 @@
  *
  * = Creating, Retrieving, Updating, and Deleting =
  *
- * To create and persist a Lisk object, use save():
+ * To create and persist a Lisk object, use @{method:save}:
  *
  *   $dog = id(new Dog())
  *     ->setName('Sawyer')
@@ -96,26 +98,27 @@
  *     ->save();
  *
  * Note that **Lisk automatically builds getters and setters for all of your
- * object's properties** via __call(). If you want to add custom behavior to
- * your getters or setters, you can do so by overriding the readField and
- * writeField methods.
+ * object's protected properties** via @{method:__call}. If you want to add
+ * custom behavior to your getters or setters, you can do so by overriding the
+ * @{method:readField} and @{method:writeField} methods.
  *
- * Calling save() will persist the object to the database. After calling
- * save(), you can call getID() to retrieve the object's ID.
+ * Calling @{method:save} will persist the object to the database. After calling
+ * @{method:save}, you can call @{method:getID} to retrieve the object's ID.
  *
- * To load objects by ID, use the load() method:
+ * To load objects by ID, use the @{method:load} method:
  *
  *   $dog = id(new Dog())->load($id);
  *
  * This will load the Dog record with ID $id into $dog, or ##null## if no such
- * record exists (load() is an instance method rather than a static method
- * because PHP does not support late static binding, at least until PHP 5.3).
+ * record exists (@{method:load} is an instance method rather than a static
+ * method because PHP does not support late static binding, at least until PHP
+ * 5.3).
  *
  * To update an object, change its properties and save it:
  *
  *   $dog->setBreed('Lab')->save();
  *
- * To delete an object, call delete():
+ * To delete an object, call @{method:delete}:
  *
  *   $dog->delete();
  *
@@ -124,7 +127,7 @@
  * = Queries =
  *
  * Often, you want to load a bunch of objects, or execute a more specialized
- * query. Use loadAllWhere() or loadOneWhere() to do this:
+ * query. Use @{method:loadAllWhere} or @{method:loadOneWhere} to do this:
  *
  *   $pugs = $dog->loadAllWhere('breed = %s', 'Pug');
  *   $sawyer = $dog->loadOneWhere('name = %s', 'Sawyer');
@@ -132,8 +135,8 @@
  * These methods work like @{function:queryfx}, but only take half of a query
  * (the part after the WHERE keyword). Lisk will handle the connection, columns,
  * and object construction; you are responsible for the rest of it.
- * loadAllWhere() returns a list of objects, while loadOneWhere() returns a
- * single object (or null).
+ * @{method:loadAllWhere} returns a list of objects, while
+ * @{method:loadOneWhere} returns a single object (or `null`).
  *
  * = Managing Transactions =
  *
@@ -159,6 +162,10 @@
  * Assuming ##$obj##, ##$other## and ##$another## live on the same database,
  * this code will work correctly by establishing savepoints.
  *
+ * Selects whose data are used later in the transaction should be included in
+ * @{method:beginReadLocking} or @{method:beginWriteLocking} block.
+ *
+ * @task   conn    Managing Connections
  * @task   config  Configuring Lisk
  * @task   load    Loading Objects
  * @task   info    Examining Objects
@@ -187,13 +194,15 @@ abstract class LiskDAO {
   const IDS_PHID                    = 'ids-phid';
   const IDS_MANUAL                  = 'ids-manual';
 
-  private $__connections            = array();
   private $__dirtyFields            = array();
   private $__missingFields          = array();
-  private static $processIsolationLevel = 0;
+  private static $processIsolationLevel       = 0;
+  private static $transactionIsolationLevel   = 0;
   private static $__checkedClasses = array();
 
   private $__ephemeral = false;
+
+  private static $connections       = array();
 
   /**
    *  Build an empty object.
@@ -235,7 +244,65 @@ abstract class LiskDAO {
     }
   }
 
+
+/* -(  Managing Connections  )----------------------------------------------- */
+
+
+  /**
+   * Establish a live connection to a database service. This method should
+   * return a new connection. Lisk handles connection caching and management;
+   * do not perform caching deeper in the stack.
+   *
+   * @param string Mode, either 'r' (reading) or 'w' (reading and writing).
+   * @return AphrontDatabaseConnection New database connection.
+   * @task conn
+   */
   abstract protected function establishLiveConnection($mode);
+
+
+  /**
+   * Return a namespace for this object's connections in the connection cache.
+   * Generally, the database name is appropriate. Two connections are considered
+   * equivalent if they have the same connection namespace and mode.
+   *
+   * @return string Connection namespace for cache
+   * @task conn
+   */
+  abstract protected function getConnectionNamespace();
+
+
+  /**
+   * Get an existing, cached connection for this object.
+   *
+   * @param mode Connection mode.
+   * @return AprontDatabaseConnection|null  Connection, if it exists in cache.
+   * @task conn
+   */
+  protected function getEstablishedConnection($mode) {
+    $key = $this->getConnectionNamespace().':'.$mode;
+    if (isset(self::$connections[$key])) {
+      return self::$connections[$key];
+    }
+    return null;
+  }
+
+
+  /**
+   * Store a connection in the connection cache.
+   *
+   * @param mode Connection mode.
+   * @param AphrontDatabaseConnection Connection to cache.
+   * @return this
+   * @task conn
+   */
+  protected function setEstablishedConnection(
+    $mode,
+    AphrontDatabaseConnection $connection) {
+
+    $key = $this->getConnectionNamespace().':'.$mode;
+    self::$connections[$key] = $connection;
+    return $this;
+  }
 
 
 /* -(  Configuring Lisk  )--------------------------------------------------- */
@@ -481,16 +548,11 @@ abstract class LiskDAO {
     $connection = $this->establishConnection('r');
 
     $lock_clause = '';
-/*
-
-    TODO: Restore this?
-
     if ($connection->isReadLocking()) {
       $lock_clause = 'FOR UPDATE';
     } else if ($connection->isWriteLocking()) {
       $lock_clause = 'LOCK IN SHARE MODE';
     }
-*/
 
     $args = func_get_args();
     $args = array_slice($args, 2);
@@ -739,20 +801,46 @@ abstract class LiskDAO {
 
     if (self::shouldIsolateAllLiskEffectsToCurrentProcess()) {
       $mode = 'isolate-'.$mode;
-      if (!isset($this->__connections[$mode])) {
-        $this->__connections[$mode] = $this->establishIsolatedConnection($mode);
+
+      $connection = $this->getEstablishedConnection($mode);
+      if (!$connection) {
+        $connection = $this->establishIsolatedConnection($mode);
+        $this->setEstablishedConnection($mode, $connection);
       }
-      return $this->__connections[$mode];
+
+      return $connection;
     }
 
-    // TODO There is currently no protection on 'r' queries against writing
-    // or on 'w' queries against reading
-
-    if (!isset($this->__connections[$mode])) {
-      $this->__connections[$mode] = $this->establishLiveConnection($mode);
+    if (self::shouldIsolateAllLiskEffectsToTransactions()) {
+      // If we're doing fixture transaction isolation, force the mode to 'w'
+      // so we always get the same connection for reads and writes, and thus
+      // can see the writes inside the transaction.
+      $mode = 'w';
     }
 
-    return $this->__connections[$mode];
+    // TODO: There is currently no protection on 'r' queries against writing.
+
+    $connection = null;
+    if ($mode == 'r') {
+      // If we're requesting a read connection but already have a write
+      // connection, reuse the write connection so that reads can take place
+      // inside transactions.
+      $connection = $this->getEstablishedConnection('w');
+    }
+
+    if (!$connection) {
+      $connection = $this->getEstablishedConnection($mode);
+    }
+
+    if (!$connection) {
+      $connection = $this->establishLiveConnection($mode);
+      if (self::shouldIsolateAllLiskEffectsToTransactions()) {
+        $connection->openTransaction();
+      }
+      $this->setEstablishedConnection($mode, $connection);
+    }
+
+    return $connection;
   }
 
 
@@ -1255,7 +1343,73 @@ abstract class LiskDAO {
   }
 
 
+  /**
+   * Begins read-locking selected rows with SELECT ... FOR UPDATE, so that
+   * other connections can not read them (this is an enormous oversimplification
+   * of FOR UPDATE semantics; consult the MySQL documentation for details). To
+   * end read locking, call @{method:endReadLocking}. For example:
+   *
+   *   $beach->openTransaction();
+   *     $beach->beginReadLocking();
+   *
+   *       $beach->reload();
+   *       $beach->setGrainsOfSand($beach->getGrainsOfSand() + 1);
+   *       $beach->save();
+   *
+   *     $beach->endReadLocking();
+   *   $beach->saveTransaction();
+   *
+   * @return this
+   * @task xaction
+   */
+  public function beginReadLocking() {
+    $this->establishConnection('w')->beginReadLocking();
+    return $this;
+  }
+
+
+  /**
+   * Ends read-locking that began at an earlier @{method:beginReadLocking} call.
+   *
+   * @return this
+   * @task xaction
+   */
+  public function endReadLocking() {
+    $this->establishConnection('w')->endReadLocking();
+    return $this;
+  }
+
+  /**
+   * Begins write-locking selected rows with SELECT ... LOCK IN SHARE MODE, so
+   * that other connections can not update or delete them (this is an
+   * oversimplification of LOCK IN SHARE MODE semantics; consult the
+   * MySQL documentation for details). To end write locking, call
+   * @{method:endWriteLocking}.
+   *
+   * @return this
+   * @task xaction
+   */
+  public function beginWriteLocking() {
+    $this->establishConnection('w')->beginWriteLocking();
+    return $this;
+  }
+
+
+  /**
+   * Ends write-locking that began at an earlier @{method:beginWriteLocking}
+   * call.
+   *
+   * @return this
+   * @task xaction
+   */
+  public function endWriteLocking() {
+    $this->establishConnection('w')->endWriteLocking();
+    return $this;
+  }
+
+
 /* -(  Isolation  )---------------------------------------------------------- */
+
 
   /**
    * @task isolate
@@ -1290,6 +1444,44 @@ abstract class LiskDAO {
     return new AphrontIsolatedDatabaseConnection($config);
   }
 
+  /**
+   * @task isolate
+   */
+  public static function beginIsolateAllLiskEffectsToTransactions() {
+    if (self::$transactionIsolationLevel === 0) {
+      self::closeAllConnections();
+    }
+    self::$transactionIsolationLevel++;
+  }
+
+  /**
+   * @task isolate
+   */
+  public static function endIsolateAllLiskEffectsToTransactions() {
+    self::$transactionIsolationLevel--;
+    if (self::$transactionIsolationLevel < 0) {
+      throw new Exception(
+        "Lisk transaction isolation level was reduced below 0.");
+    } else if (self::$transactionIsolationLevel == 0) {
+      foreach (self::$connections as $key => $conn) {
+        if ($conn) {
+          $conn->killTransaction();
+        }
+      }
+      self::closeAllConnections();
+    }
+  }
+
+  /**
+   * @task isolate
+   */
+  public static function shouldIsolateAllLiskEffectsToTransactions() {
+    return (bool)self::$transactionIsolationLevel;
+  }
+
+  public static function closeAllConnections() {
+    self::$connections = array();
+  }
 
 /* -(  Utilities  )---------------------------------------------------------- */
 

@@ -22,6 +22,7 @@ final class DiffusionBrowseTableView extends DiffusionView {
   private $handles = array();
 
   public function setPaths(array $paths) {
+    assert_instances_of($paths, 'DiffusionRepositoryPath');
     $this->paths = $paths;
     return $this;
   }
@@ -88,6 +89,7 @@ final class DiffusionBrowseTableView extends DiffusionView {
     $rows = array();
     foreach ($this->paths as $path) {
 
+      $dir_slash = null;
       $file_type = $path->getFileType();
       if ($file_type == DifferentialChangeType::FILE_DIRECTORY) {
         $browse_text = $path->getPath().'/';
@@ -118,9 +120,8 @@ final class DiffusionBrowseTableView extends DiffusionView {
           $type = 'file';
         }
         $browse_text = $path->getPath();
-        $dir_slash = null;
         $browse_link = $this->linkBrowse(
-          $base_path.$path->getPath().$dir_slash,
+          $base_path.$path->getPath(),
           array(
             'html' => $this->renderPathIcon($type, $browse_text),
           ));

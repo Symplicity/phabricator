@@ -32,27 +32,14 @@ class AphrontDefaultApplicationConfiguration
 
   public function getURIMap() {
     return $this->getResourceURIMapRules() + array(
-      '/(?:(?P<filter>jump)/)?' =>
+      '/(?:(?P<filter>(?:jump|apps))/)?' =>
         'PhabricatorDirectoryMainController',
       '/(?:(?P<filter>feed)/)' => array(
         'public/' => 'PhabricatorFeedPublicStreamController',
         '(?:(?P<subfilter>[^/]+)/)?' =>
           'PhabricatorDirectoryMainController',
       ),
-      '/directory/' => array(
-        '(?P<id>\d+)/'
-          => 'PhabricatorDirectoryCategoryViewController',
-        'edit/'
-          => 'PhabricatorDirectoryEditController',
-        'item/edit/(?:(?P<id>\d+)/)?'
-          => 'PhabricatorDirectoryItemEditController',
-        'item/delete/(?P<id>\d+)/'
-          => 'PhabricatorDirectoryItemDeleteController',
-        'category/edit/(?:(?P<id>\d+)/)?'
-          => 'PhabricatorDirectoryCategoryEditController',
-        'category/delete/(?P<id>\d+)/'
-          => 'PhabricatorDirectoryCategoryDeleteController',
-      ),
+      '/F(?P<id>\d+)' => 'PhabricatorFileShortcutController',
       '/file/' => array(
         '' => 'PhabricatorFileListController',
         'filter/(?P<filter>\w+)/' => 'PhabricatorFileListController',
@@ -89,7 +76,7 @@ class AphrontDefaultApplicationConfiguration
       '/p/(?P<username>\w+)/(?:(?P<page>\w+)/)?'
         => 'PhabricatorPeopleProfileController',
       '/conduit/' => array(
-        '' => 'PhabricatorConduitConsoleController',
+        '' => 'PhabricatorConduitListController',
         'method/(?P<method>[^/]+)/' => 'PhabricatorConduitConsoleController',
         'log/' => 'PhabricatorConduitLogController',
         'log/view/(?P<view>[^/]+)/' => 'PhabricatorConduitLogController',
@@ -261,6 +248,7 @@ class AphrontDefaultApplicationConfiguration
           'lastmodified/(?P<dblob>.*)'  => 'DiffusionLastModifiedController',
           'diff/'                       => 'DiffusionDiffController',
           'tags/(?P<dblob>.*)'          => 'DiffusionTagListController',
+          'branches/(?P<dblob>.*)'      => 'DiffusionBranchTableController',
         ),
         'inline/(?P<phid>[^/]+)/' => 'DiffusionInlineCommentController',
         'services/' => array(
@@ -451,6 +439,9 @@ class AphrontDefaultApplicationConfiguration
           'testpaymentform/' => 'PhortuneStripeTestPaymentFormController',
         ),
       ),
+
+      '/emailverify/(?P<code>[^/]+)/' =>
+        'PhabricatorEmailVerificationController',
     );
   }
 
@@ -473,10 +464,32 @@ class AphrontDefaultApplicationConfiguration
   }
 
   public function handleException(Exception $ex) {
+    $request = $this->getRequest();
+
+    // For Conduit requests, return a Conduit response.
+    if ($request->isConduit()) {
+      $response = new ConduitAPIResponse();
+      $response->setErrorCode(get_class($ex));
+      $response->setErrorInfo($ex->getMessage());
+
+      return id(new AphrontJSONResponse())
+        ->setContent($response->toDictionary());
+    }
+
+    // For non-workflow requests, return a Ajax response.
+    if ($request->isAjax() && !$request->isJavelinWorkflow()) {
+      $response = new AphrontAjaxResponse();
+      $response->setError(
+        array(
+          'code' => get_class($ex),
+          'info' => $ex->getMessage(),
+        ));
+      return $response;
+    }
 
     $is_serious = PhabricatorEnv::getEnvConfig('phabricator.serious-business');
 
-    $user = $this->getRequest()->getUser();
+    $user = $request->getUser();
     if (!$user) {
       // If we hit an exception very early, we won't have a user.
       $user = new PhabricatorUser();
@@ -508,6 +521,22 @@ class AphrontDefaultApplicationConfiguration
       $response->setDialog($dialog);
       return $response;
     }
+
+    if ($ex instanceof AphrontUsageException) {
+      $error = new AphrontErrorView();
+      $error->setTitle(phutil_escape_html($ex->getTitle()));
+      $error->appendChild(phutil_escape_html($ex->getMessage()));
+
+      $view = new PhabricatorStandardPageView();
+      $view->setRequest($this->getRequest());
+      $view->appendChild($error);
+
+      $response = new AphrontWebpageResponse();
+      $response->setContent($view->render());
+
+      return $response;
+    }
+
 
     // Always log the unhandled exception.
     phlog($ex);
