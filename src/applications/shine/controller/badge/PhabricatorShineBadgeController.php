@@ -148,7 +148,11 @@ class PhabricatorShineBadgeController
             $file = id(new PhabricatorFile())->loadOneWhere(
               'phid = %s',
               $object->getProfileImagePHID());
-            $profile_image = $file->getBestURI();
+            if ($file) {
+              $profile_image = $file->getBestURI();
+            } else {
+              $profile_image = '/res/1c5f2550/rsrc/image/avatar.png';
+            }
 
             $avatars[$phid] = phutil_render_tag(
               'a',
