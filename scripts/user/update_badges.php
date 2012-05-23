@@ -20,7 +20,7 @@
 $root = dirname(dirname(dirname(__FILE__)));
 require_once $root.'/scripts/__init_script__.php';
 
-$users = id(new PhabricatorUser())->loadAll();
+$users = id(new PhabricatorUser())->loadAllWhere('isDisabled = 0 and isSystemAgent = 0');
 echo "Badging " . count($users) . " users\n";
 
 $badge = new ShineBadge();
