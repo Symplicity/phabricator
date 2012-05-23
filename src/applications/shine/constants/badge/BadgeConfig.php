@@ -74,6 +74,13 @@ final class BadgeConfig {
       'desc' => 'Created a task',
       'href' => '/maniphest/',
     ),
+    'Closer' => array(
+      'class' => 'ManiphestTask',
+      'phid_field' => 'ownerPHID',
+      'where' => "status = 1",
+      'desc' => 'Completed a task',
+      'href' => '/maniphest/',
+    ),
   );
 
   public static function getDescription($title)

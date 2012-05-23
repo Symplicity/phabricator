@@ -67,7 +67,7 @@ foreach ($users as $user) {
     }
   }
   if ($badge_titles) {
-    $body .= "The awesome " . $user->getUserName() . " just unlocked this:\n$badge_titles\n";
+    $body .= $user->getRealName() . " (" . $user->getUserName() . ") just unlocked this:\n$badge_titles\n";
   }
 }
 
