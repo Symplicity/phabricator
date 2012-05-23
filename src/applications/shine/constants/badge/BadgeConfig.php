@@ -81,6 +81,12 @@ final class BadgeConfig {
       'desc' => 'Completed a task',
       'href' => '/maniphest/',
     ),
+    'Commithor' => array(
+      'class' => 'PhabricatorRepositoryCommit',
+      'date_field' => 'epoch',
+      'desc' => 'Every commit counts',
+      'href' => '/diffusion/',
+    ),
   );
 
   public static function getDescription($title)
