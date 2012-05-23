@@ -24,14 +24,7 @@ $users = id(new PhabricatorUser())->loadAll();
 echo "Badging " . count($users) . " users\n";
 
 $badge = new ShineBadge();
-$data = queryfx_all(
-  $badge->establishConnection('r'),
-  'SELECT userPHID, GROUP_CONCAT(title) AS badges FROM %T GROUP BY userPHID',
-  $badge->getTableName());
-$all_old_badges = ipull($data, 'badges', 'userPHID');
-
 $new_badges = array();
-
 foreach (BadgeConfig::$data as $title => $meta) {
   $class = $meta['class'];
   $object = new $class();
@@ -40,30 +33,34 @@ foreach (BadgeConfig::$data as $title => $meta) {
   $date_field = isset($meta['date_field']) ? $meta['date_field'] : 'dateCreated';
   $data = queryfx_all(
     $object->establishConnection('r'),
-    'SELECT ' . $phid_field . ', min(' . $date_field . ') as earned FROM %T ' . $where . ' GROUP BY ' . $phid_field,
+    'SELECT ' . $phid_field . ', min(' . $date_field . ') as earned, count(*) as tally FROM %T ' . $where . ' GROUP BY ' . $phid_field,
     $object->getTableName());
-  $new_badges[$title] = ipull($data, 'earned', $phid_field);
+  $new_badges[$title] = ipull($data, null, $phid_field);
 }
 
 $body = "";
 foreach ($users as $user) {
   $phid = $user->getPHID();
-
-  $old_badges = array();
-  if (isset($all_old_badges[$phid])) {
-    $old_badges = array_flip(explode(',', $all_old_badges[$phid]));
-  }
-
+  $old_badges = id(new ShineBadge())->loadAllWhere('userPHID = %s', $phid);
+  $old_badges = mpull($old_badges, null, 'getTitle');
   $badge_titles = '';
   foreach($new_badges as $title => $users) {
-    if (isset($users[$phid]) && !isset($old_badges[$title])) {
-      id(new ShineBadge())
-              ->setTitle($title)
-              ->setUserPHID($phid)
-              ->setDateEarned($users[$phid])
-              ->save();
-      $suffix = strlen($title) < 8 ? "\t" : '';
-      $badge_titles .= "\t$title$suffix\t(" . strip_tags(BadgeConfig::getDescription($title)) . ")\n";
+    if (isset($users[$phid])) {
+      if (isset($old_badges[$title])) {
+        if ($users[$phid]['tally'] != $old_badges[$title]->getTally()) {
+          $old_badges[$title]->setTally($users[$phid]['tally'])->save();
+        }
+      } else {
+        id(new ShineBadge())
+                ->setTitle($title)
+                ->setUserPHID($phid)
+                ->setDateEarned($users[$phid]['earned'])
+                ->setTally($users[$phid]['tally'])
+                ->save();
+        $description = strip_tags(BadgeConfig::getDescription($title));
+        $suffix = strlen($title) < 8 ? "\t" : '';
+        $badge_titles .= "\t$title$suffix\t($description)\n";
+      }
     }
   }
   if ($badge_titles) {

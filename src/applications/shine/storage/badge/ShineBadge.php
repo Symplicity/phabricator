@@ -21,6 +21,7 @@ class ShineBadge extends ShineDAO {
   protected $title;
   protected $userPHID;
   protected $dateEarned;
+  protected $tally;
 
   public function getConfiguration()
   {
