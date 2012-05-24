@@ -26,7 +26,7 @@ class PhabricatorShineBadgeController
     'all' => 'All Badges',
     'top' => 'Top Scores',
   );
-  private $total_score = 0;
+  private $max_score = 0;
 
   public function willProcessRequest(array $data)
   {
@@ -98,7 +98,6 @@ class PhabricatorShineBadgeController
 
     $rows = array();
     foreach ($data as $row) {
-      $this->total_score = $stats[$row->getTitle()]['total'];
       $rows[] = array(
         $this->renderBadge($row->getTitle()),
         BadgeConfig::getDescription($row->getTitle()),
@@ -190,17 +189,15 @@ class PhabricatorShineBadgeController
     $badge = new ShineBadge();
     $data = queryfx_all(
       $badge->establishConnection('r'),
-      'SELECT UserPHID AS user, SUM(tally) AS score FROM %T GROUP BY user ORDER BY score DESC',
+      'SELECT UserPHID AS user, SUM(tally) AS score, GROUP_CONCAT(CONCAT(title, \': \', tally)) as details FROM %T GROUP BY user ORDER BY score DESC',
       $badge->getTableName());
 
-    $this->total_score = array_reduce($data, function(&$total, $user)
-    {
-      $total += $user['score'];
-      return $total;
-    }, 0);
-
+    $this->max_score = 0;
     $result_markup = id(new AphrontFormLayoutView());
     foreach ($data as $pos => $row) {
+      if (!$this->max_score) {
+        $this->max_score = $row['score'];
+      }
       $object = id(new PhabricatorUser())->loadOneWhere('phid = %s', $row['user']);
       if ($object) {
         $result_markup->appendChild(phutil_render_tag(
@@ -208,7 +205,9 @@ class PhabricatorShineBadgeController
           array(
             'class' => 'phabricator-shine-facepile',
           ),
-          $this->renderPosition($pos) . $this->renderUserAvatar($object) . $this->renderScore($row['score'])));
+          $this->renderPosition($pos)
+            . $this->renderUserAvatar($object)
+            . $this->renderScore($row['score'], $row['details'])));
       }
     }
     $result_markup->appendChild(phutil_render_tag(
@@ -276,17 +275,17 @@ class PhabricatorShineBadgeController
       ($pos + 1) . '. ');
   }
 
-  private function renderScore($score)
+  private function renderScore($score, $details)
   {
-    $score = number_format(100 * $score / $this->total_score, 2);
-    $size = 100 + ceil(3 * $score);
+    $size = 100 + ceil(3 * ceil(100 * $score / $this->max_score));
     return phutil_render_tag(
       'div',
       array(
         'class' => 'phabricator-shine-score',
-        'style' => 'font-size:' . $size . '%'
+        'style' => 'font-size:' . $size . '%',
+        'title' => str_replace(',', ' + ', $details)
       ),
-      $score . '%');
+      number_format($score, 0));
   }
 
 }
