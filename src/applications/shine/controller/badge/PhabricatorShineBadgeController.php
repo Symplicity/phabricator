@@ -186,14 +186,32 @@ class PhabricatorShineBadgeController
   {
     static $avatars;
 
+    $result_markup = id(new AphrontFormLayoutView());
+
+    $this->renderTopScoreList(
+      $result_markup,
+      $this->getBadgeData(array(strtotime('30 days ago'), time())),
+      "Last Days");
+
     $badge = new ShineBadge();
     $data = queryfx_all(
       $badge->establishConnection('r'),
-      'SELECT UserPHID AS user, SUM(tally) AS score, GROUP_CONCAT(CONCAT(title, \': \', tally)) as details FROM %T GROUP BY user ORDER BY score DESC',
+      'SELECT UserPHID AS user, SUM(tally) AS score, GROUP_CONCAT(CONCAT(title, \': \', tally)) as details FROM %T GROUP BY user ORDER BY score DESC limit 20',
       $badge->getTableName());
+    $this->renderTopScoreList($result_markup, $data, "Eternity");
+
+    return $result_markup;
+  }
+
+  private function renderTopScoreList($result_markup, $data, $title) {
+    $result_markup->appendChild('<div style="width:45%; float:left; margin:20px 0px">' . phutil_render_tag(
+      'div',
+      array(
+        'class' => 'phabricator-shine-badge',
+      ),
+      $title));
 
     $this->max_score = 0;
-    $result_markup = id(new AphrontFormLayoutView());
     foreach ($data as $pos => $row) {
       if (!$this->max_score) {
         $this->max_score = $row['score'];
@@ -205,19 +223,56 @@ class PhabricatorShineBadgeController
           array(
             'class' => 'phabricator-shine-facepile',
           ),
-          $this->renderPosition($pos)
-            . $this->renderUserAvatar($object)
-            . $this->renderScore($row['score'], $row['details'])));
+          $this->renderPosition($pos) . $this->renderUserAvatar($object) . $this->renderScore($row['score'], $row['details'])));
       }
     }
     $result_markup->appendChild(phutil_render_tag(
       'div',
       array(
-        'class' => 'phabricator-shine-facepile',
+        'class' => 'phabricator-shine-facepile'
       ),
-      '&nbsp;'));
+      '&nbsp;') . '</div>');
+  }
 
-    return $result_markup;
+  private function getBadgeData($date_range) {
+    $badge_data = array();
+    foreach (BadgeConfig::$data as $title => $meta) {
+      $class = $meta['class'];
+      $object = new $class();
+      $phid_field = isset($meta['phid_field']) ? $meta['phid_field'] : 'authorPHID';
+      $date_field = isset($meta['date_field']) ? $meta['date_field'] : 'dateCreated';
+      $where = BadgeConfig::getWhere($title);
+      if ($date_range) {
+        if ($where) {
+          $where .= ' AND ';
+        } else {
+          $where = 'WHERE ';
+        }
+        $where .= $date_field . ' BETWEEN ' . join(' AND ', $date_range);
+      }
+      $weight = isset($meta['weight']) ? $meta['weight'] : 1;
+      $data = queryfx_all(
+        $object->establishConnection('r'),
+        'SELECT ' . $phid_field . ' as user, (%d * count(*)) as score FROM %T ' . $where . ' GROUP BY user ORDER BY score DESC limit 20',
+        $weight,
+        $object->getTableName());
+      foreach ($data as $row) {
+        if (isset($badge_data[$row['user']])) {
+          $badge_data[$row['user']]['score'] += $row['score'];
+          $badge_data[$row['user']]['details'] .= ',' . $title . ': ' . $row['score'];
+        } else {
+          $row['details'] = $title . ': ' . $row['score'];
+          $badge_data[$row['user']] = $row;
+        }
+      }
+    }
+    usort($badge_data, function($a, $b) {
+      if ($a['score'] == $b['score']) {
+        return 0;
+      }
+      return ($a['score'] < $b['score']) ? 1 : -1;
+    });
+    return $badge_data;
   }
 
   private function renderBadge($title)
