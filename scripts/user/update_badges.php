@@ -23,7 +23,6 @@ require_once $root.'/scripts/__init_script__.php';
 $users = id(new PhabricatorUser())->loadAllWhere('isDisabled = 0 and isSystemAgent = 0');
 echo "Badging " . count($users) . " users\n";
 
-$badge = new ShineBadge();
 $new_badges = array();
 foreach (BadgeConfig::$data as $title => $meta) {
   $class = $meta['class'];
@@ -31,9 +30,11 @@ foreach (BadgeConfig::$data as $title => $meta) {
   $where = BadgeConfig::getWhere($title);
   $phid_field = isset($meta['phid_field']) ? $meta['phid_field'] : 'authorPHID';
   $date_field = isset($meta['date_field']) ? $meta['date_field'] : 'dateCreated';
+  $weight = isset($meta['weight']) ? $meta['weight'] : 1;
   $data = queryfx_all(
     $object->establishConnection('r'),
-    'SELECT ' . $phid_field . ', min(' . $date_field . ') as earned, count(*) as tally FROM %T ' . $where . ' GROUP BY ' . $phid_field,
+    'SELECT ' . $phid_field . ', min(' . $date_field . ') as earned, (%d * count(*)) as tally FROM %T ' . $where . ' GROUP BY ' . $phid_field,
+    $weight,
     $object->getTableName());
   $new_badges[$title] = ipull($data, null, $phid_field);
 }

@@ -2200,7 +2200,7 @@ celerity_register_resource_map(array(
   ),
   'phabricator-shine-css' =>
   array(
-    'uri' => '/res/a4b48799/rsrc/css/application/shine/shine.css',
+    'uri' => '/res/0eb1309c/rsrc/css/application/shine/shine.css',
     'type' => 'css',
     'requires' =>
     array(

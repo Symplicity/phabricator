@@ -51,6 +51,8 @@
     position: relative;
     font-size: 2.0em;
     margin: .1em;
+    width: 2em;
+    text-align: right;
 }
 
 .phabricator-shine-score {

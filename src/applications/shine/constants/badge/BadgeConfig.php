@@ -28,17 +28,20 @@ final class BadgeConfig {
       'class' => 'DifferentialRevision',
       'desc' => 'Requested a code review',
       'href' => '/differential/',
+      'weight' => 5,
     ),
     'Accepted' => array(
       'class' => 'DifferentialRevision',
       'desc' => 'Received code review approval',
       'href' => '/differential/',
+      'weight' => 5,
     ),
     'Prover' => array(
       'class' => 'DifferentialComment',
       'where' => "action = 'accept'",
       'desc' => 'Approved a code review',
       'href' => '/differential/',
+      'weight' => 5,
     ),
     'Pollster' => array(
       'class' => 'PhabricatorSlowvotePoll',
@@ -63,6 +66,7 @@ final class BadgeConfig {
       'date_field' => 'dateModified',
       'desc' => 'Uploaded a profile photo',
       'href' => '/settings/page/profile/',
+      'weight' => 100,
     ),
     'Pastafarian' => array(
       'class' => 'PhabricatorPaste',
@@ -73,6 +77,7 @@ final class BadgeConfig {
       'class' => 'ManiphestTask',
       'desc' => 'Created a task',
       'href' => '/maniphest/',
+      'weight' => 5,
     ),
     'Closer' => array(
       'class' => 'ManiphestTask',
@@ -80,6 +85,7 @@ final class BadgeConfig {
       'where' => "status = 1",
       'desc' => 'Completed a task',
       'href' => '/maniphest/',
+      'weight' => 10,
     ),
     'Commithor' => array(
       'class' => 'PhabricatorRepositoryCommit',

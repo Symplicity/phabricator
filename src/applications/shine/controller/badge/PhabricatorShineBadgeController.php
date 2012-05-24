@@ -26,7 +26,7 @@ class PhabricatorShineBadgeController
     'all' => 'All Badges',
     'top' => 'Top Scores',
   );
-  private $max_score = 0;
+  private $total_score = 0;
 
   public function willProcessRequest(array $data)
   {
@@ -92,17 +92,20 @@ class PhabricatorShineBadgeController
     $data = $badge->loadAllWhere('userPHID = %s', $this->user->getPHID());
     $stats = queryfx_all(
       $badge->establishConnection('r'),
-      'SELECT title, count(*) as cnt FROM %T GROUP BY title',
+      'SELECT title, count(*) as cnt, sum(tally) as total FROM %T GROUP BY title',
       $badge->getTableName());
-    $stats = ipull($stats, 'cnt', 'title');
+    $stats = ipull($stats, null, 'title');
 
     $rows = array();
     foreach ($data as $row) {
+      $this->total_score = $stats[$row->getTitle()]['total'];
       $rows[] = array(
         $this->renderBadge($row->getTitle()),
         BadgeConfig::getDescription($row->getTitle()),
         phabricator_datetime($row->getDateEarned(), $this->user),
-        $stats[$row->getTitle()] - 1 ?: 'You are the only one!',
+        $row->getTally(),
+        number_format(100 * $row->getTally() / $stats[$row->getTitle()]['total'], 2),
+        $stats[$row->getTitle()]['cnt'] - 1 ?: 'You are the only one!',
       );
     }
 
@@ -112,10 +115,14 @@ class PhabricatorShineBadgeController
            'Badge',
            'Achievement',
            'Earned On',
+           'Tally',
+           '%',
            'Co-Badgers',
       ));
     $table->setColumnClasses(
       array(
+           null,
+           null,
            null,
            null,
            null,
@@ -186,12 +193,14 @@ class PhabricatorShineBadgeController
       'SELECT UserPHID AS user, SUM(tally) AS score FROM %T GROUP BY user ORDER BY score DESC',
       $badge->getTableName());
 
+    $this->total_score = array_reduce($data, function(&$total, $user)
+    {
+      $total += $user['score'];
+      return $total;
+    }, 0);
+
     $result_markup = id(new AphrontFormLayoutView());
-    $max = 0;
     foreach ($data as $pos => $row) {
-      if (!$this->max_score) {
-        $this->max_score = $row['score'];
-      }
       $object = id(new PhabricatorUser())->loadOneWhere('phid = %s', $row['user']);
       if ($object) {
         $result_markup->appendChild(phutil_render_tag(
@@ -269,14 +278,15 @@ class PhabricatorShineBadgeController
 
   private function renderScore($score)
   {
-    $size = 100 + (3 * ceil(100 * ($score / $this->max_score)));
+    $score = number_format(100 * $score / $this->total_score, 2);
+    $size = 100 + ceil(3 * $score);
     return phutil_render_tag(
       'div',
       array(
         'class' => 'phabricator-shine-score',
         'style' => 'font-size:' . $size . '%'
       ),
-      $score);
+      $score . '%');
   }
 
 }
