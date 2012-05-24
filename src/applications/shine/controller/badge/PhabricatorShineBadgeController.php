@@ -253,7 +253,7 @@ class PhabricatorShineBadgeController
       $weight = isset($meta['weight']) ? $meta['weight'] : 1;
       $data = queryfx_all(
         $object->establishConnection('r'),
-        'SELECT ' . $phid_field . ' as user, (%d * count(*)) as score FROM %T ' . $where . ' GROUP BY user ORDER BY score DESC limit 20',
+        'SELECT ' . $phid_field . ' as user, (%d * count(*)) as score FROM %T ' . $where . ' GROUP BY user',
         $weight,
         $object->getTableName());
       foreach ($data as $row) {
@@ -272,7 +272,7 @@ class PhabricatorShineBadgeController
       }
       return ($a['score'] < $b['score']) ? 1 : -1;
     });
-    return $badge_data;
+    return array_slice($badge_data, 0, 20);
   }
 
   private function renderBadge($title)
