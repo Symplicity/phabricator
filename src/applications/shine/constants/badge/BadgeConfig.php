@@ -93,6 +93,13 @@ final class BadgeConfig {
       'desc' => 'Every commit counts',
       'href' => '/diffusion/',
     ),
+    'Instigator' => array(
+      'class' => 'PhabricatorAuditComment',
+      'phid_field' => 'ActorPHID',
+      'where' => "action = 'concern'",
+      'desc' => 'Raised concern with a commit',
+      'href' => '/audit/',
+    ),
   );
 
   public static function getDescription($title)
