@@ -24,7 +24,9 @@ class PhabricatorShineBadgeController
   private $view_names = array(
     'my' => 'My Badges',
     'all' => 'All Badges',
+    'top' => 'Top Scores',
   );
+  private $max_score = 0;
 
   public function willProcessRequest(array $data)
   {
@@ -64,6 +66,9 @@ class PhabricatorShineBadgeController
         break;
       case 'all':
         $content = $this->renderAllTable();
+        break;
+      case 'top':
+        $content = $this->renderTopScores();
         break;
       default:
         $content = null;
@@ -140,32 +145,15 @@ class PhabricatorShineBadgeController
         $users = explode(',', $row['users']);
         foreach ($users as $phid) {
           if (!isset($avatars[$phid])) {
+            $avatars[$phid] = '';
             $object = id(new PhabricatorUser())->loadOneWhere('phid = %s', $phid);
-            if (!$object) {
-              continue;
+            if ($object) {
+              $avatars[$phid] = $this->renderUserAvatar($object);
             }
-
-            $file = id(new PhabricatorFile())->loadOneWhere(
-              'phid = %s',
-              $object->getProfileImagePHID());
-            if ($file) {
-              $profile_image = $file->getBestURI();
-            } else {
-              $profile_image = '/res/1c5f2550/rsrc/image/avatar.png';
-            }
-
-            $avatars[$phid] = phutil_render_tag(
-              'a',
-              array(
-                   'href' => '/p/' . $object->getUserName() . '/',
-              ),
-              phutil_render_tag(
-                'img',
-                array(
-                     'src' => $profile_image,
-                )));
           }
-          $user_markup[] = $avatars[$phid];
+          if ($avatars[$phid]) {
+            $user_markup[] = $avatars[$phid];
+          }
         }
         $user_markup = implode('', $user_markup);
       } else {
@@ -182,6 +170,42 @@ class PhabricatorShineBadgeController
       'div',
       array(
            'class' => 'phabricator-shine-facepile',
+      ),
+      '&nbsp;'));
+
+    return $result_markup;
+  }
+
+  private function renderTopScores()
+  {
+    static $avatars;
+
+    $badge = new ShineBadge();
+    $data = queryfx_all(
+      $badge->establishConnection('r'),
+      'SELECT UserPHID AS user, SUM(tally) AS score FROM %T GROUP BY user ORDER BY score DESC',
+      $badge->getTableName());
+
+    $result_markup = id(new AphrontFormLayoutView());
+    $max = 0;
+    foreach ($data as $pos => $row) {
+      if (!$this->max_score) {
+        $this->max_score = $row['score'];
+      }
+      $object = id(new PhabricatorUser())->loadOneWhere('phid = %s', $row['user']);
+      if ($object) {
+        $result_markup->appendChild(phutil_render_tag(
+          'div',
+          array(
+            'class' => 'phabricator-shine-facepile',
+          ),
+          $this->renderPosition($pos) . $this->renderUserAvatar($object) . $this->renderScore($row['score'])));
+      }
+    }
+    $result_markup->appendChild(phutil_render_tag(
+      'div',
+      array(
+        'class' => 'phabricator-shine-facepile',
       ),
       '&nbsp;'));
 
@@ -206,6 +230,53 @@ class PhabricatorShineBadgeController
            'class' => 'phabricator-shine-desc',
       ),
       BadgeConfig::getDescription($title));
+  }
+
+  private function renderUserAvatar($object)
+  {
+    $file = id(new PhabricatorFile())->loadOneWhere(
+      'phid = %s',
+      $object->getProfileImagePHID());
+    if ($file) {
+      $profile_image = $file->getBestURI();
+    } else {
+      $profile_image = '/res/1c5f2550/rsrc/image/avatar.png';
+    }
+
+    return phutil_render_tag(
+      'a',
+      array(
+        'href' => '/p/' . $object->getUserName() . '/',
+        'title' => $object->getRealName()
+      ),
+      phutil_render_tag(
+        'img',
+        array(
+          'src' => $profile_image,
+        )
+      ));
+  }
+
+  private function renderPosition($pos)
+  {
+    return phutil_render_tag(
+      'div',
+      array(
+        'class' => 'phabricator-shine-position',
+      ),
+      ($pos + 1) . '. ');
+  }
+
+  private function renderScore($score)
+  {
+    $size = 100 + (3 * ceil(100 * ($score / $this->max_score)));
+    return phutil_render_tag(
+      'div',
+      array(
+        'class' => 'phabricator-shine-score',
+        'style' => 'font-size:' . $size . '%'
+      ),
+      $score);
   }
 
 }

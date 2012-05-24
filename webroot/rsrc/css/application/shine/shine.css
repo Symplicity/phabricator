@@ -44,3 +44,19 @@
     margin: .9em 0 0 .5em;
     width: 50em;
 }
+
+.phabricator-shine-position {
+    clear: left;
+    float: left;
+    position: relative;
+    font-size: 2.0em;
+    margin: .1em;
+}
+
+.phabricator-shine-score {
+    float: left;
+    position: relative;
+    font-size: 3.0em;
+    margin: 2px;
+    line-height: 100%;
+}
