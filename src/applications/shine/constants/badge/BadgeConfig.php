@@ -100,6 +100,12 @@ final class BadgeConfig {
       'desc' => 'Raised a concern with a commit',
       'href' => '/audit/',
     ),
+    'Izerizer' => array(
+      'class' => 'PhabricatorRepositoryCommit',
+      'date_field' => 'epoch',
+      'desc' => 'Mentioned manager issue number in a commit',
+      'href' => '/diffusion/',
+    ),
   );
 
   public static function getDescription($title)
@@ -114,23 +120,25 @@ final class BadgeConfig {
    }
 
   public static function getWhere($title) {
+    $where = '';
     if (isset(self::$data[$title]['where'])) {
-      $where = self::$data[$title]['where'];
+      $where = 'WHERE ' . self::$data[$title]['where'];
     } elseif ($title == 'Accepted') {
-      $where = sprintf('status IN (%d, %d)',
+      $where = sprintf('WHERE status IN (%d, %d)',
         ArcanistDifferentialRevisionStatus::ACCEPTED,
         ArcanistDifferentialRevisionStatus::CLOSED);
     } elseif ($title == 'Profiller') {
-      $where = sprintf("title != '' AND blurb != '' AND profileImagePHID != '%s'",
+      $where = sprintf("WHERE title != '' AND blurb != '' AND profileImagePHID != '%s'",
         PhabricatorEnv::getEnvConfig('user.default-profile-image-phid'));
     } elseif ($title == 'Photogenic') {
-      $where = sprintf("profileImagePHID != '%s'",
+      $where = sprintf("WHERE profileImagePHID != '%s'",
         PhabricatorEnv::getEnvConfig('user.default-profile-image-phid'));
+    } elseif ($title == 'Izerizer') {
+      $where = sprintf("rc INNER JOIN repository_commitdata rcd ON rc.id=rcd.commitID"
+        . " WHERE commitMessage rlike '[1-9][0-9]{5,}' AND epoch>%d",
+        strtotime('2012-05-31')
+      );
     }
-    if (empty($where)) {
-      return '';
-    } else {
-      return 'WHERE ' . $where;
-    }
+    return $where;
   }
 }
