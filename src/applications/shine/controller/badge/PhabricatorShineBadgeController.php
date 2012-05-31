@@ -190,15 +190,25 @@ class PhabricatorShineBadgeController
 
     $this->renderTopScoreList(
       $result_markup,
+      $this->getBadgeData(array(strtotime('today'), time())),
+      "Today");
+
+    $this->renderTopScoreList(
+      $result_markup,
+      $this->getBadgeData(array(strtotime('7 days ago'), time())),
+      "7 Days");
+
+    $this->renderTopScoreList(
+      $result_markup,
       $this->getBadgeData(array(strtotime('30 days ago'), time())),
-      "Last Days");
+      "30 Days");
 
     $badge = new ShineBadge();
     $data = queryfx_all(
       $badge->establishConnection('r'),
-      'SELECT UserPHID AS user, SUM(tally) AS score, GROUP_CONCAT(CONCAT(title, \': \', tally)) as details FROM %T GROUP BY user ORDER BY score DESC limit 20',
+      'SELECT UserPHID AS user, SUM(tally) AS score, GROUP_CONCAT(CONCAT(title, \': \', tally)) as details FROM %T GROUP BY user ORDER BY score DESC limit 10',
       $badge->getTableName());
-    $this->renderTopScoreList($result_markup, $data, "Eternity");
+    $this->renderTopScoreList($result_markup, $data, "All Days");
 
     return $result_markup;
   }
@@ -272,7 +282,7 @@ class PhabricatorShineBadgeController
       }
       return ($a['score'] < $b['score']) ? 1 : -1;
     });
-    return array_slice($badge_data, 0, 20);
+    return array_slice($badge_data, 0, 10);
   }
 
   private function renderBadge($title)

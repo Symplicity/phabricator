@@ -97,7 +97,7 @@ final class BadgeConfig {
       'class' => 'PhabricatorAuditComment',
       'phid_field' => 'ActorPHID',
       'where' => "action = 'concern'",
-      'desc' => 'Raised concern with a commit',
+      'desc' => 'Raised a concern with a commit',
       'href' => '/audit/',
     ),
   );
