@@ -201,7 +201,7 @@ class PhabricatorShineBadgeController
     $badge = new ShineBadge();
     $data = queryfx_all(
       $badge->establishConnection('r'),
-      'SELECT UserPHID AS user, SUM(tally) AS score, GROUP_CONCAT(CONCAT(title, \': \', tally)) as details FROM %T GROUP BY user ORDER BY score DESC limit 10',
+      'SELECT UserPHID AS user, SUM(tally) AS score, GROUP_CONCAT(CONCAT(title, \': \', tally)) as details FROM %T GROUP BY user ORDER BY score DESC limit 20',
       $badge->getTableName());
     $this->renderTopScoreList($result_markup, $data, "All Days");
 
@@ -277,7 +277,7 @@ class PhabricatorShineBadgeController
       }
       return ($a['score'] < $b['score']) ? 1 : -1;
     });
-    return array_slice($badge_data, 0, 10);
+    return array_slice($badge_data, 0, 20);
   }
 
   private function renderBadge($title)
