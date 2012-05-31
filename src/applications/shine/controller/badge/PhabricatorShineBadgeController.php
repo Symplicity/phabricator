@@ -190,11 +190,6 @@ class PhabricatorShineBadgeController
 
     $this->renderTopScoreList(
       $result_markup,
-      $this->getBadgeData(array(strtotime('today'), time())),
-      "Today");
-
-    $this->renderTopScoreList(
-      $result_markup,
       $this->getBadgeData(array(strtotime('7 days ago'), time())),
       "7 Days");
 
@@ -214,7 +209,7 @@ class PhabricatorShineBadgeController
   }
 
   private function renderTopScoreList($result_markup, $data, $title) {
-    $result_markup->appendChild('<div style="width:45%; float:left; margin:20px 0px">' . phutil_render_tag(
+    $result_markup->appendChild('<div style="width:33%; float:left; margin:20px 0">' . phutil_render_tag(
       'div',
       array(
         'class' => 'phabricator-shine-badge',
