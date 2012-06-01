@@ -39,7 +39,7 @@ foreach (BadgeConfig::$data as $title => $meta) {
   $new_badges[$title] = ipull($data, null, $phid_field);
 }
 
-$body = "";
+$bodies = array();
 foreach ($users as $user) {
   $phid = $user->getPHID();
   $old_badges = id(new ShineBadge())->loadAllWhere('userPHID = %s', $phid);
@@ -65,22 +65,29 @@ foreach ($users as $user) {
     }
   }
   if ($badge_titles) {
-    $body .= $user->getRealName() . " (" . $user->getUserName() . ") just unlocked this:\n$badge_titles\n";
+    try {
+      $email = $user->loadPrimaryEmailAddress();
+    } catch (Exception $e) {
+      continue;
+    }
+    $bodies[$email] = "Hi " . $user->getUserName() . "!\n\nYou just unlocked this:\n\n$badge_titles\n";
   }
 }
 
-if ($body) {
-  $body = "This just in!\n\n$body\nSee them all at ";
-  $body .= PhabricatorEnv::getEnvConfig('phabricator.base-uri') . "shine/view/all/\n";
+if (count($bodies)) {
   $root = phutil_get_library_root('phabricator');
   $root = dirname($root);
   require_once $root . '/externals/phpmailer/class.phpmailer-lite.php';
-  $mailer = newv('PHPMailerLite', array());
-  $mailer->CharSet = 'utf-8';
-  $mailer->Subject = "New Badges Awarded";
-  $mailer->SetFrom(PhabricatorEnv::getEnvConfig('shine.notifications_from'), 'Phabricator');
-  $mailer->AddAddress(PhabricatorEnv::getEnvConfig('shine.notifications_to'));
-  $mailer->Body = $body;
-  $mailer->send();
+  foreach ($bodies as $email => $body) {
+    $body .= "\nSee your badges at " . PhabricatorEnv::getEnvConfig('phabricator.base-uri') . "shine/view/my/\n";
+    $body .= "\nSee all badges at " . PhabricatorEnv::getEnvConfig('phabricator.base-uri') . "shine/view/all/\n";
+    $mailer = newv('PHPMailerLite', array());
+    $mailer->CharSet = 'utf-8';
+    $mailer->Subject = "You Has Badges!";
+    $mailer->SetFrom(PhabricatorEnv::getEnvConfig('shine.notifications_from'), 'Phabricator');
+    $mailer->AddAddress($email);
+    $mailer->Body = $body;
+    $mailer->send();
+  }
 }
 echo "Done.\n";
