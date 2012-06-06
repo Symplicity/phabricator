@@ -90,8 +90,10 @@ class PhabricatorShineBadgeController
   {
     $badge = new ShineBadge();
     $data = $badge->loadAllWhere('userPHID = %s', $this->user->getPHID());
+    $conn = $badge->establishConnection('r');
+    queryfx($conn, 'SET SESSION group_concat_max_len = 2048');
     $stats = queryfx_all(
-      $badge->establishConnection('r'),
+      $conn,
       'SELECT title, count(*) as cnt, sum(tally) as total FROM %T GROUP BY title',
       $badge->getTableName());
     $stats = ipull($stats, null, 'title');
