@@ -27,6 +27,7 @@ if (!$args) {
   return help();
 }
 
+$title = '';
 $category = '';
 $category_page = '';
 $limit = 500;
@@ -41,6 +42,9 @@ for ($ii = 0; $ii < $len; $ii++) {
         throw new Exception("File '$config_file' is not valid JSON!");
       }
       $wiki_url = idx($config, 'wiki.url');
+      break;
+    case '--title':
+      $title = $args[++$ii];
       break;
     case '--cat':
       $category = $args[++$ii];
@@ -59,8 +63,8 @@ if (!isset($config)) {
   return usage("Please specify --config file.");
 }
 
-if (!$category) {
-  return usage("Please use --cat option to specify article category.");
+if (!$category && !$title) {
+  return usage("Please use --cat or --title options to specify what to import.");
 }
 
 $conduit = new ConduitClient(PhabricatorEnv::getURI('/api/'));
@@ -74,12 +78,20 @@ $response = $conduit->callMethodSynchronous(
     'certificate' => idx($config, 'conduit.cert'),
   ));
 
-$data = file_get_contents("$wiki_url/api.php?action=query&format=php&cmlimit=$limit&list=categorymembers&cmtitle=Category:" . str_replace(' ', '_', $category));
+if ($category) {
+  $data = getMWCategoryData($wiki_url, $category, $limit);
+}
+if ($title) {
+  $data = getMWTitleData($wiki_url, $title);
+}
 if ($data) {
-  $data = unserialize($data);
-  foreach ($data['query']['categorymembers'] as $page) {
+  foreach ($data as $page) {
     echo $page['title'] . ': ';
-    $page_data = getMWPageData($wiki_url, $page['pageid']);
+    if (isset($page['pageid'])) {
+      $page_data = getMWPageData($wiki_url, $page['pageid']);
+    } else {
+      continue;
+    }
     if ($page_data) {
       $safe_title = str_replace(' ', '_', $page['title']);
       $text = convertMWToPhriction($wiki_url, $page_data['content']);
@@ -122,6 +134,28 @@ if ($category_page) {
 }
 echo "Done.\n";
 
+function getMWCategoryData($wiki_url, $category, $limit) {
+  $data = file_get_contents("$wiki_url/api.php?action=query&format=php&cmlimit=$limit&list=categorymembers&cmtitle=Category:" . str_replace(' ', '_', $category));
+  if ($data) {
+    $data = unserialize($data);
+    if (count($data['query']['categorymembers'])) {
+      return $data['query']['categorymembers'];
+    }
+  }
+  return null;
+}
+
+function getMWTitleData($wiki_url, $title) {
+  $data = file_get_contents("$wiki_url/api.php?action=query&format=php&prop=info&titles=" . str_replace(' ', '_', $title));
+  if ($data) {
+    $data = unserialize($data);
+    if (count($data['query']['pages'])) {
+      return $data['query']['pages'];
+    }
+  }
+  return null;
+}
+
 function getMWPageData($wiki_url, $page_id) {
   $page_data = array();
   $data = file_get_contents("$wiki_url/api.php?action=query&format=php&prop=revisions&rvprop=content&pageids=" . $page_id);
@@ -143,22 +177,28 @@ function getMWPageData($wiki_url, $page_id) {
 function convertMWToPhriction($wiki_url, $text) {
   $wiki_url = str_replace('https', 'https?', $wiki_url);
   $regexps = array(
-    // replaces bolded or italicized headers with regular headers
-    '/(=+)\'+([^\']+)\'+(=+)/' => "\$1\$2\$3",
-    // make sure there is an empty line after headers
-    '/(=+)\n+/' => "\$1\n\n",
+    // replace bolded or italicized headers with regular headers
+    // and make sure there are empty lines around headers
+    '/\n+(=+)\'*([^\'=]+)\'*(=+)\n+/' => "\n\n\$1\$2\$3\n\n",
+
     // ensure an empty line before bulleted lists, and no spaces between bullet chars
     '/\n+(?:([*#])\s*)(?:([*#])\s*)?(?:([*#])\s*)?/' => "\n\n\$1\$2\$3 ",
+
     // use two spaces for pre-formatted block, and make sure there is a blank line before
     '/\n+ +/' => "\n\n  ",
+
     // replace <pre> with ``` and ensure a blank line
     '#\n*<pre>([\w\W]+?)</pre>\n*#' => "\n\n```\$1```\n\n",
+
     // replace direct references to wiki url (which should not be there...)
     "#\[+$wiki_url/index\.php/([^ ]+) ([^\]]+)\]+#" => '[[$1|$2]]',
+
     // use [[...]] instead of [...] for external links
     '/([^[])\[(http[^ ]+) ([^\]]+)\]/' => '$1[[$2|$3]]',
+
     // bold
     "/'''+/" => '**',
+
     // new lines need not be forced
     '#<br\s*/?>#' => ''
   );
@@ -180,13 +220,17 @@ function help() {
 **SUMMARY**
 
     **import_mediwiki.php** --config foo.json --cat Bar [--limit 10]
+    **import_mediwiki.php** --config foo.json --title Foo
 
-    Import MediaWiki articles from a given category into Phriction.
+    Import MediaWiki articles from a given category or title.
     Convert MW syntax to Remarkup.
     Create "category" pages with links to all imported articles.
 
     __--config__
         JSON config file with wiki.url, conduit.user, and conduit.cert
+
+    __--title__
+        MW title to import
 
     __--cat__
         MW category to import from
