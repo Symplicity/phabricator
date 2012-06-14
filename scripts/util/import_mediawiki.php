@@ -73,38 +73,42 @@ $response = $conduit->callMethodSynchronous(
     'user' => idx($config, 'conduit.user'),
     'certificate' => idx($config, 'conduit.cert'),
   ));
+
 $data = file_get_contents("$wiki_url/api.php?action=query&format=php&cmlimit=$limit&list=categorymembers&cmtitle=Category:" . str_replace(' ', '_', $category));
 if ($data) {
   $data = unserialize($data);
   foreach ($data['query']['categorymembers'] as $page) {
-    echo $page['title'];
-    $export = file_get_contents("$wiki_url/api.php?action=query&format=php&prop=revisions&rvprop=content&pageids=" . $page['pageid']);
-    if ($export) {
-      $export = unserialize($export);
-      foreach ($export['query']['pages'] as $page_id => $page_data) {
-        $safe_title = str_replace(' ', '_', $page['title']);
-        $text = convertMWToPhriction($page_data['revisions'][0]['*'])
-          . "\n\nImported from [[$wiki_url/index.php/$safe_title|{$page['title']}]]";
+    echo $page['title'] . ': ';
+    $page_data = getMWPageData($wiki_url, $page['pageid']);
+    if ($page_data) {
+      $safe_title = str_replace(' ', '_', $page['title']);
+      $text = convertMWToPhriction($wiki_url, $page_data['content']);
+      $text .= "\n\nImported from [[$wiki_url/index.php/$safe_title|{$page['title']}]]";
 
-        $response = $conduit->callMethodSynchronous('phriction.info', array(
-          "slug" => strtolower($page['title'])));
-        if ($response['content'] == $text) {
-          echo ': no changes';
+      try {
+        $existing = $conduit->callMethodSynchronous('phriction.info', array(
+          "slug" => strtolower($safe_title)));
+      } catch (Exception $e) {
+        $existing = null;
+      }
+      if ($existing && $existing['content'] == $text) {
+        echo 'no changes';
+      } else {
+        $response = $conduit->callMethodSynchronous('phriction.edit', array(
+          "slug" => strtolower($page['title']),
+          "title" => $page['title'],
+          "content" => $text,
+          "description" => "Imported from $wiki_url ($category)"));
+
+        if ($response['status'] == 'exists') {
+          echo $existing ? 'updated' : 'imported';
+          $category_page .= "* [[{$response['slug']}|{$response['title']}]]\n";
         } else {
-          $response = $conduit->callMethodSynchronous('phriction.edit', array(
-            "slug" => strtolower($page['title']),
-            "title" => $page['title'],
-            "content" => $text,
-            "description" => "Imported from $wiki_url ($category)"));
-
-          if ($response['status'] == 'exists') {
-            echo ': imported';
-            $category_page .= "* [[{$response['slug']}|{$response['title']}]]\n";
-          }
+          echo "failed ({$response['status']})";
         }
       }
-      echo "\n";
     }
+    echo "\n";
   }
 }
 
@@ -118,9 +122,26 @@ if ($category_page) {
 }
 echo "Done.\n";
 
-function convertMWToPhriction($text) {
-  // numbered lists suck, use bullets
-  //$text = str_replace("\n# ", "\n* ", $text);
+function getMWPageData($wiki_url, $page_id) {
+  $page_data = array();
+  $data = file_get_contents("$wiki_url/api.php?action=query&format=php&prop=revisions&rvprop=content&pageids=" . $page_id);
+  if ($data) {
+    $data = unserialize($data);
+    if (isset($data['query']['pages'])) {
+      $data = array_shift($data['query']['pages']);
+      if (isset($data['revisions'][0]['*'])) {
+        $page_data = array(
+          'title' => $data['title'],
+          'content' => $data['revisions'][0]['*']
+        );
+      }
+    }
+  }
+  return $page_data;
+}
+
+function convertMWToPhriction($wiki_url, $text) {
+  $wiki_url = str_replace('https', 'https?', $wiki_url);
   $regexps = array(
     // replaces bolded or italicized headers with regular headers
     '/(=+)\'+([^\']+)\'+(=+)/' => "\$1\$2\$3",
@@ -132,6 +153,8 @@ function convertMWToPhriction($text) {
     '/\n+ +/' => "\n\n  ",
     // replace <pre> with ``` and ensure a blank line
     '#\n*<pre>([\w\W]+?)</pre>\n*#' => "\n\n```\$1```\n\n",
+    // replace direct references to wiki url (which should not be there...)
+    "#\[+$wiki_url/index\.php/([^ ]+) ([^\]]+)\]+#" => '[[$1|$2]]',
     // use [[...]] instead of [...] for external links
     '/([^[])\[(http[^ ]+) ([^\]]+)\]/' => '$1[[$2|$3]]',
     // bold
