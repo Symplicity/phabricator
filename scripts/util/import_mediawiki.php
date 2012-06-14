@@ -27,6 +27,8 @@ if (!$args) {
   return help();
 }
 
+$action = 'replace';
+$all_actions = array('insert', 'replace', 'delete');
 $title = '';
 $category = '';
 $category_page = '';
@@ -51,6 +53,12 @@ for ($ii = 0; $ii < $len; $ii++) {
       break;
     case '--limit':
       $limit = intval($args[++$ii]);
+      break;
+    case '--action':
+      $action = $args[++$ii];
+      if (!in_array($action, $all_actions)) {
+        return usage("Supported actions are: " . join(', ', $all_actions));
+      }
       break;
     case '--help':
       return help();
@@ -103,6 +111,9 @@ if ($data) {
       } catch (Exception $e) {
         $existing = null;
       }
+      if ($action == 'delete') {
+        $text = '';
+      }
       if ($existing && $existing['content'] == $text) {
         echo 'no changes';
       } else {
@@ -116,7 +127,7 @@ if ($data) {
           echo ($existing ? 'updated' : 'imported') . " as {$response['slug']}";
           $category_page .= "* [[{$response['slug']}|{$response['title']}]]\n";
         } else {
-          echo "failed ({$response['status']})";
+          echo $response['status'];
         }
       }
     }
@@ -249,6 +260,9 @@ function help() {
 
     __--limit__
         Number of articles to import (defaults to 500)
+
+    __--action__
+        Action to perform (insert, replace, delete - defaults to replace)
 
     __--help__: show this help
 
