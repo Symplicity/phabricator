@@ -96,7 +96,7 @@ if ($data) {
       $safe_title = str_replace(' ', '_', $page['title']);
       $text = convertMWToPhriction($wiki_url, $page_data['content']);
       $text .= "\n\nImported from [[$wiki_url/index.php/$safe_title|{$page['title']}]]";
-
+      $safe_title = getPhrictionPrefix($text, idx($config, 'category.map')) . $safe_title;
       try {
         $existing = $conduit->callMethodSynchronous('phriction.info', array(
           "slug" => strtolower($safe_title)));
@@ -107,13 +107,13 @@ if ($data) {
         echo 'no changes';
       } else {
         $response = $conduit->callMethodSynchronous('phriction.edit', array(
-          "slug" => strtolower($page['title']),
+          "slug" => $safe_title,
           "title" => $page['title'],
           "content" => $text,
           "description" => "Imported from $wiki_url ($category)"));
 
         if ($response['status'] == 'exists') {
-          echo $existing ? 'updated' : 'imported';
+          echo ($existing ? 'updated' : 'imported') . " as {$response['slug']}";
           $category_page .= "* [[{$response['slug']}|{$response['title']}]]\n";
         } else {
           echo "failed ({$response['status']})";
@@ -206,6 +206,18 @@ function convertMWToPhriction($wiki_url, $text) {
   // italics
   $text = str_replace("''", '//', $text);
   return $text;
+}
+
+function getPhrictionPrefix($text, $category_map) {
+  if (preg_match_all('/\[\[category:([^\]]+)\]\]/i', $text, $categories)) {
+    foreach ($categories[1] as $cat) {
+      $cat = str_replace('_', ' ', $cat);
+      if (isset($category_map[$cat])) {
+        return $category_map[$cat] . '/';
+      }
+    }
+  }
+  return '';
 }
 
 function usage($message) {
