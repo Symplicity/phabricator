@@ -87,66 +87,79 @@ $response = $conduit->callMethodSynchronous(
   ));
 
 if ($category) {
-  $data = getMWCategoryData($wiki_url, $category, $limit);
+  if ($category == 'all') {
+    $loop_categories = idx($config, 'category.map');
+  } else {
+    $loop_categories = array($category);
+  }
+} else {
+  $loop_categories = array(''); // single loop in title case
 }
-if ($title) {
-  $data = getMWTitleData($wiki_url, $title);
-}
-if ($data) {
-  foreach ($data as $page) {
-    echo $page['title'] . ': ';
-    if (isset($page['pageid'])) {
-      $page_data = getMWPageData($wiki_url, $page['pageid']);
-    } else {
-      continue;
-    }
-    if ($page_data) {
-      $safe_title = str_replace(' ', '_', $page['title']);
-      $text = convertMWToPhriction($wiki_url, $page_data['content']);
-      $text .= "\n\nImported from [[$wiki_url/index.php/$safe_title|{$page['title']}]]";
-      $cat_prefix = getPhrictionPrefix($text, idx($config, 'category.map'));
-      if ($cat_prefix) {
-        removeUncategorizedArticle($conduit, $safe_title, $text);
-        $safe_title = $cat_prefix . $safe_title;
-      }
-      try {
-        $existing = $conduit->callMethodSynchronous('phriction.info', array(
-          "slug" => strtolower($safe_title)));
-      } catch (Exception $e) {
-        $existing = null;
-      }
-      if ($action == 'delete') {
-        $text = '';
-      }
-      if ($existing && $existing['content'] == $text) {
-        echo 'no changes';
+foreach ($loop_categories as $category) {
+  if ($category) {
+    echo "\nImporting $category articles\n";
+    $data = getMWCategoryData($wiki_url, $category, $limit);
+  }
+  if ($title) {
+    $data = getMWTitleData($wiki_url, $title);
+  }
+  if ($data) {
+    foreach ($data as $page) {
+      echo $page['title'] . ': ';
+      if (isset($page['pageid'])) {
+        $page_data = getMWPageData($wiki_url, $page['pageid']);
       } else {
-        $response = $conduit->callMethodSynchronous('phriction.edit', array(
-          "slug" => $safe_title,
-          "title" => $page['title'],
-          "content" => $text,
-          "description" => "Imported from $wiki_url ($category)"));
-
-        if ($response['status'] == 'exists') {
-          echo ($existing ? 'updated' : 'imported') . " as {$response['slug']}";
-          $category_page .= "* [[{$response['slug']}|{$response['title']}]]\n";
+        continue;
+      }
+      if ($page_data) {
+        $safe_title = str_replace(' ', '_', $page['title']);
+        $text = convertMWToPhriction($wiki_url, $page_data['content']);
+        $text .= "\n\nImported from [[$wiki_url/index.php/$safe_title|{$page['title']}]]";
+        $cat_prefix = getPhrictionPrefix($text, idx($config, 'category.map'));
+        if ($cat_prefix) {
+          removeUncategorizedArticle($conduit, $safe_title, $text);
+          $safe_title = $cat_prefix . $safe_title;
+        }
+        try {
+          $existing = $conduit->callMethodSynchronous('phriction.info', array(
+            "slug" => strtolower($safe_title)));
+        } catch (Exception $e) {
+          $existing = null;
+        }
+        if ($action == 'delete') {
+          $text = '';
+        }
+        if ($existing && $existing['content'] == $text) {
+          echo 'no changes';
         } else {
-          echo $response['status'];
+          $response = $conduit->callMethodSynchronous('phriction.edit', array(
+            "slug" => $safe_title,
+            "title" => $page['title'],
+            "content" => $text,
+            "description" => "Imported from $wiki_url ($category)"));
+
+          if ($response['status'] == 'exists') {
+            echo ($existing ? 'updated' : 'imported') . " as {$response['slug']}";
+            $category_page .= "* [[{$response['slug']}|{$response['title']}]]\n";
+          } else {
+            echo $response['status'];
+          }
         }
       }
+      echo "\n";
     }
-    echo "\n";
+  }
+
+  if ($category_page) {
+    $response = $conduit->callMethodSynchronous('phriction.edit', array(
+      "slug" => strtolower("Category $category"),
+      "title" => "Category $category",
+      "content" => $category_page,
+      "description" => "Imported from $wiki_url"
+    ));
   }
 }
 
-if ($category_page) {
-  $response = $conduit->callMethodSynchronous('phriction.edit', array(
-    "slug" => strtolower("Category $category"),
-    "title" => "Category $category",
-    "content" => $category_page,
-    "description" => "Imported from $wiki_url"
-  ));
-}
 echo "Done.\n";
 
 function getMWCategoryData($wiki_url, $category, $limit) {
@@ -277,7 +290,7 @@ function help() {
         MW title to import
 
     __--cat__
-        MW category to import from
+        MW category to import from (use "all" for all configured categories)
 
     __--limit__
         Number of articles to import (defaults to 500)
