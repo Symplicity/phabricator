@@ -104,7 +104,11 @@ if ($data) {
       $safe_title = str_replace(' ', '_', $page['title']);
       $text = convertMWToPhriction($wiki_url, $page_data['content']);
       $text .= "\n\nImported from [[$wiki_url/index.php/$safe_title|{$page['title']}]]";
-      $safe_title = getPhrictionPrefix($text, idx($config, 'category.map')) . $safe_title;
+      $cat_prefix = getPhrictionPrefix($text, idx($config, 'category.map'));
+      if ($cat_prefix) {
+        removeUncategorizedArticle($conduit, $safe_title, $text);
+        $safe_title = $cat_prefix . $safe_title;
+      }
       try {
         $existing = $conduit->callMethodSynchronous('phriction.info', array(
           "slug" => strtolower($safe_title)));
@@ -229,6 +233,23 @@ function getPhrictionPrefix($text, $category_map) {
     }
   }
   return '';
+}
+
+function removeUncategorizedArticle($conduit, $safe_title, $text) {
+  try {
+    $existing = $conduit->callMethodSynchronous('phriction.info', array(
+      "slug" => strtolower($safe_title)));
+    if ($existing && $existing['content'] == $text) {
+      $response = $conduit->callMethodSynchronous('phriction.edit', array(
+        "slug" => $safe_title,
+        "content" => $text));
+      echo " ({$response['status']} as $safe_title) ";
+    } else {
+      echo " (may exist as $safe_title) ";
+    }
+  } catch (Exception $e) {
+    // it does not exist, keep going
+  }
 }
 
 function usage($message) {
