@@ -88,7 +88,7 @@ $response = $conduit->callMethodSynchronous(
 
 if ($category) {
   if ($category == 'all') {
-    $loop_categories = idx($config, 'category.map');
+    $loop_categories = array_keys(idx($config, 'category.map'));
   } else {
     $loop_categories = array($category);
   }
