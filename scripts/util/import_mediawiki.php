@@ -132,6 +132,7 @@ foreach ($loop_categories as $category) {
         }
         if ($existing && $existing['content'] == $text) {
           echo 'no changes';
+          $category_page .= "* [[{$response['slug']}|{$response['title']}]]\n";
         } else {
           $response = $conduit->callMethodSynchronous('phriction.edit', array(
             "slug" => $safe_title,
