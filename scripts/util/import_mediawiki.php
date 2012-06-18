@@ -44,6 +44,7 @@ for ($ii = 0; $ii < $len; $ii++) {
         throw new Exception("File '$config_file' is not valid JSON!");
       }
       $wiki_url = idx($config, 'wiki.url');
+      $category_map = array_change_key_case(idx($config, 'category.map'));
       break;
     case '--title':
       $title = $args[++$ii];
@@ -115,7 +116,7 @@ foreach ($loop_categories as $category) {
         $safe_title = str_replace(' ', '_', $page['title']);
         $text = convertMWToPhriction($wiki_url, $page_data['content']);
         $text .= "\n\nImported from [[$wiki_url/index.php/$safe_title|{$page['title']}]]";
-        $cat_prefix = getPhrictionPrefix($text, idx($config, 'category.map'));
+        $cat_prefix = getPhrictionPrefix($text, $category_map);
         if ($cat_prefix) {
           removeUncategorizedArticle($conduit, $safe_title, $text);
           $safe_title = $cat_prefix . $safe_title;
@@ -239,7 +240,7 @@ function convertMWToPhriction($wiki_url, $text) {
 function getPhrictionPrefix($text, $category_map) {
   if (preg_match_all('/\[\[category:([^\]]+)\]\]/i', $text, $categories)) {
     foreach ($categories[1] as $cat) {
-      $cat = str_replace('_', ' ', $cat);
+      $cat = strtolower(str_replace('_', ' ', $cat));
       if (isset($category_map[$cat])) {
         return $category_map[$cat] . '/';
       }
