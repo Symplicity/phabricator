@@ -256,7 +256,7 @@ function removeUncategorizedArticle($conduit, $safe_title, $text) {
     if ($existing && $existing['content'] == $text) {
       $response = $conduit->callMethodSynchronous('phriction.edit', array(
         "slug" => $safe_title,
-        "content" => $text));
+        "content" => ""));
       echo " ({$response['status']} as $safe_title) ";
     } else {
       echo " (may exist as $safe_title) ";
