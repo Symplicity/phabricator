@@ -31,7 +31,6 @@ $action = 'replace';
 $all_actions = array('insert', 'replace', 'delete');
 $title = '';
 $category = '';
-$category_page = '';
 $limit = 500;
 $len = count($args);
 for ($ii = 0; $ii < $len; $ii++) {
@@ -97,6 +96,7 @@ if ($category) {
   $loop_categories = array(''); // single loop in title case
 }
 foreach ($loop_categories as $category) {
+  $category_page = '';
   if ($category) {
     echo "\nImporting $category articles\n";
     $data = getMWCategoryData($wiki_url, $category, $limit);
