@@ -2,7 +2,7 @@
 <?php
 
 /*
- * Copyright 2011 Facebook, Inc.
+ * Copyright 2012 Facebook, Inc.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -25,13 +25,6 @@ $root = dirname(dirname(dirname(__FILE__)));
 require_once $root.'/scripts/__init_script__.php';
 require_once $root.'/externals/mimemailparser/MimeMailParser.class.php';
 
-phutil_require_module(
-  'phabricator',
-  'applications/metamta/storage/receivedmail');
-phutil_require_module(
-  'phabricator',
-  'applications/files/storage/file');
-
 $parser = new MimeMailParser();
 $parser->setText(file_get_contents('php://stdin'));
 
@@ -41,9 +34,10 @@ $text_body_headers = $parser->getMessageBodyHeaders('text');
 $content_type = idx($text_body_headers, 'content-type');
 if (
   !phutil_is_utf8($text_body) &&
-  preg_match('/charset="(.*?)"/', $content_type, $matches)
+  (preg_match('/charset="(.*?)"/', $content_type, $matches) ||
+   preg_match('/charset=(\S+)/', $content_type, $matches))
 ) {
-  $text_body = mb_convert_encoding($text_body, "UTF-8", $matches[1]);
+  $text_body = phutil_utf8_convert($text_body, "UTF-8", $matches[1]);
 }
 
 $headers = $parser->getHeaders();

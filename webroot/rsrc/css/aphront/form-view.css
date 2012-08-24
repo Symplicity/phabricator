@@ -40,6 +40,12 @@
   padding-top: 4px;
 }
 
+.aphront-form-required {
+  font-weight: normal;
+  color: #888888;
+  font-size: 11px;
+}
+
 .aphront-form-input input,
 .aphront-form-input textarea {
   font-size: 12px;
@@ -78,7 +84,6 @@
   font-size: 11px;
   color: #444444;
   text-align: right;
-  clear: both;
   margin-right: 25%;
   margin-left: 20%;
 }
@@ -137,6 +142,18 @@ table.aphront-form-control-checkbox-layout th {
   font-size: 11px;
   color: #444444;
   max-width: 400px;
+}
+
+.aphront-form-control-image .image {
+  width: 164px;
+}
+
+.aphront-form-control-image span {
+  margin: 0px 4px 0px 2px;
+}
+
+.aphront-form-control-image .default-image {
+  width: 12px;
 }
 
 .aphront-form-input hr {

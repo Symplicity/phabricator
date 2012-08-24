@@ -20,9 +20,6 @@
 $root = dirname(dirname(dirname(__FILE__)));
 require_once $root.'/scripts/__init_script__.php';
 
-phutil_require_module('phutil', 'console');
-phutil_require_module('phutil', 'future/exec');
-
 echo "Enter a username to create a new account or edit an existing account.";
 
 $username = phutil_console_prompt("Enter a username:");
@@ -32,8 +29,8 @@ if (!strlen($username)) {
 }
 
 if (!PhabricatorUser::validateUsername($username)) {
-  echo "The username '{$username}' is invalid. Usernames must consist of only ".
-       "numbers and letters.\n";
+  $valid = PhabricatorUser::describeValidUsername();
+  echo "The username '{$username}' is invalid. {$valid}\n";
   exit(1);
 }
 
@@ -121,7 +118,6 @@ $is_admin = $user->getIsAdmin();
 $set_admin = phutil_console_confirm(
   'Should this user be an administrator?',
   $default_no = !$is_admin);
-$user->setIsAdmin($set_admin);
 
 echo "\n\nACCOUNT SUMMARY\n\n";
 $tpl = "%12s   %-30s   %-30s\n";
@@ -140,7 +136,7 @@ printf(
   $tpl,
   'Admin',
   $original->getIsAdmin() ? 'Y' : 'N',
-  $user->getIsAdmin() ? 'Y' : 'N');
+  $set_admin ? 'Y' : 'N');
 
 echo "\n";
 
@@ -149,21 +145,31 @@ if (!phutil_console_confirm("Save these changes?", $default_no = false)) {
   exit(1);
 }
 
-$user->save();
-if ($changed_pass !== false) {
-  // This must happen after saving the user because we use their PHID as a
-  // component of the password hash.
-  $user->setPassword($changed_pass);
-  $user->save();
-}
+$user->openTransaction();
 
-if ($new_email) {
-  id(new PhabricatorUserEmail())
-    ->setUserPHID($user->getPHID())
-    ->setAddress($new_email)
-    ->setIsVerified(1)
-    ->setIsPrimary(1)
-    ->save();
-}
+  $editor = new PhabricatorUserEditor();
+
+  // TODO: This is wrong, but we have a chicken-and-egg problem when you use
+  // this script to create the first user.
+  $editor->setActor($user);
+
+  if ($new_email) {
+    $email = id(new PhabricatorUserEmail())
+      ->setAddress($new_email)
+      ->setIsVerified(1);
+
+    $editor->createNewUser($user, $email);
+  } else {
+    $editor->updateUser($user);
+  }
+
+  $editor->makeAdminUser($user, $set_admin);
+
+  if ($changed_pass !== false) {
+    $envelope = new PhutilOpaqueEnvelope($changed_pass);
+    $editor->changePassword($user, $envelope);
+  }
+
+$user->saveTransaction();
 
 echo "Saved changes.\n";

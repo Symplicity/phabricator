@@ -20,12 +20,8 @@
 $root = dirname(dirname(dirname(__FILE__)));
 require_once $root.'/scripts/__init_script__.php';
 
-phutil_require_module('phutil', 'console');
-phutil_require_module('phabricator', 'storage/queryfx');
-
 $purge_changesets   = false;
 $purge_differential = false;
-$purge_maniphest    = false;
 
 $args = array_slice($argv, 1);
 if (!$args) {
@@ -39,7 +35,6 @@ for ($ii = 0; $ii < $len; $ii++) {
     case '--all':
       $purge_changesets = true;
       $purge_differential = true;
-      $purge_maniphest = true;
       break;
     case '--changesets':
       $purge_changesets = true;
@@ -54,9 +49,6 @@ for ($ii = 0; $ii < $len; $ii++) {
       break;
     case '--differential':
       $purge_differential = true;
-      break;
-    case '--maniphest':
-      $purge_maniphest = true;
       break;
     case '--help':
       return help();
@@ -101,16 +93,6 @@ if ($purge_differential) {
   echo "Done.\n";
 }
 
-if ($purge_maniphest) {
-  echo "Purging Maniphest comment cache...\n";
-  $table = new ManiphestTransaction();
-  queryfx(
-    $table->establishConnection('w'),
-    'UPDATE %T SET cache = NULL',
-    $table->getTableName());
-  echo "Done.\n";
-}
-
 echo "Ok, caches purged.\n";
 
 function usage($message) {
@@ -125,7 +107,6 @@ function help() {
 **SUMMARY**
 
     **purge_cache.php**
-        [--maniphest]
         [--differential]
         [--changesets [changeset_id ...]]
     **purge_cache.php** --all
@@ -139,9 +120,8 @@ function help() {
     syntax highlighting, you may want to purge the changeset cache (with
     "--changesets") so your changes are reflected in older diffs.
 
-    If you change Remarkup rules, you may want to purge the Maniphest or
-    Differential comment caches ("--maniphest", "--differential") so older
-    comments pick up the new rules.
+    If you change Remarkup rules, you may want to purge the Differential
+    comment caches ("--differential") so older comments pick up the new rules.
 
     __--all__
         Purge all long-lived caches.
@@ -153,9 +133,6 @@ function help() {
 
     __--differential__
         Purge Differential comment formatting cache.
-
-    __--maniphest__: show this help
-        Purge Maniphest comment formatting cache.
 
     __--help__: show this help
 

@@ -56,13 +56,16 @@ return array(
   'security.hmac-key' => '[D\t~Y7eNmnQGJ;rnH6aF;m2!vJ8@v8C=Cs:aQS\.Qw',
 
 
-// -- Customization --------------------------------------------------------- //
+// -- Internationalization -------------------------------------------------- //
 
-  // If you want to use a custom logo (e.g., for your company or organization),
-  // copy 'webroot/rsrc/image/custom/example_template.png' to
-  // 'webroot/rsrc/image/custom/custom.png' and set this to the URI you want it
-  // to link to (like http://www.yourcompany.com/).
-  'phabricator.custom.logo'   => null,
+  // This allows customizing texts used in Phabricator. The class must extend
+  // PhabricatorTranslation.
+  'translation.provider' => 'PhabricatorEnglishTranslation',
+
+  // You can use 'translation.override' if you don't want to create a full
+  // translation to give users an option for switching to it and you just want
+  // to override some strings in the default translation.
+  'translation.override' => array(),
 
 
 // -- Access Policies ------------------------------------------------------- //
@@ -142,6 +145,8 @@ return array(
   'darkconsole.config-mask'     => array(
     'mysql.pass',
     'amazon-ses.secret-key',
+    'amazon-s3.secret-key',
+    'sendgrid.api-key',
     'recaptcha.private-key',
     'phabricator.csrf-key',
     'facebook.application-secret',
@@ -180,6 +185,32 @@ return array(
   'mysql.implementation' => 'AphrontMySQLDatabaseConnection',
 
 
+// -- Notifications --------------------------------------------------------- //
+
+  'notification.enabled' => false,
+
+  // Client port for the realtime server to listen on, and for realtime clients
+  // to connect to. Use "localhost" if you are running the notification server
+  // on the same host as the web server.
+  'notification.client-uri'   => 'http://localhost:22280/',
+
+  // URI and port for the notification root server.
+  'notification.server-uri'   => 'http://localhost:22281/',
+
+  // The server must be started as root so it can bind to privileged ports, but
+  // if you specify a user here it will drop permissions after binding.
+  'notification.user'         => null,
+
+  // Location where the server should log to.
+  'notification.log'          => '/var/log/aphlict.log',
+
+  // PID file to use.
+  'notification.pidfile'      => '/var/run/aphlict.pid',
+
+  // Enable this option to get additional debug output in the browser.
+  'notification.debug'        => false,
+
+
 // -- Email ----------------------------------------------------------------- //
 
   // Some Phabricator tools send email notifications, e.g. when Differential
@@ -211,6 +242,7 @@ return array(
   //       one from the user and one from Phabricator turning their mail into
   //       a comment.
   //     - Not supported with a private reply-to address.
+  //     - Mails are sent in the server default translation.
   //   - One mail to each user:
   //     - Recipients need to look in the mail body to see To/Cc.
   //     - If you use mailing lists, recipients may sometimes get duplicate
@@ -219,10 +251,17 @@ return array(
   //       can be customzied by each user.
   //     - "Reply All" no longer spams all other users.
   //     - Required if private reply-to addresses are configured.
+  //     - Mails are sent in the language of user preference.
   //
   // In the code, splitting one outbound email into one-per-recipient is
   // sometimes referred to as "multiplexing".
   'metamta.one-mail-per-recipient'  => true,
+
+  // When sending a message that has no To recipient (i.e. all recipients
+  // are CC'd, for example when multiplexing mail), set the To field to the
+  // following value. If no value is set, messages with no To will have
+  // their CCs upgraded to To.
+  'metamta.placeholder-to-recipient' => null,
 
   // When a user takes an action which generates an email notification (like
   // commenting on a Differential revision), Phabricator can either send that
@@ -255,13 +294,11 @@ return array(
   'metamta.mail-adapter'        =>
     'PhabricatorMailImplementationPHPMailerLiteAdapter',
 
-  // When email is sent, try to hand it off to the MTA immediately. This may
-  // be worth disabling if your MTA infrastructure is slow or unreliable. If you
-  // disable this option, you must run the 'metamta_mta.php' daemon or mail
-  // won't be handed off to the MTA. If you're using Amazon SES it can be a
-  // little slugish sometimes so it may be worth disabling this and moving to
-  // the daemon after you've got your install up and running. If you have a
-  // properly configured local MTA it should not be necessary to disable this.
+  // When email is sent, try to hand it off to the MTA immediately instead of
+  // queueing it for delivery by the daemons. If you are running the Phabricator
+  // daemons with "phd start", you should disable this to provide a (sometimes
+  // substantial) performance boost. It's on by default to make setup and
+  // configuration a little easier.
   'metamta.send-immediately'    => true,
 
   // If you're using Amazon SES to send email, provide your AWS access key
@@ -345,6 +382,13 @@ return array(
   // patches are sent in. Valid options are 'unified' (like diff -u) or 'git'.
   'metamta.differential.patch-format'   => 'unified',
 
+  // Enables a different format for comments in differential emails.
+  // Differential will create unified diffs around the comment, which
+  // will give enough context for people who are only viewing the
+  // reviews in email to understand what is going on. The context will
+  // be created based on the range of the comment.
+  'metamta.differential.unified-comment-context' => false,
+
   // Prefix prepended to mail sent by Diffusion.
   'metamta.diffusion.subject-prefix' => '[Diffusion]',
 
@@ -355,6 +399,26 @@ return array(
   // See 'metamta.maniphest.reply-handler'. This does the same thing, but
   // affects Diffusion.
   'metamta.diffusion.reply-handler' => 'PhabricatorAuditReplyHandler',
+
+  // Set this to true if you want patches to be attached to commit notifications
+  // from Diffusion. This won't work with SendGrid.
+  'metamta.diffusion.attach-patches' => false,
+
+  // To include patches in Diffusion email bodies, set this to a positive
+  // integer. Patches will be inlined if they are at most that many lines.
+  // By default, patches are not inlined.
+  'metamta.diffusion.inline-patches' => 0,
+
+  // If you've enabled attached patches or inline patches for commit emails, you
+  // can establish a hard byte limit on their size. You should generally set
+  // reasonable byte and time limits (defaults are 1MB and 60 seconds) to avoid
+  // sending ridiculously enormous email for changes like "importing an external
+  // library" or "accidentally committed this full-length movie as text".
+  'metamta.diffusion.byte-limit'     => 1024 * 1024,
+
+  // If you've enabled attached patches or inline patches for commit emails, you
+  // can establish a hard time limit on generating them.
+  'metamta.diffusion.time-limit'     => 60,
 
   // Prefix prepended to mail sent by Package.
   'metamta.package.subject-prefix' => '[Package]',
@@ -406,6 +470,20 @@ return array(
   // address will be stored in an 'From Email' field on the task.
   'metamta.maniphest.default-public-author' => null,
 
+  // You can disable the Herald hints in email if users prefer smaller messages.
+  // These are the links under the headers "MANAGE HERALD RULES" and
+  // "WHY DID I GET THIS EMAIL?". If you set this to true, they will not appear
+  // in any mail. Users can still navigate to the links via the web interface.
+  'metamta.herald.show-hints' => true,
+
+  // You can disable the hints under "REPLY HANDLER ACTIONS" if users prefer
+  // smaller messages. The actions themselves will still work properly.
+  'metamta.reply.show-hints' => true,
+
+  // You can disable the "To:" and "Cc:" footers in mail if users prefer
+  // smaller messages.
+  'metamta.recipients.show-hints' => true,
+
   // If this option is enabled, Phabricator will add a "Precedence: bulk"
   // header to transactional mail (e.g., Differential, Maniphest and Herald
   // notifications). This may improve the behavior of some auto-responder
@@ -453,6 +531,34 @@ return array(
   // disabled.
   'auth.sshkeys.enabled'        => false,
 
+  // If true, email addresses must be verified (by clicking a link in an
+  // email) before a user can login. By default, verification is optional
+  // unless 'auth.email-domains' is nonempty (see below).
+  'auth.require-email-verification' => false,
+
+  // You can restrict allowed email addresses to certain domains (like
+  // "yourcompany.com") by setting a list of allowed domains here. Users will
+  // only be allowed to register using email addresses at one of the domains,
+  // and will only be able to add new email addresses for these domains. If
+  // you configure this, it implies 'auth.require-email-verification'.
+  //
+  // To configure email domains, set a list of domains like this:
+  //
+  //   array(
+  //     'yourcompany.com',
+  //     'yourcompany.co.uk',
+  //   )
+  //
+  // You should omit the "@" from domains. Note that the domain must match
+  // exactly. If you allow "yourcompany.com", that permits "joe@yourcompany.com"
+  // but rejects "joe@mail.yourcompany.com".
+  'auth.email-domains' => array(),
+
+  // You can provide an arbitrary block of HTML here, which will appear on the
+  // login screen. Normally, you'd use this to provide login or registration
+  // instructions to users.
+  'auth.login-message' => null,
+
 
 // -- Accounts -------------------------------------------------------------- //
 
@@ -485,6 +591,9 @@ return array(
   // The Facebook "Application Secret" to use for Facebook API access.
   'facebook.application-secret' => null,
 
+  // Should Phabricator reject requests made by users with
+  // Secure Browsing disabled?
+  'facebook.require-https-auth' => false,
 
 // -- GitHub OAuth ---------------------------------------------------------- //
 
@@ -539,6 +648,47 @@ return array(
 
   // The Google "Client Secret" to use for Google API access.
   'google.application-secret'   => null,
+
+// -- LDAP Auth ----------------------------------------------------- //
+  // Enable ldap auth
+  'ldap.auth-enabled'         => false,
+
+  // The LDAP server hostname
+  'ldap.hostname' => '',
+
+  // The LDAP server port
+  'ldap.port' => 389,
+
+  // The LDAP base domain name
+  'ldap.base_dn' => '',
+
+  // The attribute to be regarded as 'username'. Has to be unique
+  'ldap.search_attribute' => '',
+
+  // Perform a search to find a user
+  // Many LDAP installations do not have the username in the dn, if this is
+  // true for you set this to true and configure the username_attribute below
+  'ldap.search-first'         => false,
+
+  // The attribute to search for if you have to search for a user
+  'ldap.username-attribute' => '',
+
+  // The attribute(s) to be regarded as 'real name'.
+  // If more then one attribute is supplied the values of the attributes in
+  // the array will be joined
+  'ldap.real_name_attributes' => array(),
+
+  // A domain name to use when authenticating against Active Directory
+  // (e.g. 'example.com')
+  'ldap.activedirectory_domain' => '',
+
+  // The LDAP version
+  'ldap.version' => 3,
+
+  // LDAP Referrals Option
+  // Whether referrals should be followed by the client
+  // Should be set to 0 if you use Windows 2003 AD
+  'ldap.referrals' => 1,
 
 // -- Disqus OAuth ---------------------------------------------------------- //
 
@@ -623,8 +773,15 @@ return array(
   // addresses.
   'phabricator.mail-key'        => '5ce3e7e8787f6e40dfae861da315a5cdf1018f12',
 
-  // Version string displayed in the footer. You probably should leave this
-  // alone.
+  // Version string displayed in the footer. You can generate this value from
+  // Git log or from the current date in the deploy with a script like this:
+  //
+  // git log -n1 --pretty=%h > version.txt
+  //
+  // You can then use this generated value like this:
+  //
+  // 'phabricator.version' =>
+  //   file_get_contents(dirname(__FILE__).'/version.txt'),
   'phabricator.version'         => 'UNSTABLE',
 
   // PHP requires that you set a timezone in your php.ini before using date
@@ -833,7 +990,7 @@ return array(
     '/.*/'      => 80,
   ),
 
-  // List of file regexps were whitespace is meaningful and should not
+  // List of file regexps where whitespace is meaningful and should not
   // use 'ignore-all' by default
   'differential.whitespace-matters' => array(
     '/\.py$/',
@@ -874,12 +1031,26 @@ return array(
   'differential.anonymous-access' => false,
 
   // List of file regexps that should be treated as if they are generated by
-  // an automatic process, and thus get hidden by default in differential
+  // an automatic process, and thus get hidden by default in differential.
   'differential.generated-paths' => array(
     // '/config\.h$/',
     // '#/autobuilt/#',
   ),
 
+  // If you set this to true, users can accept their own revisions.  This action
+  // is disabled by default because it's most likely not a behavior you want,
+  // but it proves useful if you are working alone on a project and want to make
+  // use of all of differential's features.
+  'differential.allow-self-accept' => false,
+
+  // Revisions newer than this number of days are marked as fresh in Action
+  // Required and Revisions Waiting on You views. Only work days (not weekends
+  // and holidays) are included. Set to 0 to disable this feature.
+  'differential.days-fresh' => 1,
+
+  // Similar to 'differential.days-fresh' but marks stale revisions. If the
+  // revision is even older than it is marked as old.
+  'differential.days-stale' => 3,
 
 // -- Maniphest ------------------------------------------------------------- //
 
@@ -933,6 +1104,7 @@ return array(
   'gcdaemon.ttl.herald-transcripts'         => 30 * (24 * 60 * 60),
   'gcdaemon.ttl.daemon-logs'                =>  7 * (24 * 60 * 60),
   'gcdaemon.ttl.differential-parse-cache'   => 14 * (24 * 60 * 60),
+  'gcdaemon.ttl.markup-cache'               => 30 * (24 * 60 * 60),
 
 
 // -- Feed ------------------------------------------------------------------ //
@@ -941,6 +1113,9 @@ return array(
   // pages using iframes. These feeds are completely public, and a login is not
   // required to view them! This is intended for things like open source
   // projects that want to expose an activity feed on the project homepage.
+  //
+  // NOTE: You must also set `policy.allow-public` to true for this setting
+  // to work properly.
   'feed.public' => false,
 
 
@@ -950,6 +1125,7 @@ return array(
   // EC2 credentials here.
   'amazon-ec2.access-key'   => null,
   'amazon-ec2.secret-key'   => null,
+
 
 // -- Customization --------------------------------------------------------- //
 
@@ -965,12 +1141,29 @@ return array(
 
   // Directory that phd (the Phabricator daemon control script) should use to
   // track running daemons.
-  'phd.pid-directory' => '/var/tmp/phd',
+  'phd.pid-directory' => '/var/tmp/phd/pid',
+
+  // Directory that the Phabricator daemons should use to store the log file
+  'phd.log-directory' => '/var/tmp/phd/log',
 
   // Number of "TaskMaster" daemons that "phd start" should start. You can
   // raise this if you have a task backlog, or explicitly launch more with
   // "phd launch <N> taskmaster".
   'phd.start-taskmasters' => 4,
+
+  // Launch daemons in "verbose" mode by default. This creates a lot of output,
+  // but can help debug issues. Daemons launched in debug mode with "phd debug"
+  // are always launched in verbose mode. See also 'phd.trace'.
+  'phd.verbose' => false,
+
+  // Launch daemons in "trace" mode by default. This creates an ENORMOUS amount
+  // of output, but can help debug issues. Daemons launched in debug mode with
+  // "phd debug" are always launched in trace mdoe. See also 'phd.verbose'.
+  'phd.trace' => false,
+
+  // Path to custom celerity resource map relative to 'phabricator/src'.
+  // See also `scripts/celerity_mapper.php`.
+  'celerity.resource-path' => '__celerity_resource_map__.php',
 
   // This value is an input to the hash function when building resource hashes.
   // It has no security value, but if you accidentally poison user caches (by
@@ -998,12 +1191,16 @@ return array(
   // of classes which extend PhabricatorEventListener here.
   'events.listeners'  => array(),
 
-// -- Pygments -------------------------------------------------------------- //
+// -- Syntax Highlighting --------------------------------------------------- //
 
-  // Phabricator can highlight PHP by default, but if you want syntax
-  // highlighting for other languages you should install the python package
-  // 'Pygments', make sure the 'pygmentize' script is available in the
-  // $PATH of the webserver, and then enable this.
+  // Phabricator can highlight PHP by default and use Pygments for other
+  // languages if enabled. You can provide a custom highlighter engine by
+  // extending class PhutilSyntaxHighlighterEngine.
+  'syntax-highlighter.engine' => 'PhutilDefaultSyntaxHighlighterEngine',
+
+  // If you want syntax highlighting for other languages than PHP then you can
+  // install the python package 'Pygments', make sure the 'pygmentize' script is
+  //  available in the $PATH of the webserver, and then enable this.
   'pygments.enabled'            => false,
 
   // In places that we display a dropdown to syntax-highlight code,
@@ -1056,6 +1253,47 @@ return array(
     // '@\\.([^.]+)\\.bak$@' => 1,
 
     '@\.arcconfig$@' => 'js',
+    '@\.divinerconfig$@' => 'js',
   ),
 
+  // Set the default monospaced font style for users who haven't set a custom
+  // style.
+  'style.monospace' => '10px "Menlo", "Consolas", "Monaco", monospace',
+
+
+// -- Debugging ------------------------------------------------------------- //
+
+  // Enable this to change HTTP redirects into normal pages with a link to the
+  // redirection target. For example, after you submit a form you'll get a page
+  // saying "normally, you'd be redirected...". This is useful to examine
+  // service or profiler information on write pathways, or debug redirects. It
+  // also makes the UX horrible for normal use, so you should enable it only
+  // when debugging.
+  //
+  // NOTE: This does not currently work for forms with Javascript "workflow",
+  // since the redirect happens in Javascript.
+  'debug.stop-on-redirect'    => false,
+
+  // Enable this to always profile every page. This is very slow! You should
+  // only enable it when debugging.
+  'debug.profile-every-request'  => false,
+
+
+// -- Previews  ------------------------------------------------------------- //
+
+  // Turn on to enable the "viewport" meta tag. This is a preview feature which
+  // will improve the usability of Phabricator on phones and tablets once it
+  // is ready.
+  'preview.viewport-meta-tag' => false,
+
+// -- Environment  ---------------------------------------------------------- //
+
+  // Phabricator occasionally shells out to other binaries on the server.
+  // An example of this is the "pygmentize" command, used to syntax-highlight
+  // code written in languages other than PHP. By default, it is assumed that
+  // these binaries are in the $PATH of the user running Phabricator (normally
+  // 'apache', 'httpd', or 'nobody'). Here you can add extra directories to
+  // the $PATH environment variable, for when these binaries are in non-standard
+  // locations.
+  'environment.append-paths' => array(),
 );

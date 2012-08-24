@@ -21,13 +21,6 @@ $access_log = null;
 
 error_reporting(E_ALL | E_STRICT);
 
-if ($_SERVER['REQUEST_METHOD'] == 'POST' && !$_POST &&
-    isset($_REQUEST['__file__'])) {
-  $size = ini_get('post_max_size');
-  phabricator_fatal(
-    "Request size exceeds PHP 'post_max_size' ('{$size}').");
-}
-
 $required_version = '5.2.3';
 if (version_compare(PHP_VERSION, $required_version) < 0) {
   phabricator_fatal_config_error(
@@ -35,8 +28,6 @@ if (version_compare(PHP_VERSION, $required_version) < 0) {
     "the minimum version, '{$required_version}'. Update to at least ".
     "'{$required_version}'.");
 }
-
-phabricator_detect_insane_memory_limit();
 
 ini_set('memory_limit', -1);
 
@@ -55,8 +46,14 @@ if (!$env) {
 }
 
 if (!isset($_REQUEST['__path__'])) {
-  phabricator_fatal_config_error(
-    "__path__ is not set. Your rewrite rules are not configured correctly.");
+  if (php_sapi_name() == 'cli-server') {
+    // Compatibility with PHP 5.4+ built-in web server.
+    $url = parse_url($_SERVER['REQUEST_URI']);
+    $_REQUEST['__path__'] = $url['path'];
+  } else {
+    phabricator_fatal_config_error(
+      "__path__ is not set. Your rewrite rules are not configured correctly.");
+  }
 }
 
 if (get_magic_quotes_gpc()) {
@@ -73,11 +70,28 @@ require_once dirname(dirname(__FILE__)).'/conf/__init_conf__.php';
 try {
   setup_aphront_basics();
 
+  $overseer = new PhabricatorRequestOverseer();
+  $overseer->didStartup();
+
   $conf = phabricator_read_config_file($env);
   $conf['phabricator.env'] = $env;
 
-  phutil_require_module('phabricator', 'infrastructure/env');
   PhabricatorEnv::setEnvConfig($conf);
+
+  // This needs to be done before we create the log, because
+  // PhabricatorAccessLog::getLog() calls date()
+  $tz = PhabricatorEnv::getEnvConfig('phabricator.timezone');
+  if ($tz) {
+    date_default_timezone_set($tz);
+  }
+
+  // Append any paths to $PATH if we need to.
+  $paths = PhabricatorEnv::getEnvConfig('environment.append-paths');
+  if (!empty($paths)) {
+    $current_env_path = getenv('PATH');
+    $new_env_paths = implode(':', $paths);
+    putenv('PATH='.$current_env_path.':'.$new_env_paths);
+  }
 
   // This is the earliest we can get away with this, we need env config first.
   PhabricatorAccessLog::init();
@@ -91,23 +105,13 @@ try {
       ));
   }
 
-  phutil_require_module('phabricator', 'aphront/console/plugin/xhprof/api');
   DarkConsoleXHProfPluginAPI::hookProfiler();
-
-  phutil_require_module('phabricator', 'aphront/console/plugin/errorlog/api');
 
   PhutilErrorHandler::initialize();
 
 } catch (Exception $ex) {
   phabricator_fatal("[Initialization Exception] ".$ex->getMessage());
 }
-
-$tz = PhabricatorEnv::getEnvConfig('phabricator.timezone');
-if ($tz) {
-  date_default_timezone_set($tz);
-}
-phutil_require_module('phabricator', 'aphront/console/plugin/errorlog/api');
-phutil_require_module('phutil', 'error');
 
 PhutilErrorHandler::setErrorListener(
   array('DarkConsoleErrorLogPluginAPI', 'handleErrors'));
@@ -128,6 +132,11 @@ if (PhabricatorEnv::getEnvConfig('phabricator.setup')) {
 
 phabricator_detect_bad_base_uri();
 
+$translation = PhabricatorEnv::newObjectFromConfig('translation.provider');
+PhutilTranslator::getInstance()
+  ->setLanguage($translation->getLanguage())
+  ->addTranslations($translation->getTranslations());
+
 $host = $_SERVER['HTTP_HOST'];
 $path = $_REQUEST['__path__'];
 
@@ -144,7 +153,7 @@ $application->setPath($path);
 $application->willBuildRequest();
 $request = $application->buildRequest();
 
-$write_guard = new AphrontWriteGuard($request);
+$write_guard = new AphrontWriteGuard(array($request, 'validateCSRF'));
 PhabricatorEventEngine::initialize();
 
 $application->setRequest($request);
@@ -158,6 +167,10 @@ if ($access_log) {
     ));
 }
 
+// If execution throws an exception and then trying to render that exception
+// throws another exception, we want to show the original exception, as it is
+// likely the root cause of the rendering exception.
+$original_exception = null;
 try {
   $response = $controller->willBeginExecution();
 
@@ -178,17 +191,27 @@ try {
   $response = id(new AphrontRedirectResponse())
     ->setURI($ex->getURI());
 } catch (Exception $ex) {
+  $original_exception = $ex;
   $response = $application->handleException($ex);
 }
 
 try {
-  $response = $application->willSendResponse($response);
+  $response = $controller->didProcessRequest($response);
+  $response = $application->willSendResponse($response, $controller);
   $response->setRequest($request);
   $response_string = $response->buildResponseString();
 } catch (Exception $ex) {
   $write_guard->dispose();
   if ($access_log) {
     $access_log->write();
+  }
+  if ($original_exception) {
+    $ex = new PhutilAggregateException(
+      "Multiple exceptions during processing and rendering.",
+      array(
+        $original_exception,
+        $ex,
+      ));
   }
   phabricator_fatal('[Rendering Exception] '.$ex->getMessage());
 }
@@ -206,8 +229,8 @@ $headers = array_merge($headers, $response->getHeaders());
 $sink->writeHeaders($headers);
 
 // TODO: This shouldn't be possible in a production-configured environment.
-if (isset($_REQUEST['__profile__']) &&
-    ($_REQUEST['__profile__'] == 'all')) {
+if (DarkConsoleXHProfPluginAPI::isProfilerRequested() &&
+    DarkConsoleXHProfPluginAPI::isProfilerRequested() === 'all') {
   $profile = DarkConsoleXHProfPluginAPI::stopProfiler();
   $profile =
     '<div style="text-align: center; background: #ff00ff; padding: 1em;
@@ -295,34 +318,6 @@ function phabricator_detect_bad_base_uri() {
       "'127.0.0.1 example.com', and access the localhost with ".
       "'http://example.com/'.");
   }
-}
-
-function phabricator_detect_insane_memory_limit() {
-  $memory_limit = ini_get('memory_limit');
-  $char_limit   = 12;
-  if (strlen($memory_limit) <= $char_limit) {
-    return;
-  }
-
-  // colmdoyle ran into an issue on an Ubuntu box with Suhosin where his
-  // 'memory_limit' was set to:
-  //
-  //   3232323232323232323232323232323232323232323232323232323232323232M
-  //
-  // Not a typo. A wizard did it.
-  //
-  // Anyway, with this 'memory_limit', the machine would immediately fatal
-  // when executing the ini_set() later. I wasn't able to reproduce this on my
-  // EC2 Ubuntu + Suhosin box, but verified that it caused the problem on his
-  // machine and that setting it to a more sensible value fixed it. Since I
-  // have no idea how to actually trigger the issue, we look for a coarse
-  // approximation of it (a memory_limit setting more than 12 characters in
-  // length).
-
-  phabricator_fatal_config_error(
-    "Your PHP 'memory_limit' is set to something ridiculous ".
-    "(\"{$memory_limit}\"). Set it to a more reasonable value (it must be no ".
-    "more than {$char_limit} characters long).");
 }
 
 function phabricator_shutdown() {

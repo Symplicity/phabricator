@@ -20,9 +20,6 @@
 $root = dirname(dirname(dirname(__FILE__)));
 require_once $root.'/scripts/__init_script__.php';
 
-phutil_require_module('phutil', 'console');
-phutil_require_module('phutil', 'future/exec');
-
 if ($argc !== 5) {
   echo "usage: add_user.php <username> <email> <realname> <admin_user>\n";
   exit(1);
@@ -61,14 +58,14 @@ if ($existing_email) {
 $user = new PhabricatorUser();
 $user->setUsername($username);
 $user->setRealname($realname);
-$user->save();
 
 $email_object = id(new PhabricatorUserEmail())
-  ->setUserPHID($user->getPHID())
   ->setAddress($email)
-  ->setIsVerified(1)
-  ->setIsPrimary(1)
-  ->save();
+  ->setIsVerified(1);
+
+id(new PhabricatorUserEditor())
+  ->setActor($admin)
+  ->createNewUser($user, $email_object);
 
 $user->sendWelcomeEmail($admin);
 

@@ -169,20 +169,22 @@ JX.behavior('differential-edit-inline-comments', function(config) {
         hideReticle();
       } else {
         root = e.getNode('differential-changeset');
+        if (root) {
 
-        var data = e.getNodeData('differential-inline-comment');
-        var change = e.getNodeData('differential-changeset');
+          var data = e.getNodeData('differential-inline-comment');
+          var change = e.getNodeData('differential-changeset');
 
-        var id_part  = data.on_right ? change.right : change.left;
-        var th = e.getNode('tag:td').previousSibling;
-        var new_part = isNewFile(th) ? 'N' : 'O';
-        var prefix = 'C' + id_part + new_part + 'L';
+          var id_part  = data.on_right ? change.right : change.left;
+          var th = e.getNode('tag:td').previousSibling;
+          var new_part = isNewFile(th) ? 'N' : 'O';
+          var prefix = 'C' + id_part + new_part + 'L';
 
-        origin = JX.$(prefix + data.number);
-        target = JX.$(prefix + (parseInt(data.number, 10) +
-                                parseInt(data.length, 10)));
+          origin = JX.$(prefix + data.number);
+          target = JX.$(prefix + (parseInt(data.number, 10) +
+                                  parseInt(data.length, 10)));
 
-        updateReticle();
+          updateReticle();
+        }
       }
     });
 
@@ -200,6 +202,25 @@ JX.behavior('differential-edit-inline-comments', function(config) {
   var handle_inline_action = function(node, op) {
     var data = JX.Stratcom.getData(node);
     var row  = node.parentNode.parentNode;
+    var other_rows = [];
+    if (JX.Stratcom.hasSigil(node, 'differential-inline-comment-preview')) {
+      // The DOM structure around the comment is different if it's part of the
+      // preview, so make sure not to pass the wrong container.
+      row = node;
+      if (op === 'delete') {
+        // Furthermore, deleting a comment in the preview does not automatically
+        // delete other occurrences of the same comment, so do that manually.
+        var nodes = JX.DOM.scry(
+          document.body,
+          'div',
+          'differential-inline-comment');
+        for (var i = 0; i < nodes.length; ++i) {
+          if (JX.Stratcom.getData(nodes[i]).id === data.id) {
+            other_rows.push(nodes[i]);
+          }
+        }
+      }
+    }
 
     var original = data.original;
     if (op == 'reply') {
@@ -217,6 +238,7 @@ JX.behavior('differential-edit-inline-comments', function(config) {
       .setOnRight(data.on_right)
       .setOriginalText(original)
       .setRow(row)
+      .setOtherRows(other_rows)
       .setTable(row.parentNode)
       .start();
 

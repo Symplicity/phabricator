@@ -20,7 +20,6 @@
 $root = dirname(dirname(dirname(__FILE__)));
 require_once $root.'/scripts/__init_script__.php';
 
-phutil_require_module('phabricator', 'infrastructure/daemon/control');
 $control = new PhabricatorDaemonControl();
 
 must_have_extension('pcntl');
@@ -57,7 +56,11 @@ switch ($command) {
     /* Fall Through */
   case 'start':
     $running = $control->loadRunningDaemons();
-    if ($running) {
+    // "running" might not mean actually running so much as was running at
+    // some point. ergo, do a quick grouping and only barf if daemons are
+    // *actually* running.
+    $running_dict = mgroup($running, 'isRunning');
+    if (!empty($running_dict[true])) {
       echo phutil_console_wrap(
         "phd start: Unable to start daemons because daemons are already ".
         "running.\n".
@@ -208,10 +211,6 @@ switch ($command) {
 }
 
 function phd_load_tracked_repositories() {
-  phutil_require_module(
-    'phabricator',
-    'applications/repository/storage/repository');
-
   $repositories = id(new PhabricatorRepository())->loadAll();
   foreach ($repositories as $key => $repository) {
     if (!$repository->isTracked()) {
@@ -226,7 +225,7 @@ function will_launch($control, $with_logs = true) {
   echo "Staging launch...\n";
   $control->pingConduit();
   if ($with_logs) {
-    $log_dir = $control->getControlDirectory('log').'/daemons.log';
+    $log_dir = $control->getLogDirectory().'/daemons.log';
     echo "NOTE: Logs will appear in '{$log_dir}'.\n\n";
   }
 }
