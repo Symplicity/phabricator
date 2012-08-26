@@ -10,11 +10,11 @@ phutil_register_library_map(array(
   '__library_version__' => 2,
   'class' =>
   array(
-    'BadgeConfig' => 'applications/shine/constants/badge',
-    'PhabricatorShineBadgeController' => 'applications/shine/controller/badge',
-    'PhabricatorShineController' => 'applications/shine/controller/base',
-    'ShineBadge' => 'applications/shine/storage/badge',
-    'ShineDAO' => 'applications/shine/storage/base',
+    'BadgeConfig' => 'applications/shine/constants/badge/BadgeConfig.php',
+    'PhabricatorShineBadgeController' => 'applications/shine/controller/badge/PhabricatorShineBadgeController.php',
+    'PhabricatorShineController' => 'applications/shine/controller/base/PhabricatorShineController.php',
+    'ShineBadge' => 'applications/shine/storage/badge/ShineBadge.php',
+    'ShineDAO' => 'applications/shine/storage/base/ShineDAO.php',
     'Aphront304Response' => 'aphront/response/Aphront304Response.php',
     'Aphront400Response' => 'aphront/response/Aphront400Response.php',
     'Aphront403Response' => 'aphront/response/Aphront403Response.php',
