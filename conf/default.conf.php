@@ -1218,7 +1218,6 @@ return array(
     'erb' => 'Embedded Ruby/ERB',
     'erlang' => 'Erlang',
     'html' => 'HTML',
-    'infer' => 'Infer from title (extension)',
     'java' => 'Java',
     'js' => 'Javascript',
     'mysql' => 'MySQL',
@@ -1231,8 +1230,6 @@ return array(
     'ruby' => 'Ruby',
     'xml' => 'XML',
   ),
-
-  'pygments.dropdown-default' => 'infer',
 
   // This is an override list of regular expressions which allows you to choose
   // what language files are highlighted as. If your projects have certain rules
