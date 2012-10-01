@@ -57,37 +57,38 @@ foreach ($repos as $repo) {
   $repo_code = $repo->getCallsign();
   $name = $repo->getName();
   $repo_path = $repo_base . $repo_code . DIRECTORY_SEPARATOR;
+  $svn_out = $files = array();
+  $force_update = false;
   if (file_exists($repo_path)) {
     chdir($repo_path);
     echo "Updating $name\n";
-    exec("svn update --accept theirs-full");
+    exec("svn update --accept theirs-full", $svn_out);
+    foreach ($svn_out as $line) {
+      //U    SympleObjects.class
+      list($action, $path) = preg_split('/\s+/', $line);
+      if ($action === 'D') {
+        $phid = "PHID-$search_type-" . md5($repo_code . ':' . $path);
+        $indexed_file = $search_object->loadOneWhere('phid = %s', $phid);
+        if ($indexed_file) {
+          $indexed_file->delete();
+        }
+      } elseif (file_exists($repo_path . $path)) {
+        $files[] = new SplFileInfo($path);
+      }
+    }
   } else {
     chdir($repo_base);
     echo "Checking out $name as $repo_code\n";
     exec("svn checkout -q $svn_uri $repo_code");
+    $dir_iterator = new RecursiveDirectoryIterator($repo_path);
+    $files = new RecursiveIteratorIterator($dir_iterator, RecursiveIteratorIterator::SELF_FIRST);
+    $force_update = true;
   }
 
-  $last_index = queryfx_one(
-    $search_object->establishConnection('r'),
-          'SELECT max(relatedTime) FROM search_documentrelationship'
-                  . ' WHERE relation=%s AND relatedPHID=%s AND phid like %s',
-    PhabricatorSearchRelationship::RELATIONSHIP_REPOSITORY,
-    $repo->getPHID(),
-    "PHID-{$search_type}%");
-  if ($last_index) {
-    $last_index = array_pop($last_index);
-  }
-
-  $dir_iterator = new RecursiveDirectoryIterator($repo_path);
-  $files = new RecursiveIteratorIterator($dir_iterator, RecursiveIteratorIterator::SELF_FIRST);
   foreach ($files as $file) {
     if ($file->isFile()) {
       $mtime = $file->getMTime();
-      if ($last_index >= $file->getMTime()) {
-        continue;
-      }
       $full_path = $file->getPathname();
-
       $ext = substr($full_path, strrpos($full_path, '.') + 1);
       $extensions = PhabricatorEnv::getEnvConfig('search.source_extensions');
       if ($extensions && !in_array($ext, $extensions)) {
@@ -101,7 +102,7 @@ foreach ($repos as $repo) {
       }
 
       $phid = "PHID-$search_type-" . md5($repo_code . ':' . $path);
-      $indexed_file = $search_object->loadOneWhere('phid = %s', $phid);
+      $indexed_file = $force_update ? false : $search_object->loadOneWhere('phid = %s', $phid);
 
       if (!$indexed_file || ($mtime != $indexed_file->getDocumentModified())) {
         $ctime = $file->getCTime();
