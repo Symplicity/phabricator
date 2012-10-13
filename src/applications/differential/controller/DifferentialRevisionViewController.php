@@ -82,15 +82,12 @@ final class DifferentialRevisionViewController extends DifferentialController {
                                          $repository);
     }
 
-    list($aux_fields, $props) = $this->loadAuxiliaryFieldsAndProperties(
-      $revision,
-      $target_manual,
-      array(
-        'local:commits',
-        'arc:lint',
-        'arc:unit',
-      ));
+    $props = id(new DifferentialDiffProperty())->loadAllWhere(
+      'diffID = %d',
+      $target_manual->getID());
+    $props = mpull($props, 'getData', 'getName');
 
+    $aux_fields = $this->loadAuxiliaryFields($revision);
 
     $comments = $revision->loadComments();
     $comments = array_merge(
@@ -138,13 +135,15 @@ final class DifferentialRevisionViewController extends DifferentialController {
 
     $aux_phids = array();
     foreach ($aux_fields as $key => $aux_field) {
+      $aux_field->setDiff($target);
+      $aux_field->setManualDiff($target_manual);
+      $aux_field->setDiffProperties($props);
       $aux_phids[$key] = $aux_field->getRequiredHandlePHIDsForRevisionView();
     }
     $object_phids = array_merge($object_phids, array_mergev($aux_phids));
     $object_phids = array_unique($object_phids);
 
-    $handles = id(new PhabricatorObjectHandleData($object_phids))
-      ->loadHandles();
+    $handles = $this->loadViewerHandles($object_phids);
 
     foreach ($aux_fields as $key => $aux_field) {
       // Make sure each field only has access to handles it specifically
@@ -184,7 +183,6 @@ final class DifferentialRevisionViewController extends DifferentialController {
       $warning = new AphrontErrorView();
       $warning->setTitle('Very Large Diff');
       $warning->setSeverity(AphrontErrorView::SEVERITY_WARNING);
-      $warning->setWidth(AphrontErrorView::WIDTH_WIDE);
       $warning->appendChild(
         "<p>This diff is very large and affects {$count} files. Load ".
         "each file individually. ".
@@ -354,10 +352,17 @@ final class DifferentialRevisionViewController extends DifferentialController {
         'authorPHID = %s AND draftKey = %s',
         $user->getPHID(),
         'differential-comment-'.$revision->getID());
+
+      $reviewers = array();
+      $ccs = array();
       if ($draft) {
-        $draft = $draft->getDraft();
-      } else {
-        $draft = null;
+        $reviewers = idx($draft->getMetadata(), 'reviewers', array());
+        $ccs = idx($draft->getMetadata(), 'ccs', array());
+        if ($reviewers || $ccs) {
+          $handles = $this->loadViewerHandles(array_merge($reviewers, $ccs));
+          $reviewers = array_select_keys($handles, $reviewers);
+          $ccs = array_select_keys($handles, $ccs);
+        }
       }
 
       $comment_form = new DifferentialAddCommentView();
@@ -367,6 +372,8 @@ final class DifferentialRevisionViewController extends DifferentialController {
       $comment_form->setActionURI('/differential/comment/save/');
       $comment_form->setUser($user);
       $comment_form->setDraft($draft);
+      $comment_form->setReviewers(mpull($reviewers, 'getFullName', 'getPHID'));
+      $comment_form->setCCs(mpull($ccs, 'getFullName', 'getPHID'));
     }
 
     $pane_id = celerity_generate_unique_node_id();
@@ -565,7 +572,9 @@ final class DifferentialRevisionViewController extends DifferentialController {
     $status = $revision->getStatus();
 
     $allow_self_accept = PhabricatorEnv::getEnvConfig(
-        'differential.allow-self-accept', false);
+      'differential.allow-self-accept', false);
+    $always_allow_close = PhabricatorEnv::getEnvConfig(
+      'differential.always-allow-close', false);
 
     if ($viewer_is_owner) {
       switch ($status) {
@@ -613,6 +622,7 @@ final class DifferentialRevisionViewController extends DifferentialController {
       }
       if ($status != ArcanistDifferentialRevisionStatus::CLOSED) {
         $actions[DifferentialAction::ACTION_CLAIM] = true;
+        $actions[DifferentialAction::ACTION_CLOSE] = $always_allow_close;
       }
     }
 
@@ -729,10 +739,7 @@ final class DifferentialRevisionViewController extends DifferentialController {
     return array($changesets, $vs_map, $vs_changesets, $refs);
   }
 
-  private function loadAuxiliaryFieldsAndProperties(
-    DifferentialRevision $revision,
-    DifferentialDiff $diff,
-    array $special_properties) {
+  private function loadAuxiliaryFields(DifferentialRevision $revision) {
 
     $aux_fields = DifferentialFieldSelector::newSelector()
       ->getFieldSpecifications();
@@ -748,45 +755,7 @@ final class DifferentialRevisionViewController extends DifferentialController {
       $revision,
       $aux_fields);
 
-    $aux_props = array();
-    foreach ($aux_fields as $key => $aux_field) {
-      $aux_field->setDiff($diff);
-      $aux_props[$key] = $aux_field->getRequiredDiffProperties();
-    }
-
-    $required_properties = array_mergev($aux_props);
-    $required_properties = array_merge(
-      $required_properties,
-      $special_properties);
-
-    $property_map = array();
-    if ($required_properties) {
-      $properties = id(new DifferentialDiffProperty())->loadAllWhere(
-        'diffID = %d AND name IN (%Ls)',
-        $diff->getID(),
-        $required_properties);
-      $property_map = mpull($properties, 'getData', 'getName');
-    }
-
-    foreach ($aux_fields as $key => $aux_field) {
-      // Give each field only the properties it specifically required, and
-      // set 'null' for each requested key which we didn't actually load a
-      // value for (otherwise, getDiffProperty() will throw).
-      if ($aux_props[$key]) {
-        $props = array_select_keys($property_map, $aux_props[$key]) +
-                 array_fill_keys($aux_props[$key], null);
-      } else {
-        $props = array();
-      }
-
-      $aux_field->setDiffProperties($props);
-    }
-
-    return array(
-      $aux_fields,
-      array_select_keys(
-        $property_map,
-        $special_properties));
+    return $aux_fields;
   }
 
   private function buildSymbolIndexes(
@@ -876,7 +845,7 @@ final class DifferentialRevisionViewController extends DifferentialController {
       ->loadAssets();
 
     $phids = $view->getRequiredHandlePHIDs();
-    $handles = id(new PhabricatorObjectHandleData($phids))->loadHandles();
+    $handles = $this->loadViewerHandles($phids);
     $view->setHandles($handles);
 
     return

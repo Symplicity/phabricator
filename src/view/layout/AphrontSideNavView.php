@@ -52,7 +52,7 @@ final class AphrontSideNavView extends AphrontView {
   }
 
   public function setFlexible($flexible) {
-    $this->flexible = $flexible;
+    $this->isFlexible = $flexible;
     return $this;
   }
 
@@ -77,38 +77,11 @@ final class AphrontSideNavView extends AphrontView {
       $nav_id = null;
       $drag_id = null;
       $content_id = celerity_generate_unique_node_id();
-      $collapse_id = null;
-      $expand_id = null;
       $local_id = null;
       $local_menu = null;
       $main_id = celerity_generate_unique_node_id();
 
       $apps = $this->renderApplications();
-
-      $key = PhabricatorUserPreferences::PREFERENCE_NAV_COLLAPSED;
-      if ($user->loadPreferences()->getPreference($key)) {
-        $nav_classes[] = 'phabricator-nav-app-collapsed';
-      }
-
-      $collapse_id = celerity_generate_unique_node_id();
-      $expand_id = celerity_generate_unique_node_id();
-
-      $collapse_button = phutil_render_tag(
-        'a',
-        array(
-          'href' => '#',
-          'class' => 'phabricator-nav-app-button-collapse',
-          'id' => $collapse_id,
-        ),
-        '&laquo; Collapse');
-      $expand_button = phutil_render_tag(
-        'a',
-        array(
-          'href' => '#',
-          'class' => 'phabricator-nav-app-button-expand',
-          'id' => $expand_id,
-        ),
-        '&raquo;');
 
       $app_menu = phutil_render_tag(
         'div',
@@ -116,11 +89,9 @@ final class AphrontSideNavView extends AphrontView {
           'class' => 'phabricator-nav-col phabricator-nav-app',
           'id'    => $app_id,
         ),
-        $apps->render()).
-        $expand_button.
-        $collapse_button;
+        $apps->render());
 
-      if ($this->flexible) {
+      if ($this->isFlexible) {
         $drag_id = celerity_generate_unique_node_id();
         $flex_bar = phutil_render_tag(
           'div',
@@ -154,9 +125,6 @@ final class AphrontSideNavView extends AphrontView {
           'localID'     => $local_id,
           'dragID'      => $drag_id,
           'contentID'   => $content_id,
-          'collapseID'  => $collapse_id,
-          'expandID'    => $expand_id,
-          'collapseKey' => $key,
         ));
 
       if ($this->active && $local_id) {
@@ -225,18 +193,23 @@ final class AphrontSideNavView extends AphrontView {
 
     $meta = null;
 
+    $group_core = PhabricatorApplication::GROUP_CORE;
+
     $applications = PhabricatorApplication::getAllInstalledApplications();
     foreach ($applications as $application) {
       if ($application instanceof PhabricatorApplicationApplications) {
         $meta = $application;
         continue;
       }
-      if ($application->getCoreApplicationOrder() !== null) {
+      if ($application->getApplicationGroup() != $group_core) {
+        continue;
+      }
+      if ($application->getApplicationOrder() !== null) {
         $core[] = $application;
       }
     }
 
-    $core = msort($core, 'getCoreApplicationOrder');
+    $core = msort($core, 'getApplicationOrder');
     if ($meta) {
       $core[] = $meta;
     }
@@ -246,12 +219,18 @@ final class AphrontSideNavView extends AphrontView {
       array_unshift($core, $current);
     }
 
+    Javelin::initBehavior('phabricator-tooltips', array());
+    require_celerity_resource('aphront-tooltip-css');
+
     $apps = array();
     foreach ($core as $phid => $application) {
       $classes = array();
       $classes[] = 'phabricator-nav-app-item';
+
       if ($current && $phid == $current->getPHID()) {
-        $classes[] = 'phabricator-nav-app-item-selected';
+        $selected = true;
+      } else {
+        $selected = false;
       }
 
       $iclasses = array();
@@ -262,7 +241,11 @@ final class AphrontSideNavView extends AphrontView {
                  'background-size: 30px auto;';
       } else {
         $iclasses[] = 'autosprite';
-        $iclasses[] = 'app-'.$application->getAutospriteName();
+        $sprite = $application->getAutospriteName();
+        if ($selected) {
+          $sprite .= '-selected';
+        }
+        $iclasses[] = 'app-'.$sprite;
       }
 
       $icon = phutil_render_tag(
@@ -273,11 +256,16 @@ final class AphrontSideNavView extends AphrontView {
         ),
         '');
 
-      $apps[] = phutil_render_tag(
+      $apps[] = javelin_render_tag(
         'a',
         array(
           'class' => implode(' ', $classes),
           'href' => $application->getBaseURI(),
+          'sigil' => 'has-tooltip',
+          'meta' => array(
+            'tip' => $application->getName(),
+            'align' => 'E',
+          ),
         ),
         $icon.
         phutil_escape_html($application->getName()));

@@ -38,6 +38,7 @@ abstract class DifferentialFieldSpecification {
 
   private $revision;
   private $diff;
+  private $manualDiff;
   private $handles;
   private $diffProperties;
   private $user;
@@ -278,25 +279,10 @@ abstract class DifferentialFieldSpecification {
       return '<em>None</em>';
     }
 
-    $statuses = id(new PhabricatorUserStatus())->loadCurrentStatuses(
-      $user_phids);
-
     $links = array();
     foreach ($user_phids as $user_phid) {
       $handle = $this->getHandle($user_phid);
-      $extra = null;
-      $status = idx($statuses, $handle->getPHID());
-      if ($handle->isDisabled()) {
-        $extra = ' <strong>(disabled)</strong>';
-      } else if ($status) {
-        $until = phabricator_date($status->getDateTo(), $this->getUser());
-        if ($status->getStatus() == PhabricatorUserStatus::STATUS_SPORADIC) {
-          $extra = ' <strong title="until '.$until.'">(sporadic)</strong>';
-        } else {
-          $extra = ' <strong title="until '.$until.'">(away)</strong>';
-        }
-      }
-      $links[] = $handle->renderLink().$extra;
+      $links[] = $handle->renderLink();
     }
 
     return implode(', ', $links);
@@ -583,6 +569,25 @@ abstract class DifferentialFieldSpecification {
   }
 
 
+  /**
+   * This method allows you to take action when a commit appears in a tracked
+   * branch (for example, by closing tasks associated with the commit).
+   *
+   * @param PhabricatorRepository The repository the commit appeared in.
+   * @param PhabricatorRepositoryCommit The commit itself.
+   * @param PhabricatorRepostioryCommitData Commit data.
+   * @return void
+   *
+   * @task commit
+   */
+  public function didParseCommit(
+    PhabricatorRepository $repo,
+    PhabricatorRepositoryCommit $commit,
+    PhabricatorRepositoryCommitData $data) {
+    return;
+  }
+
+
 /* -(  Loading Additional Data  )-------------------------------------------- */
 
 
@@ -669,16 +674,6 @@ abstract class DifferentialFieldSpecification {
    */
   public function getRequiredHandlePHIDsForCommitMessage() {
     return $this->getRequiredHandlePHIDs();
-  }
-
-  /**
-   * Specify which diff properties this field needs to load.
-   *
-   * @return list List of diff property keys this field requires.
-   * @task load
-   */
-  public function getRequiredDiffProperties() {
-    return array();
   }
 
   /**
@@ -806,6 +801,14 @@ abstract class DifferentialFieldSpecification {
   /**
    * @task context
    */
+  final public function setManualDiff(DifferentialDiff $diff) {
+    $this->manualDiff = $diff;
+    return $this;
+  }
+
+  /**
+   * @task context
+   */
   final public function setHandles(array $handles) {
     assert_instances_of($handles, 'PhabricatorObjectHandle');
     $this->handles = $handles;
@@ -851,6 +854,16 @@ abstract class DifferentialFieldSpecification {
   /**
    * @task context
    */
+  final protected function getManualDiff() {
+    if (!$this->manualDiff) {
+      return $this->getDiff();
+    }
+    return $this->manualDiff;
+  }
+
+  /**
+   * @task context
+   */
   final protected function getUser() {
     if (empty($this->user)) {
       throw new DifferentialFieldDataNotAvailableException($this);
@@ -881,29 +894,31 @@ abstract class DifferentialFieldSpecification {
   }
 
   /**
-   * Get a diff property which this field previously requested by returning
-   * the key from @{method:getRequiredDiffProperties}.
+   * Get the list of properties for a diff set by @{method:setManualDiff}.
    *
-   * @param  string      Diff property key.
-   * @return string|null Diff property, or null if the property does not have
-   *                     a value.
+   * @return array Array of all Diff properties.
    * @task context
    */
-  final public function getDiffProperty($key) {
+  final public function getDiffProperties() {
     if ($this->diffProperties === null) {
       // This will be set to some (possibly empty) array if we've loaded
       // properties, so null means diff properties aren't available in this
       // context.
       throw new DifferentialFieldDataNotAvailableException($this);
     }
-    if (!array_key_exists($key, $this->diffProperties)) {
-      $class = get_class($this);
-      throw new Exception(
-        "A differential field (of class '{$class}') is attempting to retrieve ".
-        "a diff property ('{$key}') which it did not request. Return all ".
-        "diff property keys you need from getRequiredDiffProperties().");
-    }
-    return $this->diffProperties[$key];
+    return $this->diffProperties;
+  }
+
+  /**
+   * Get a property of a diff set by @{method:setManualDiff}.
+   *
+   * @param  string      Diff property key.
+   * @return mixed|null  Diff property, or null if the property does not have
+   *                     a value.
+   * @task context
+   */
+  final public function getDiffProperty($key) {
+    return idx($this->getDiffProperties(), $key);
   }
 
 }

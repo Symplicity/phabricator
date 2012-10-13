@@ -16,6 +16,9 @@
  * limitations under the License.
  */
 
+/**
+ * @group search
+ */
 final class PhabricatorSearchEngineElastic extends PhabricatorSearchEngine {
   private $uri;
   private $timeout;
@@ -104,8 +107,7 @@ final class PhabricatorSearchEngineElastic extends PhabricatorSearchEngine {
     return $doc;
   }
 
-  public function executeSearch(PhabricatorSearchQuery $query) {
-
+  private function buildSpec(PhabricatorSearchQuery $query) {
     $spec = array();
     $filter = array();
 
@@ -126,17 +128,6 @@ final class PhabricatorSearchEngineElastic extends PhabricatorSearchEngine {
           ),
         ),
       );
-    }
-
-    $type = $query->getParameter('type');
-    if ($type) {
-      $uri = "/phabricator/{$type}/_search";
-    } else {
-      // Don't use '/phabricator/_search' for the case that there is something
-      // else in the index (for example if 'phabricator' is only an alias to
-      // some bigger index).
-      $types = PhabricatorSearchAbstractDocument::getSupportedTypes();
-      $uri = '/phabricator/' . implode(',', array_keys($types)) . '/_search';
     }
 
     $rel_mapping = array(
@@ -189,9 +180,43 @@ final class PhabricatorSearchEngineElastic extends PhabricatorSearchEngine {
       }
     }
 
+    if (!$query->getQuery()) {
+      $spec['sort'] = array(
+        array('dateCreated' => 'desc'),
+      );
+    }
+
     $spec['from'] = (int)$query->getParameter('offset', 0);
     $spec['size'] = (int)$query->getParameter('limit', 25);
-    $response = $this->executeRequest($uri, $spec);
+
+    return $spec;
+  }
+
+  public function executeSearch(PhabricatorSearchQuery $query) {
+    $type = $query->getParameter('type');
+    if ($type) {
+      $uri = "/phabricator/{$type}/_search";
+    } else {
+      // Don't use '/phabricator/_search' for the case that there is something
+      // else in the index (for example if 'phabricator' is only an alias to
+      // some bigger index).
+      $types = PhabricatorSearchAbstractDocument::getSupportedTypes();
+      $uri = '/phabricator/' . implode(',', array_keys($types)) . '/_search';
+    }
+
+    try {
+      $response = $this->executeRequest($uri, $this->buildSpec($query));
+    } catch (HTTPFutureResponseStatusHTTP $ex) {
+      // elasticsearch probably uses Lucene query syntax:
+      // http://lucene.apache.org/core/3_6_1/queryparsersyntax.html
+      // Try literal search if operator search fails.
+      if (!$query->getQuery()) {
+        throw $ex;
+      }
+      $query = clone $query;
+      $query->setQuery(addcslashes($query->getQuery(), '+-&|!(){}[]^"~*?:\\'));
+      $response = $this->executeRequest($uri, $this->buildSpec($query));
+    }
 
     $phids = ipull($response['hits']['hits'], '_id');
     return $phids;

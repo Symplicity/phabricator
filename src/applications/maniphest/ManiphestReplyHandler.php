@@ -50,7 +50,7 @@ final class ManiphestReplyHandler extends PhabricatorMailReplyHandler {
     }
   }
 
-  public function receiveEmail(PhabricatorMetaMTAReceivedMail $mail) {
+  protected function receiveEmail(PhabricatorMetaMTAReceivedMail $mail) {
 
     // NOTE: We'll drop in here on both the "reply to a task" and "create a
     // new task" workflows! Make sure you test both if you make changes!
@@ -87,6 +87,7 @@ final class ManiphestReplyHandler extends PhabricatorMailReplyHandler {
       $task->setAuthorPHID($user->getPHID());
       $task->setTitle(nonempty($mail->getSubject(), 'Untitled Task'));
       $task->setDescription($body);
+      $task->setPriority(ManiphestTaskPriority::getDefaultPriority());
 
     } else {
       $lines = explode("\n", trim($body));
@@ -166,7 +167,10 @@ final class ManiphestReplyHandler extends PhabricatorMailReplyHandler {
 
 
     $editor = new ManiphestTransactionEditor();
+    $editor->setActor($user);
     $editor->setParentMessageID($mail->getMessageID());
+    $editor->setExcludeMailRecipientPHIDs(
+      $this->getExcludeMailRecipientPHIDs());
     $editor->applyTransactions($task, $xactions);
 
     $event = new PhabricatorEvent(

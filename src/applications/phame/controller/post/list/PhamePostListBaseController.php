@@ -67,13 +67,14 @@ abstract class PhamePostListBaseController
     $blogger_phids = mpull($posts, 'getBloggerPHID', 'getBloggerPHID');
 
     return
-      id(new PhabricatorObjectHandleData($blogger_phids))->loadHandles();
+      $this->loadViewerHandles($blogger_phids);
   }
 
   protected function buildPostListPageResponse() {
-    $pager = $this->getPager();
-    $query = $this->getPhamePostQuery();
-    $posts = $query->executeWithOffsetPager($pager);
+    $request = $this->getRequest();
+    $pager   = $this->getPager();
+    $query   = $this->getPhamePostQuery();
+    $posts   = $query->executeWithOffsetPager($pager);
 
     $bloggers =  $this->loadBloggersFromPosts($posts);
 
@@ -82,6 +83,7 @@ abstract class PhamePostListBaseController
       ->setBloggers($bloggers)
       ->setPosts($posts)
       ->setActions($this->getActions())
+      ->setRequestURI($request->getRequestURI())
       ->setDraftList($this->isDraft());
 
     return $this->buildStandardPageResponse(

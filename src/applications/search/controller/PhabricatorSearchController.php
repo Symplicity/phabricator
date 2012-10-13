@@ -133,8 +133,7 @@ final class PhabricatorSearchController
       $query->getParameter('repository', array())
     );
 
-    $handles = id(new PhabricatorObjectHandleData($phids))
-      ->loadHandles();
+    $handles = $this->loadViewerHandles($phids);
 
     $author_value = array_select_keys(
       $handles,

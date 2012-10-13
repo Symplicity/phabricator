@@ -62,8 +62,6 @@ final class DifferentialRevisionEditController extends DifferentialController {
 
 
     if ($request->isFormPost() && !$request->getStr('viaDiffView')) {
-      $user_phid = $request->getUser()->getPHID();
-
       foreach ($aux_fields as $aux_field) {
         $aux_field->setValueFromRequest($request);
         try {
@@ -74,7 +72,8 @@ final class DifferentialRevisionEditController extends DifferentialController {
       }
 
       if (!$errors) {
-        $editor = new DifferentialRevisionEditor($revision, $user_phid);
+        $editor = new DifferentialRevisionEditor($revision);
+        $editor->setActor($request->getUser());
         if ($diff) {
           $editor->addDiff($diff, $request->getStr('comments'));
         }
@@ -92,8 +91,7 @@ final class DifferentialRevisionEditController extends DifferentialController {
     }
     $phids = array_mergev($aux_phids);
     $phids = array_unique($phids);
-    $handles = id(new PhabricatorObjectHandleData($phids))
-      ->loadHandles();
+    $handles = $this->loadViewerHandles($phids);
     foreach ($aux_fields as $key => $aux_field) {
       $aux_field->setHandles(array_select_keys($handles, $aux_phids[$key]));
     }

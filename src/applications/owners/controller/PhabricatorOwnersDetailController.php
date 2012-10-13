@@ -59,7 +59,7 @@ final class PhabricatorOwnersDetailController
     }
     $phids = array_keys($phids);
 
-    $handles = id(new PhabricatorObjectHandleData($phids))->loadHandles();
+    $handles = $this->loadViewerHandles($phids);
 
     $rows = array();
 
@@ -98,14 +98,12 @@ final class PhabricatorOwnersDetailController
     $path_links = array();
     foreach ($paths as $path) {
       $repo = $repositories[$path->getRepositoryPHID()];
-      $drequest = DiffusionRequest::newFromDictionary(
+      $href = DiffusionRequest::generateDiffusionURI(
         array(
-          'repository' => $repo,
-          'path'       => $path->getPath(),
-      ));
-      $href = $drequest->generateURI(
-        array(
-          'action' => 'browse'
+          'callsign' => $repo->getCallsign(),
+          'branch'   => $repo->getDefaultBranch(),
+          'path'     => $path->getPath(),
+          'action'   => 'browse'
         ));
       $repo_name = '<strong>'.phutil_escape_html($repo->getName()).
                    '</strong>';
@@ -166,6 +164,7 @@ final class PhabricatorOwnersDetailController
       ->withPackagePHIDs(array($package->getPHID()))
       ->withStatus(PhabricatorAuditCommitQuery::STATUS_OPEN)
       ->needCommitData(true)
+      ->needAudits(true)
       ->setLimit(10);
     $attention_commits = $attention_query->execute();
     if ($attention_commits) {
@@ -189,6 +188,7 @@ final class PhabricatorOwnersDetailController
     $all_query = id(new PhabricatorAuditCommitQuery())
       ->withPackagePHIDs(array($package->getPHID()))
       ->needCommitData(true)
+      ->needAudits(true)
       ->setLimit(100);
     $all_commits = $all_query->execute();
 
@@ -214,7 +214,7 @@ final class PhabricatorOwnersDetailController
       $phids[] = $commit_view['view']->getRequiredHandlePHIDs();
     }
     $phids = array_mergev($phids);
-    $handles = id(new PhabricatorObjectHandleData($phids))->loadHandles();
+    $handles = $this->loadViewerHandles($phids);
 
     $commit_panels = array();
     foreach ($commit_views as $commit_view) {

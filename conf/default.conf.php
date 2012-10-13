@@ -55,6 +55,25 @@ return array(
   // string), but doing so will break existing sessions and CSRF tokens.
   'security.hmac-key' => '[D\t~Y7eNmnQGJ;rnH6aF;m2!vJ8@v8C=Cs:aQS\.Qw',
 
+  // If the web server responds to both HTTP and HTTPS requests but you want
+  // users to connect with only HTTPS, you can set this to true to make
+  // Phabricator redirect HTTP requests to HTTPS.
+  //
+  // Normally, you should just configure your server not to accept HTTP traffic,
+  // but this setting may be useful if you originally used HTTP and have now
+  // switched to HTTPS but don't want to break old links, or if your webserver
+  // sits behind a load balancer which terminates HTTPS connections and you
+  // can not reasonably configure more granular behavior there.
+  //
+  // NOTE: Phabricator determines if a request is HTTPS or not by examining the
+  // PHP $_SERVER['HTTPS'] variable. If you run Apache/mod_php this will
+  // probably be set correctly for you automatically, but if you run Phabricator
+  // as CGI/FCGI (e.g., through nginx or lighttpd), you need to configure your
+  // web server so that it passes the value correctly based on the connection
+  // type. Alternatively, you can add a PHP snippet to the top of this
+  // configuration file to directly set $_SERVER['HTTPS'] to the correct value.
+  'security.require-https' => false,
+
 
 // -- Internationalization -------------------------------------------------- //
 
@@ -300,6 +319,14 @@ return array(
   // substantial) performance boost. It's on by default to make setup and
   // configuration a little easier.
   'metamta.send-immediately'    => true,
+
+  // When email is sent, what format should Phabricator use for user's
+  // email addresses? Valid values are:
+  //  - 'short' - 'gwashington <gwashington@example.com>'
+  //  - 'real'  - 'George Washington <gwashington@example.com>'
+  //  - 'full' - 'gwashington (George Washington) <gwashington@example.com>'
+  // The default is 'full'.
+  'metamta.user-address-format' => 'full',
 
   // If you're using Amazon SES to send email, provide your AWS access key
   // and AWS secret key here. To set up Amazon SES with Phabricator, you need
@@ -733,15 +760,6 @@ return array(
   // The Phabricator "Client Secret" to use for Phabricator API access.
   'phabricator.application-secret'   => null,
 
-// -- Disqus Comments ------------------------------------------------------- //
-
-  // Should Phame users have Disqus comment widget, and if so what's the
-  // website shortname to use? For example, secure.phabricator.org uses
-  // "phabricator", which we registered with Disqus. If you aren't familiar
-  // with Disqus, see:
-  // Disqus quick start guide - http://docs.disqus.com/help/4/
-  // Information on shortnames - http://docs.disqus.com/help/68/
-  'disqus.shortname'            => null,
 
 // -- Recaptcha ------------------------------------------------------------- //
 
@@ -890,10 +908,8 @@ return array(
 
   // The largest filesize Phabricator will store in the MySQL BLOB storage
   // engine, which just uses a database table to store files. While this isn't a
-  // best practice, it's really easy to set up. This is hard-limited by the
-  // value of 'max_allowed_packet' in MySQL (since this often defaults to 1MB,
-  // the default here is slightly smaller than 1MB). Set this to 0 to disable
-  // use of the MySQL blob engine.
+  // best practice, it's really easy to set up. Set this to 0 to disable use of
+  // the MySQL blob engine.
   'storage.mysql-engine.max-size' => 1000000,
 
   // Phabricator provides a local disk storage engine, which just writes files
@@ -1043,6 +1059,13 @@ return array(
   // use of all of differential's features.
   'differential.allow-self-accept' => false,
 
+  // If you set this to true, any user can close any revision so long as it has
+  // been accepted. This can be useful depending on your development model. For
+  // example, github-style pull requests where the reviewer is often the
+  // actual committer can benefit from turning this option to true. If false,
+  // only the submitter can close a revision.
+  'differential.always-allow-close' => false,
+
   // Revisions newer than this number of days are marked as fresh in Action
   // Required and Revisions Waiting on You views. Only work days (not weekends
   // and holidays) are included. Set to 0 to disable this feature.
@@ -1064,9 +1087,24 @@ return array(
   // Adding Custom Fields" in the documentation for more information.
   'maniphest.custom-task-extensions-class' => 'ManiphestDefaultTaskExtensions',
 
+  // What should the default task priority be in create flows?
+  // See the constants in @{class:ManiphestTaskPriority} for valid values.
+  // Defaults to "needs triage".
+  'maniphest.default-priority' => 90,
+
 // -- Phriction ------------------------------------------------------------- //
 
   'phriction.enabled' => true,
+
+// -- Phame ----------------------------------------------------------------- //
+
+  // Should Phame users have Disqus comment widget, and if so what's the
+  // website shortname to use? For example, secure.phabricator.org uses
+  // "phabricator", which we registered with Disqus. If you aren't familiar
+  // with Disqus, see:
+  // Disqus quick start guide - http://docs.disqus.com/help/4/
+  // Information on shortnames - http://docs.disqus.com/help/68/
+  'disqus.shortname'            => null,
 
 // -- Remarkup -------------------------------------------------------------- //
 
@@ -1213,16 +1251,20 @@ return array(
     'c' => 'C',
     'cpp' => 'C++',
     'css' => 'CSS',
+    'd' => 'D',
     'diff' => 'Diff',
     'django' => 'Django Templating',
     'erb' => 'Embedded Ruby/ERB',
     'erlang' => 'Erlang',
+    'haskell' => 'Haskell',
     'html' => 'HTML',
     'java' => 'Java',
     'js' => 'Javascript',
     'mysql' => 'MySQL',
+    'objc' => 'Objective-C',
     'perl' => 'Perl',
     'php' => 'PHP',
+    'rest' => 'reStructuredText',
     'text' => 'Plain Text',
     'python' => 'Python',
     'rainbow' => 'Rainbow',
@@ -1271,9 +1313,12 @@ return array(
   // since the redirect happens in Javascript.
   'debug.stop-on-redirect'    => false,
 
-  // Enable this to always profile every page. This is very slow! You should
-  // only enable it when debugging.
-  'debug.profile-every-request'  => false,
+  // Set the rate for how often to do sampled profiling. On average, one
+  // request for every number of requests specified here will be sampled.
+  // Set this value to 0 to completely disable profiling. In a production
+  // environment, this value should either be set to 0 (to disable) or to
+  // a large number (to sample only a few requests).
+  'debug.profile-rate' => 0,
 
 
 // -- Previews  ------------------------------------------------------------- //

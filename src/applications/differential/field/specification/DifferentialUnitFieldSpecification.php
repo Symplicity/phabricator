@@ -27,16 +27,12 @@ final class DifferentialUnitFieldSpecification
     return 'Unit:';
   }
 
-  public function getRequiredDiffProperties() {
-    return array('arc:unit', 'arc:unit-excuse');
-  }
-
   private function getUnitExcuse() {
     return $this->getDiffProperty('arc:unit-excuse');
   }
 
   public function renderValueForRevisionView() {
-    $diff = $this->getDiff();
+    $diff = $this->getManualDiff();
 
     $ustar = DifferentialRevisionUpdateHistoryView::renderDiffUnitStar($diff);
     $umsg = DifferentialRevisionUpdateHistoryView::getDiffUnitMessage($diff);
@@ -101,10 +97,20 @@ final class DifferentialUnitFieldSpecification
           $hidden[$result]++;
         }
 
+        $value = phutil_escape_html(idx($test, 'name'));
+        if (!empty($test['link'])) {
+          $value = phutil_render_tag(
+            'a',
+            array(
+              'href' => $test['link'],
+              'target' => '_blank',
+            ),
+            $value);
+        }
         $rows[] = array(
           'style' => $this->getResultStyle($result),
           'name'  => phutil_escape_html(ucwords($result)),
-          'value' => phutil_escape_html(idx($test, 'name')),
+          'value' => $value,
           'show'  => $show,
         );
 
@@ -212,7 +218,6 @@ final class DifferentialUnitFieldSpecification
       }
       $unit_warning = id(new AphrontErrorView())
         ->setSeverity(AphrontErrorView::SEVERITY_ERROR)
-        ->setWidth(AphrontErrorView::WIDTH_WIDE)
         ->appendChild($content)
         ->setTitle(idx($titles, $diff->getUnitStatus(), 'Warning'));
     }

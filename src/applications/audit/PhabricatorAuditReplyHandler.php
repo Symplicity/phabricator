@@ -49,7 +49,7 @@ final class PhabricatorAuditReplyHandler extends PhabricatorMailReplyHandler {
     }
   }
 
-  public function receiveEmail(PhabricatorMetaMTAReceivedMail $mail) {
+  protected function receiveEmail(PhabricatorMetaMTAReceivedMail $mail) {
     $commit = $this->getMailReceiver();
     $actor = $this->getActor();
 
@@ -61,7 +61,9 @@ final class PhabricatorAuditReplyHandler extends PhabricatorMailReplyHandler {
       ->setContent($mail->getCleanTextBody());
 
     $editor = new PhabricatorAuditCommentEditor($commit);
-    $editor->setUser($actor);
+    $editor->setActor($actor);
+    $editor->setExcludeMailRecipientPHIDs(
+      $this->getExcludeMailRecipientPHIDs());
     $editor->addComment($comment);
   }
 

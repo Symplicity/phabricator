@@ -78,7 +78,7 @@ final class PhabricatorSearchAttachController
         $rem_phids = array_diff($old_phids, $add_phids);
 
         $editor = id(new PhabricatorEdgeEditor());
-        $editor->setUser($user);
+        $editor->setActor($user);
         foreach ($add_phids as $phid) {
           $editor->addEdge($this->phid, $edge_type, $phid);
         }
@@ -109,8 +109,7 @@ final class PhabricatorSearchAttachController
 
     $strings = $this->getStrings();
 
-    $handles = id(new PhabricatorObjectHandleData($phids))
-      ->loadHandles();
+    $handles = $this->loadViewerHandles($phids);
 
     $obj_dialog = new PhabricatorObjectSelectorDialog();
     $obj_dialog
@@ -160,6 +159,7 @@ final class PhabricatorSearchAttachController
     }
 
     $editor = new ManiphestTransactionEditor();
+    $editor->setActor($user);
 
     $task_names = array();
 
@@ -279,8 +279,7 @@ final class PhabricatorSearchAttachController
   private function raiseGraphCycleException(PhabricatorEdgeCycleException $ex) {
     $cycle = $ex->getCycle();
 
-    $handles = id(new PhabricatorObjectHandleData($cycle))
-      ->loadHandles();
+    $handles = $this->loadViewerHandles($cycle);
     $names = array();
     foreach ($cycle as $cycle_phid) {
       $names[] = $handles[$cycle_phid]->getFullName();

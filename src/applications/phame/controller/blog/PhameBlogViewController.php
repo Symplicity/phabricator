@@ -84,8 +84,7 @@ final class PhameBlogViewController
 
     $blogger_phids = $this->getBloggerPHIDs();
     if ($blogger_phids) {
-      $bloggers = id(new PhabricatorObjectHandleData($blogger_phids))
-        ->loadHandles();
+      $bloggers = $this->loadViewerHandles($blogger_phids);
     } else {
       $bloggers = array();
     }
@@ -100,42 +99,38 @@ final class PhameBlogViewController
       $posts = array();
     }
 
-    $actions  = array('view');
-    $is_admin = false;
-    // TODO -- make this check use a policy
-    if (isset($bloggers[$user->getPHID()])) {
-      $actions[] = 'edit';
-      $is_admin  = true;
-    }
-
+    $notice = array();
     if ($request->getExists('new')) {
-      $notice = $this->buildNoticeView()
-        ->setTitle('Successfully created your blog.')
-        ->appendChild('Time to write some posts.');
-    } else {
-      $notice = null;
+      $notice =
+        array(
+          'title' => 'Successfully created your blog.',
+          'body'  => 'Time to write some posts.'
+        );
+    } else if ($request->getExists('edit')) {
+      $notice =
+        array(
+          'title' => 'Successfully edited your blog.',
+          'body'  => 'Time to write some posts.'
+        );
     }
 
-    $details = id(new PhameBlogDetailView())
-      ->setUser($user)
-      ->setBloggers($bloggers)
-      ->setBlog($blog)
-      ->setIsAdmin($is_admin);
-
-    $panel = id(new PhamePostListView())
+    $skin = $blog->getSkinRenderer();
+    $skin
       ->setUser($this->getRequest()->getUser())
+      ->setNotice($notice)
       ->setBloggers($bloggers)
       ->setPosts($posts)
-      ->setActions($actions)
-      ->setDraftList(false);
+      ->setBlog($blog)
+      ->setRequestURI($this->getRequest()->getRequestURI());
 
     $this->setShowSideNav(false);
+    $this->setShowChrome($skin->getShowChrome());
+    $this->setDeviceReady($skin->getDeviceReady());
+    $skin->setIsExternalDomain($blog->getDomain() == $request->getHost());
 
     return $this->buildStandardPageResponse(
       array(
-        $notice,
-        $details,
-        $panel,
+        $skin
       ),
       array(
         'title' => $blog->getName(),

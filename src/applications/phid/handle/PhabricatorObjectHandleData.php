@@ -102,6 +102,14 @@ final class PhabricatorObjectHandleData {
             $objects[$revision->getPHID()] = $revision;
           }
           break;
+        case PhabricatorPHIDConstants::PHID_TYPE_QUES:
+          $questions = id(new PonderQuestionQuery())
+            ->withPHIDs($phids)
+            ->execute();
+          foreach ($questions as $question) {
+            $objects[$question->getPHID()] = $question;
+          }
+          break;
       }
     }
 
@@ -177,7 +185,12 @@ final class PhabricatorObjectHandleData {
               $handle->setAlternateID($user->getID());
               $handle->setComplete(true);
               if (isset($statuses[$phid])) {
-                $handle->setStatus($statuses[$phid]->getTextStatus());
+                $status = $statuses[$phid]->getTextStatus();
+                if ($this->viewer) {
+                  $date = $statuses[$phid]->getDateTo();
+                  $status .= ' until '.phabricator_date($date, $this->viewer);
+                }
+                $handle->setStatus($status);
               }
               $handle->setDisabled($user->getIsDisabled());
 
@@ -340,7 +353,15 @@ final class PhabricatorObjectHandleData {
         case PhabricatorPHIDConstants::PHID_TYPE_PROJ:
           $object = new PhabricatorProject();
 
-          $projects = $object->loadAllWhere('phid IN (%Ls)', $phids);
+          if ($this->viewer) {
+            $projects = id(new PhabricatorProjectQuery())
+              ->setViewer($this->viewer)
+              ->withPHIDs($phids)
+              ->execute();
+          } else {
+            $projects = $object->loadAllWhere('phid IN (%Ls)', $phids);
+          }
+
           $projects = mpull($projects, null, 'getPHID');
 
           foreach ($phids as $phid) {
@@ -526,7 +547,7 @@ final class PhabricatorObjectHandleData {
             } else {
               $question = $questions[$phid];
               $handle->setName(phutil_utf8_shorten($question->getTitle(), 60));
-              $handle->setURI(new PhutilURI('Q' . $question->getID()));
+              $handle->setURI(new PhutilURI('/Q' . $question->getID()));
               $handle->setComplete(true);
             }
             $handles[$phid] = $handle;

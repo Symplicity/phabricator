@@ -74,11 +74,12 @@ final class PhameBlogEditController
   }
 
   public function processRequest() {
-    $request    = $this->getRequest();
-    $user       = $request->getUser();
-    $e_name     = null;
-    $e_bloggers = null;
-    $errors     = array();
+    $request         = $this->getRequest();
+    $user            = $request->getUser();
+    $e_name          = null;
+    $e_bloggers      = null;
+    $e_custom_domain = null;
+    $errors          = array();
 
     if ($this->isBlogEdit()) {
       $blogs = id(new PhameBlogQuery())
@@ -117,10 +118,12 @@ final class PhameBlogEditController
     }
 
     if ($request->isFormPost()) {
-      $saved       = true;
-      $name        = $request->getStr('name');
-      $description = $request->getStr('description');
-      $blogger_arr = $request->getArr('bloggers');
+      $saved         = true;
+      $name          = $request->getStr('name');
+      $description   = $request->getStr('description');
+      $blogger_arr   = $request->getArr('bloggers');
+      $custom_domain = $request->getStr('custom_domain');
+      $skin          = $request->getStr('skin');
 
       if (empty($blogger_arr)) {
         $error = 'Bloggers must be nonempty.';
@@ -145,6 +148,15 @@ final class PhameBlogEditController
       }
       $blog->setName($name);
       $blog->setDescription($description);
+      if (!empty($custom_domain)) {
+        $error = $blog->validateCustomDomain($custom_domain);
+        if ($error) {
+          $errors[] = $error;
+          $e_custom_domain = 'Invalid';
+        }
+        $blog->setDomain($custom_domain);
+      }
+      $blog->setSkin($skin);
 
       if (empty($errors)) {
         $blog->save();
@@ -153,7 +165,7 @@ final class PhameBlogEditController
         $rem_phids = array_diff($old_bloggers, $new_bloggers);
         $editor    = new PhabricatorEdgeEditor();
         $edge_type = PhabricatorEdgeConfig::TYPE_BLOG_HAS_BLOGGER;
-        $editor->setUser($user);
+        $editor->setActor($user);
         foreach ($add_phids as $phid) {
           $editor->addEdge($blog->getPHID(), $edge_type, $phid);
         }
@@ -168,7 +180,11 @@ final class PhameBlogEditController
 
       if ($saved) {
         $uri = new PhutilURI($blog->getViewURI());
-        $uri->setQueryParam('new', true);
+        if ($this->isBlogEdit()) {
+          $uri->setQueryParam('edit', true);
+        } else {
+          $uri->setQueryParam('new', true);
+        }
         return id(new AphrontRedirectResponse())
           ->setURI($uri);
       }
@@ -181,16 +197,6 @@ final class PhameBlogEditController
       $panel->addButton($delete_button);
     }
 
-    $remarkup_reference = phutil_render_tag(
-      'a',
-      array(
-        'href' =>
-          PhabricatorEnv::getDoclink('article/Remarkup_Reference.html'),
-        'tabindex' => '-1',
-        'target' => '_blank',
-      ),
-      'Formatting Reference');
-
     $form = id(new AphrontFormView())
       ->setUser($user)
       ->appendChild(
@@ -202,13 +208,12 @@ final class PhameBlogEditController
         ->setError($e_name)
       )
       ->appendChild(
-        id(new AphrontFormTextAreaControl())
+        id(new PhabricatorRemarkupControl())
         ->setLabel('Description')
         ->setName('description')
         ->setValue($blog->getDescription())
         ->setHeight(AphrontFormTextAreaControl::HEIGHT_VERY_TALL)
         ->setID('blog-description')
-        ->setCaption($remarkup_reference)
       )
       ->appendChild(
         id(new AphrontFormTokenizerControl())
@@ -219,8 +224,24 @@ final class PhameBlogEditController
         ->setDatasource('/typeahead/common/users/')
         ->setError($e_bloggers)
       )
-        ->appendChild(
-          id(new AphrontFormSubmitControl())
+      ->appendChild(
+        id(new AphrontFormTextControl())
+        ->setLabel('Custom Domain')
+        ->setName('custom_domain')
+        ->setValue($blog->getDomain())
+        ->setCaption('Must include at least one dot (.), e.g. '.
+        'blog.example.com')
+        ->setError($e_custom_domain)
+      )
+      ->appendChild(
+        id(new AphrontFormSelectControl())
+        ->setLabel('Skin')
+        ->setName('skin')
+        ->setValue($blog->getSkin())
+        ->setOptions(PhameBlog::getSkinOptionsForSelect())
+      )
+      ->appendChild(
+        id(new AphrontFormSubmitControl())
         ->addCancelButton('/phame/blog/')
         ->setValue($submit_button)
       );

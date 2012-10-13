@@ -41,6 +41,7 @@ final class ManiphestBatchEditController extends ManiphestController {
         $xactions = $this->buildTransactions($actions, $task);
         if ($xactions) {
           $editor = new ManiphestTransactionEditor();
+          $editor->setActor($user);
           $editor->applyTransactions($task, $xactions);
         }
       }
@@ -55,8 +56,7 @@ final class ManiphestBatchEditController extends ManiphestController {
     $panel->setHeader('Maniphest Batch Editor');
 
     $handle_phids = mpull($tasks, 'getOwnerPHID');
-    $handles = id(new PhabricatorObjectHandleData($handle_phids))
-      ->loadHandles();
+    $handles = $this->loadViewerHandles($handle_phids);
 
     $list = new ManiphestTaskListView();
     $list->setTasks($tasks);

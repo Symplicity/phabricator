@@ -29,22 +29,16 @@ final class PhrictionDocumentPreviewController
 
     $draft_key = $request->getStr('draftkey');
     if ($draft_key) {
-      $table = new PhabricatorDraft();
-      queryfx(
-        $table->establishConnection('w'),
-        'INSERT INTO %T (authorPHID, draftKey, draft) VALUES (%s, %s, %s)
-          ON DUPLICATE KEY UPDATE draft = VALUES(draft)',
-        $table->getTableName(),
-        $request->getUser()->getPHID(),
-        $draft_key,
-        $document);
+      id(new PhabricatorDraft())
+        ->setAuthorPHID($request->getUser()->getPHID())
+        ->setDraftKey($draft_key)
+        ->setDraft($document)
+        ->replaceOrDelete();
     }
 
     $content_obj = new PhrictionContent();
     $content_obj->setContent($document);
-
-    $engine = PhabricatorMarkupEngine::newPhrictionMarkupEngine();
-    $content = $content_obj->renderContent();
+    $content = $content_obj->renderContent($request->getUser());
 
     return id(new AphrontAjaxResponse())->setContent($content);
   }

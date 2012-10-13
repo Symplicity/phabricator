@@ -19,6 +19,8 @@
 final class PhabricatorProjectMembersEditController
   extends PhabricatorProjectController {
 
+  private $id;
+
   public function willProcessRequest(array $data) {
     $this->id = $data['id'];
   }
@@ -78,7 +80,7 @@ final class PhabricatorProjectMembersEditController
 
       if ($xactions) {
         $editor = new PhabricatorProjectEditor($project);
-        $editor->setUser($user);
+        $editor->setActor($user);
         $editor->applyTransactions($xactions);
       }
 
@@ -87,8 +89,7 @@ final class PhabricatorProjectMembersEditController
     }
 
     $member_phids = array_reverse($member_phids);
-    $handles = id(new PhabricatorObjectHandleData($member_phids))
-      ->loadHandles();
+    $handles = $this->loadViewerHandles($member_phids);
 
     $state = array();
     foreach ($handles as $handle) {

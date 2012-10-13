@@ -49,7 +49,7 @@ final class PhabricatorProjectCreateController
         $xactions[] = $xaction;
 
         $editor = new PhabricatorProjectEditor($project);
-        $editor->setUser($user);
+        $editor->setActor($user);
         $editor->applyTransactions($xactions);
       } catch (PhabricatorProjectNameCollisionException $ex) {
         $e_name = 'Not Unique';
@@ -105,11 +105,6 @@ final class PhabricatorProjectCreateController
           ->setValue($profile->getBlurb()));
 
     if ($request->isAjax()) {
-
-      if ($error_view) {
-        $error_view->setWidth(AphrontErrorView::WIDTH_DIALOG);
-      }
-
       $dialog = id(new AphrontDialogView())
         ->setUser($user)
         ->setWidth(AphrontDialogView::WIDTH_FORM)

@@ -68,14 +68,14 @@ final class PhabricatorAuditPreviewController
 
     $phids = array_merge($phids, $view->getRequiredHandlePHIDs());
 
-    $handles = id(new PhabricatorObjectHandleData($phids))->loadHandles();
+    $handles = $this->loadViewerHandles($phids);
     $view->setHandles($handles);
 
     id(new PhabricatorDraft())
       ->setAuthorPHID($comment->getActorPHID())
       ->setDraftKey('diffusion-audit-'.$this->id)
       ->setDraft($comment->getContent())
-      ->replace();
+      ->replaceOrDelete();
 
     return id(new AphrontAjaxResponse())
       ->setContent($view->render());

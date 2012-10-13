@@ -44,17 +44,30 @@ final class PhabricatorAuditAddCommentController
       ->setAction($action)
       ->setContent($request->getStr('content'));
 
-    $auditors = $request->getArr('auditors');
-    $ccs = $request->getArr('ccs');
+    // make sure we only add auditors or ccs if the action matches
+    switch ($action) {
+      case 'add_auditors':
+        $auditors = $request->getArr('auditors');
+        $ccs = array();
+        break;
+      case 'add_ccs':
+        $auditors = array();
+        $ccs = $request->getArr('ccs');
+        break;
+      default:
+        $auditors = array();
+        $ccs = array();
+        break;
+    }
 
     id(new PhabricatorAuditCommentEditor($commit))
-      ->setUser($user)
+      ->setActor($user)
       ->setAttachInlineComments(true)
       ->addAuditors($auditors)
       ->addCCs($ccs)
       ->addComment($comment);
 
-    $handles = id(new PhabricatorObjectHandleData($phids))->loadHandles();
+    $handles = $this->loadViewerHandles($phids);
     $uri = $handles[$commit_phid]->getURI();
 
     $draft = id(new PhabricatorDraft())->loadOneWhere(

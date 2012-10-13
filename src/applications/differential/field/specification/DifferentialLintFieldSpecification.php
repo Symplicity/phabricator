@@ -27,10 +27,6 @@ final class DifferentialLintFieldSpecification
     return 'Lint:';
   }
 
-  public function getRequiredDiffProperties() {
-    return array('arc:lint', 'arc:lint-excuse', 'arc:lint-postponed');
-  }
-
   private function getLintExcuse() {
     return $this->getDiffProperty('arc:lint-excuse');
   }
@@ -40,7 +36,7 @@ final class DifferentialLintFieldSpecification
   }
 
   public function renderValueForRevisionView() {
-    $diff = $this->getDiff();
+    $diff = $this->getManualDiff();
     $path_changesets = mpull($diff->loadChangesets(), 'getID', 'getFilename');
 
     $lstar = DifferentialRevisionUpdateHistoryView::renderDiffLintStar($diff);
@@ -92,10 +88,14 @@ final class DifferentialLintFieldSpecification
 
           $line_link = 'line '.intval($line);
           if (isset($path_changesets[$path])) {
+            $href = '#C'.$path_changesets[$path].'NL'.max(1, $line);
+            if ($diff->getID() != $this->getDiff()->getID()) {
+              $href = '/D'.$diff->getRevisionID().'?id='.$diff->getID().$href;
+            }
             $line_link = phutil_render_tag(
               'a',
               array(
-                'href' => '#C'.$path_changesets[$path].'NL'.max(1, $line),
+                'href' => $href,
               ),
               $line_link);
           }
@@ -243,7 +243,6 @@ final class DifferentialLintFieldSpecification
       }
       $lint_warning = id(new AphrontErrorView())
         ->setSeverity(AphrontErrorView::SEVERITY_ERROR)
-        ->setWidth(AphrontErrorView::WIDTH_WIDE)
         ->appendChild($content)
         ->setTitle(idx($titles, $diff->getLintStatus(), 'Warning'));
     }
