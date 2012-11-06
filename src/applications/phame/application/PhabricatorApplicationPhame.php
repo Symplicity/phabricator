@@ -1,21 +1,5 @@
 <?php
 
-/*
- * Copyright 2012 Facebook, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 final class PhabricatorApplicationPhame extends PhabricatorApplication {
 
   public function getBaseURI() {
@@ -45,30 +29,33 @@ final class PhabricatorApplicationPhame extends PhabricatorApplication {
   public function getRoutes() {
     return array(
      '/phame/' => array(
-        ''                          => 'PhameAllPostListController',
+        '' => 'PhamePostListController',
+        'r/(?P<id>\d+)/(?P<hash>[^/]+)/(?P<name>.*)'
+                                          => 'PhameResourceController',
+
+        'live/(?P<id>[^/]+)/(?P<more>.*)' => 'PhameBlogLiveController',
         'post/' => array(
-          ''                        => 'PhameUserPostListController',
-          'delete/(?P<phid>[^/]+)/' => 'PhamePostDeleteController',
-          'edit/(?P<phid>[^/]+)/'   => 'PhamePostEditController',
-          'new/'                    => 'PhamePostEditController',
-          'preview/'                => 'PhamePostPreviewController',
-          'view/(?P<phid>[^/]+)/'   => 'PhamePostViewController',
-        ),
-        'draft/' => array(
-          ''                        => 'PhameDraftListController',
-          'new/'                    => 'PhamePostEditController',
+          '(?:(?P<filter>draft|all)/)?'     => 'PhamePostListController',
+          'blogger/(?P<bloggername>[\w\.-_]+)/' => 'PhamePostListController',
+          'delete/(?P<id>[^/]+)/'           => 'PhamePostDeleteController',
+          'edit/(?:(?P<id>[^/]+)/)?'        => 'PhamePostEditController',
+          'view/(?P<id>\d+)/'               => 'PhamePostViewController',
+          'publish/(?P<id>\d+)/'            => 'PhamePostPublishController',
+          'unpublish/(?P<id>\d+)/'          => 'PhamePostUnpublishController',
+          'notlive/(?P<id>\d+)/'            => 'PhamePostNotLiveController',
+          'preview/'                        => 'PhamePostPreviewController',
+          'framed/(?P<id>\d+)/'             => 'PhamePostFramedController',
+          'new/'                            => 'PhamePostNewController',
+          'move/(?P<id>\d+)/'               => 'PhamePostNewController'
         ),
         'blog/' => array(
-          ''                         => 'PhameUserBlogListController',
-          'all/'                     => 'PhameAllBlogListController',
-          'new/'                     => 'PhameBlogEditController',
-          'delete/(?P<phid>[^/]+)/'  => 'PhameBlogDeleteController',
-          'edit/(?P<phid>[^/]+)/'    => 'PhameBlogEditController',
-          'view/(?P<phid>[^/]+)/'    => 'PhameBlogViewController',
+          '(?:(?P<filter>user|all)/)?'      => 'PhameBlogListController',
+          'delete/(?P<id>[^/]+)/'           => 'PhameBlogDeleteController',
+          'edit/(?P<id>[^/]+)/'             => 'PhameBlogEditController',
+          'view/(?P<id>[^/]+)/'             => 'PhameBlogViewController',
+          'new/'                            => 'PhameBlogEditController',
         ),
         'posts/' => array(
-          ''                        => 'PhameUserPostListController',
-          '(?P<bloggername>\w+)/'   => 'PhameBloggerPostListController',
           '(?P<bloggername>\w+)/(?P<phametitle>.+/)'
                                     => 'PhamePostViewController',
         ),

@@ -1,21 +1,5 @@
 <?php
 
-/*
- * Copyright 2012 Facebook, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 final class DifferentialCommentEditor extends PhabricatorEditor {
 
   protected $revision;
@@ -558,8 +542,9 @@ final class DifferentialCommentEditor extends PhabricatorEditor {
     $xherald_header = HeraldTranscript::loadXHeraldRulesHeader(
       $revision->getPHID());
 
+    $mailed_phids = array();
     if (!$this->noEmail) {
-      id(new DifferentialCommentMail(
+      $mail = id(new DifferentialCommentMail(
         $revision,
         $actor_handle,
         $comment,
@@ -575,6 +560,8 @@ final class DifferentialCommentEditor extends PhabricatorEditor {
         ->setXHeraldRulesHeader($xherald_header)
         ->setParentMessageID($this->parentMessageID)
         ->send();
+
+      $mailed_phids = $mail->getRawMail()->buildRecipientList();
     }
 
     $event_data = array(
@@ -586,12 +573,13 @@ final class DifferentialCommentEditor extends PhabricatorEditor {
       'feedback_content'     => $comment->getContent(),
       'actor_phid'           => $actor_phid,
     );
+
+    // TODO: Get rid of this
     id(new PhabricatorTimelineEvent('difx', $event_data))
       ->recordEvent();
 
-    // TODO: Move to a daemon?
     id(new PhabricatorFeedStoryPublisher())
-      ->setStoryType(PhabricatorFeedStoryTypeConstants::STORY_DIFFERENTIAL)
+      ->setStoryType('PhabricatorFeedStoryDifferential')
       ->setStoryData($event_data)
       ->setStoryTime(time())
       ->setStoryAuthorPHID($actor_phid)
@@ -607,9 +595,10 @@ final class DifferentialCommentEditor extends PhabricatorEditor {
           array($revision->getAuthorPHID()),
           $revision->getReviewers(),
           $revision->getCCPHIDs()))
+      ->setMailRecipientPHIDs($mailed_phids)
       ->publish();
 
-    // TODO: Move to a daemon?
+    // TODO: Move to workers
     PhabricatorSearchDifferentialIndexer::indexRevision($revision);
 
     return $comment;

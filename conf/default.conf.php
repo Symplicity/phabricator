@@ -1,21 +1,5 @@
 <?php
 
-/*
- * Copyright 2012 Facebook, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 return array(
 
   // The root URI which Phabricator is installed on.
@@ -1106,6 +1090,11 @@ return array(
   // Information on shortnames - http://docs.disqus.com/help/68/
   'disqus.shortname'            => null,
 
+  // Directories to look for Phame skins inside of.
+  'phame.skins' => array(
+    'externals/skins/',
+  ),
+
 // -- Remarkup -------------------------------------------------------------- //
 
   // If you enable this, linked YouTube videos will be embeded inline. This has
@@ -1143,6 +1132,7 @@ return array(
   'gcdaemon.ttl.daemon-logs'                =>  7 * (24 * 60 * 60),
   'gcdaemon.ttl.differential-parse-cache'   => 14 * (24 * 60 * 60),
   'gcdaemon.ttl.markup-cache'               => 30 * (24 * 60 * 60),
+  'gcdaemon.ttl.task-archive'               => 14 * (24 * 60 * 60),
 
 
 // -- Feed ------------------------------------------------------------------ //
@@ -1156,6 +1146,15 @@ return array(
   // to work properly.
   'feed.public' => false,
 
+  // If you set this to a list of http URIs, when a feed story is published a
+  // task will be created for each uri that posts the story data to the uri.
+  // Daemons automagically retry failures 100 times, waiting $fail_count * 60s
+  // between each subsequent failure. Be sure to keep the daemon console
+  // (/daemon/) open while developing and testing your end points.
+  //
+  // NOTE: URIs are not validated, the URI must return http status 200 within
+  // 30 seconds, and no permission checks are performed.
+  'feed.http-hooks' => array(),
 
 // -- Drydock --------------------------------------------------------------- //
 

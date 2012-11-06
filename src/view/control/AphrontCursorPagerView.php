@@ -1,21 +1,5 @@
 <?php
 
-/*
- * Copyright 2012 Facebook, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 final class AphrontCursorPagerView extends AphrontView {
 
   private $afterID;
@@ -25,6 +9,7 @@ final class AphrontCursorPagerView extends AphrontView {
 
   private $nextPageID;
   private $prevPageID;
+  private $moreResults;
 
   private $uri;
 
@@ -89,6 +74,7 @@ final class AphrontCursorPagerView extends AphrontView {
     if (count($results) > $this->getPageSize()) {
       $offset = ($this->beforeID ? count($results) - $this->getPageSize() : 0);
       $results = array_slice($results, $offset, $this->getPageSize(), true);
+      $this->moreResults = true;
     }
     return $results;
   }
@@ -101,7 +87,7 @@ final class AphrontCursorPagerView extends AphrontView {
 
     $links = array();
 
-    if ($this->beforeID || $this->afterID) {
+    if ($this->afterID || ($this->beforeID && $this->moreResults)) {
       $links[] = phutil_render_tag(
         'a',
         array(

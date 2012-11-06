@@ -1,22 +1,92 @@
 <?php
 
-/*
- * Copyright 2012 Facebook, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 final class PhabricatorMetaMTAMailTestCase extends PhabricatorTestCase {
+
+  protected function getPhabricatorTestCaseConfiguration() {
+    return array(
+      self::PHABRICATOR_TESTCONFIG_BUILD_STORAGE_FIXTURES => true,
+    );
+  }
+
+  public function testRecipients() {
+    $user = $this->generateNewTestUser();
+    $phid = $user->getPHID();
+
+    $prefs = $user->loadPreferences();
+
+    $mailer = new PhabricatorMailImplementationTestAdapter();
+
+    $mail = new PhabricatorMetaMTAMail();
+    $mail->addTos(array($phid));
+
+    $this->assertEqual(
+      true,
+      in_array($phid, $mail->buildRecipientList()),
+      '"To" is a recipient.');
+
+
+    // Test that the "No Self Mail" preference works correctly.
+    $mail->setFrom($phid);
+
+    $this->assertEqual(
+      true,
+      in_array($phid, $mail->buildRecipientList()),
+      '"From" does not exclude recipients by default.');
+
+    $prefs->setPreference(
+      PhabricatorUserPreferences::PREFERENCE_NO_SELF_MAIL,
+      true);
+    $prefs->save();
+
+    $this->assertEqual(
+      false,
+      in_array($phid, $mail->buildRecipientList()),
+      '"From" excludes recipients with no-self-mail set.');
+
+    $prefs->unsetPreference(
+      PhabricatorUserPreferences::PREFERENCE_NO_SELF_MAIL);
+    $prefs->save();
+
+    $this->assertEqual(
+      true,
+      in_array($phid, $mail->buildRecipientList()),
+      '"From" does not exclude recipients by default.');
+
+
+    // Test that explicit exclusion works correctly.
+    $mail->setExcludeMailRecipientPHIDs(array($phid));
+
+    $this->assertEqual(
+      false,
+      in_array($phid, $mail->buildRecipientList()),
+      'Explicit exclude excludes recipients.');
+
+    $mail->setExcludeMailRecipientPHIDs(array());
+
+
+    // Test that mail tag preferences exclude recipients.
+    $prefs->setPreference(
+      PhabricatorUserPreferences::PREFERENCE_MAILTAGS,
+      array(
+        'test-tag' => false,
+      ));
+    $prefs->save();
+
+    $mail->setMailTags(array('test-tag'));
+
+    $this->assertEqual(
+      false,
+      in_array($phid, $mail->buildRecipientList()),
+      'Tag preference excludes recipients.');
+
+    $prefs->unsetPreference(PhabricatorUserPreferences::PREFERENCE_MAILTAGS);
+    $prefs->save();
+
+    $this->assertEqual(
+      true,
+      in_array($phid, $mail->buildRecipientList()),
+      'Recipients restored after tag preference removed.');
+  }
 
   public function testThreadIDHeaders() {
     $this->runThreadIDHeadersWithConfiguration(true, true);

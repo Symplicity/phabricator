@@ -1,21 +1,5 @@
 <?php
 
-/*
- * Copyright 2012 Facebook, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 final class DifferentialReviewersFieldSpecification
   extends DifferentialFieldSpecification {
 
@@ -61,14 +45,23 @@ final class DifferentialReviewersFieldSpecification
   }
 
   public function validateField() {
-    $allow_self_accept = PhabricatorEnv::getEnvConfig(
-       'differential.allow-self-accept', false);
-    if (!$allow_self_accept
-        && in_array($this->getUser()->getPHID(), $this->reviewers)) {
-      $this->error = 'Invalid';
-      throw new DifferentialFieldValidationException(
-        "You may not review your own revision!");
+    if (!$this->hasRevision()) {
+      return;
     }
+
+    $self = PhabricatorEnv::getEnvConfig('differential.allow-self-accept');
+    if ($self) {
+      return;
+    }
+
+    $author_phid = $this->getRevision()->getAuthorPHID();
+    if (!in_array($author_phid, $this->reviewers)) {
+      return;
+    }
+
+    $this->error = 'Invalid';
+    throw new DifferentialFieldValidationException(
+      "The owner of a revision may not be a reviewer.");
   }
 
   public function renderEditControl() {

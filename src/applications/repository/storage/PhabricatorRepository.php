@@ -1,21 +1,5 @@
 <?php
 
-/*
- * Copyright 2012 Facebook, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 /**
  * @task uri Repository URI Management
  */
@@ -60,11 +44,14 @@ final class PhabricatorRepository extends PhabricatorRepositoryDAO {
     return $this;
   }
 
-  public function getDiffusionBrowseURIForPath($path, $line = null) {
+  public function getDiffusionBrowseURIForPath($path,
+                                               $line = null,
+                                               $branch = null) {
     $drequest = DiffusionRequest::newFromDictionary(
       array(
         'repository' => $this,
         'path'       => $path,
+        'branch'     => $branch,
       ));
 
     return $drequest->generateURI(
@@ -548,4 +535,53 @@ final class PhabricatorRepository extends PhabricatorRepositoryDAO {
     return ($protocol == 'ssh' || $protocol == 'svn+ssh');
   }
 
+  public function delete() {
+    $this->openTransaction();
+
+      $paths = id(new PhabricatorOwnersPath())
+        ->loadAllWhere('repositoryPHID = %s', $this->getPHID());
+      foreach ($paths as $path) {
+        $path->delete();
+      }
+
+      $projects = id(new PhabricatorRepositoryArcanistProject())
+        ->loadAllWhere('repositoryID = %d', $this->getID());
+      foreach ($projects as $project) {
+        // note each project deletes its PhabricatorRepositorySymbols
+        $project->delete();
+      }
+
+      $commits = id(new PhabricatorRepositoryCommit())
+        ->loadAllWhere('repositoryID = %d', $this->getID());
+      foreach ($commits as $commit) {
+        // note PhabricatorRepositoryAuditRequests and
+        // PhabricatorRepositoryCommitData are deleted here too.
+        $commit->delete();
+      }
+
+      $conn_w = $this->establishConnection('w');
+
+      queryfx(
+        $conn_w,
+        'DELETE FROM %T WHERE repositoryID = %d',
+        self::TABLE_FILESYSTEM,
+        $this->getID());
+
+      queryfx(
+        $conn_w,
+        'DELETE FROM %T WHERE repositoryID = %d',
+        self::TABLE_PATHCHANGE,
+        $this->getID());
+
+      queryfx(
+        $conn_w,
+        'DELETE FROM %T WHERE repositoryID = %d',
+        self::TABLE_SUMMARY,
+        $this->getID());
+
+      $result = parent::delete();
+
+    $this->saveTransaction();
+    return $result;
+  }
 }

@@ -1,26 +1,11 @@
 <?php
 
-/*
- * Copyright 2012 Facebook, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 /**
  * @task config Configuring the Query
  * @task exec   Query Execution
  */
-final class PhabricatorNotificationQuery extends PhabricatorOffsetPagedQuery {
+final class PhabricatorNotificationQuery
+  extends PhabricatorCursorPagedPolicyAwareQuery {
 
   private $userPHID;
   private $keys;
@@ -60,7 +45,7 @@ final class PhabricatorNotificationQuery extends PhabricatorOffsetPagedQuery {
 /* -(  Query Execution  )---------------------------------------------------- */
 
 
-  public function execute() {
+  public function loadPage() {
     if (!$this->userPHID) {
       throw new Exception("Call setUser() before executing the query");
     }
@@ -72,7 +57,7 @@ final class PhabricatorNotificationQuery extends PhabricatorOffsetPagedQuery {
 
     $data = queryfx_all(
       $conn,
-      "SELECT story.*, notif.primaryObjectPHID, notif.hasViewed FROM %T notif
+      "SELECT story.*, notif.hasViewed FROM %T notif
          JOIN %T story ON notif.chronologicalKey = story.chronologicalKey
          %Q
          ORDER BY notif.chronologicalKey DESC
@@ -83,12 +68,13 @@ final class PhabricatorNotificationQuery extends PhabricatorOffsetPagedQuery {
       $this->buildLimitClause($conn));
 
     $viewed_map = ipull($data, 'hasViewed', 'chronologicalKey');
-    $primary_map = ipull($data, 'primaryObjectPHID', 'chronologicalKey');
 
-    $stories = PhabricatorFeedStory::loadAllFromRows($data);
+    $stories = PhabricatorFeedStory::loadAllFromRows(
+      $data,
+      $this->getViewer());
+
     foreach ($stories as $key => $story) {
       $story->setHasViewed($viewed_map[$key]);
-      $story->setPrimaryObjectPHID($primary_map[$key]);
     }
 
     return $stories;

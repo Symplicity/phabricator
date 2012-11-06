@@ -1,21 +1,5 @@
 <?php
 
-/*
- * Copyright 2012 Facebook, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 final class DiffusionDiffController extends DiffusionController {
 
   public function willProcessRequest(array $data) {
@@ -64,12 +48,11 @@ final class DiffusionDiffController extends DiffusionController {
       return new Aphront404Response();
     }
 
+
     $parser = new DifferentialChangesetParser();
     $parser->setUser($user);
     $parser->setChangeset($changeset);
     $parser->setRenderingReference($diff_query->getRenderingReference());
-    $parser->setMarkupEngine(
-      PhabricatorMarkupEngine::newDiffusionMarkupEngine());
 
     $pquery = new DiffusionPathIDQuery(array($changeset->getFilename()));
     $ids = $pquery->loadPathIDs();
@@ -97,6 +80,19 @@ final class DiffusionDiffController extends DiffusionController {
       $handles = $this->loadViewerHandles($phids);
       $parser->setHandles($handles);
     }
+
+    $engine = new PhabricatorMarkupEngine();
+    $engine->setViewer($user);
+
+    foreach ($inlines as $inline) {
+      $engine->addObject(
+        $inline,
+        PhabricatorInlineCommentInterface::MARKUP_FIELD_BODY);
+    }
+
+    $engine->process();
+
+    $parser->setMarkupEngine($engine);
 
     $spec = $request->getStr('range');
     list($range_s, $range_e, $mask) =

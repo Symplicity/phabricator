@@ -1,21 +1,5 @@
 <?php
 
-/*
- * Copyright 2012 Facebook, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 /**
  *
  * @task data Accessing Request Data
@@ -55,15 +39,24 @@ final class AphrontRequest {
     return $this->applicationConfiguration;
   }
 
+  final public function setPath($path) {
+    $this->path = $path;
+    return $this;
+  }
+
   final public function getPath() {
     return $this->path;
   }
 
   final public function getHost() {
-    // The "Host" header may include a port number; if so, ignore it. We can't
-    // use PhutilURI since there's no URI scheme.
-    list($actual_host) = explode(':', $this->host, 2);
-    return $actual_host;
+    // The "Host" header may include a port number, or may be a malicious
+    // header in the form "realdomain.com:ignored@evil.com". Invoke the full
+    // parser to extract the real domain correctly. See here for coverage of
+    // a similar issue in Django:
+    //
+    //  https://www.djangoproject.com/weblog/2012/oct/17/security/
+    $uri = new PhutilURI('http://'.$this->host);
+    return $uri->getDomain();
   }
 
 

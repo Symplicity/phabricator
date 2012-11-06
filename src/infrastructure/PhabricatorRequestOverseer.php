@@ -1,21 +1,5 @@
 <?php
 
-/*
- * Copyright 2012 Facebook, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 final class PhabricatorRequestOverseer {
 
   public function didStartup() {
@@ -31,11 +15,10 @@ final class PhabricatorRequestOverseer {
    * the request anyway, and provides no formal way to detect that this
    * happened.
    *
-   * We can still read the entire body out of `php://input`. However, this
-   * stream can't be rewound, and according to the documentation isn't available
-   * for "multipart/form-data" (on nginx + php-fpm it appears that it is
-   * available, though, at least) so any attempt to generate $_POST would create
-   * side effects and be fragile.
+   * We can still read the entire body out of `php://input`. However according
+   * to the documentation the stream isn't available for "multipart/form-data"
+   * (on nginx + php-fpm it appears that it is available, though, at least) so
+   * any attempt to generate $_POST would be fragile.
    */
   private function detectPostMaxSizeTriggered() {
     // If this wasn't a POST, we're fine.
@@ -45,6 +28,16 @@ final class PhabricatorRequestOverseer {
 
     // If there's POST data, clearly we're in good shape.
     if ($_POST) {
+      return;
+    }
+
+    // For HTML5 drag-and-drop file uploads, Safari submits the data as
+    // "application/x-www-form-urlencoded". For most files this generates
+    // something in POST because most files decode to some nonempty (albeit
+    // meaningless) value. However, some files (particularly small images)
+    // don't decode to anything. If we know this is a drag-and-drop upload,
+    // we can skip this check.
+    if (isset($_REQUEST['__upload__'])) {
       return;
     }
 

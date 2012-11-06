@@ -1,22 +1,6 @@
 #!/usr/bin/env php
 <?php
 
-/*
- * Copyright 2012 Facebook, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 require_once dirname(dirname(__FILE__)).'/__init_script__.php';
 
 $args = new PhutilArgumentParser($argv);
@@ -179,6 +163,8 @@ $app_map = array(
   'repositories'    => array(8, 13),
   'phame'           => array(8, 4),
   'macro'           => array(0, 31),
+  'releeph'         => array(5, 18),
+  'drydock'         => array(5, 25),
 );
 
 $xadj = -1;
@@ -202,23 +188,10 @@ $action_template = id(new PhutilSprite())
   ->setSourcePosition(0, 0)
   ->setSourceSize(16, 16);
 
-$action_map = array(
-  'file'              => 'icon/page_white_text.png',
-  'fork'              => 'icon/arrow_branch.png',
-  'edit'              => 'icon/page_white_edit.png',
-  'flag-0'            => 'icon/flag-0.png',
-  'flag-1'            => 'icon/flag-1.png',
-  'flag-2'            => 'icon/flag-2.png',
-  'flag-3'            => 'icon/flag-3.png',
-  'flag-4'            => 'icon/flag-4.png',
-  'flag-5'            => 'icon/flag-5.png',
-  'flag-6'            => 'icon/flag-6.png',
-  'flag-7'            => 'icon/flag-7.png',
-  'flag-ghost'        => 'icon/flag-ghost.png',
-  'subscribe-auto'    => 'icon/unsubscribe.png',
-  'subscribe-add'     => 'icon/subscribe.png',
-  'subscribe-delete'  => 'icon/unsubscribe.png',
-);
+$action_icons = PhabricatorActionView::getAvailableIcons();
+foreach ($action_icons as $icon) {
+  $action_map[$icon] = 'icon/'.$icon.'.png';
+}
 
 foreach ($action_map as $icon => $source) {
   $sheet->addSprite(
@@ -242,6 +215,7 @@ $remarkup_icons = array(
   'tt',
   'ul',
   'help',
+  'table',
 );
 
 foreach ($remarkup_icons as $icon) {

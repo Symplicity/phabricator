@@ -1,21 +1,5 @@
 <?php
 
-/*
- * Copyright 2012 Facebook, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 /**
  * @group celerity
  */
@@ -24,6 +8,12 @@ final class CelerityResourceTransformer {
   private $minify;
   private $rawResourceMap;
   private $celerityMap;
+  private $translateURICallback;
+
+  public function setTranslateURICallback($translate_uricallback) {
+    $this->translateURICallback = $translate_uricallback;
+    return $this;
+  }
 
   public function setMinify($minify) {
     $this->minify = $minify;
@@ -46,8 +36,10 @@ final class CelerityResourceTransformer {
     switch ($type) {
       case 'css':
         $data = preg_replace_callback(
-          '@url\s*\((\s*[\'"]?/rsrc/.*?)\)@s',
-          array($this, 'translateResourceURI'),
+          '@url\s*\((\s*[\'"]?.*?)\)@s',
+          nonempty(
+            $this->translateURICallback,
+            array($this, 'translateResourceURI')),
           $data);
         break;
     }

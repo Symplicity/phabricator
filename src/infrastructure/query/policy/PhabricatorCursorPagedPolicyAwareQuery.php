@@ -1,21 +1,5 @@
 <?php
 
-/*
- * Copyright 2012 Facebook, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 /**
  * A query class which uses cursor-based paging. This paging is much more
  * performant than offset-based paging in the presence of policy filtering.
@@ -40,7 +24,7 @@ abstract class PhabricatorCursorPagedPolicyAwareQuery
 
   protected function nextPage(array $page) {
     if ($this->beforeID) {
-      $this->beforeID = $this->getPagingValue(head($page));
+      $this->beforeID = $this->getPagingValue(last($page));
     } else {
       $this->afterID = $this->getPagingValue(last($page));
     }
@@ -102,13 +86,12 @@ abstract class PhabricatorCursorPagedPolicyAwareQuery
     }
   }
 
-  final protected function processResults(array $results) {
+  final protected function didLoadResults(array $results) {
     if ($this->beforeID) {
       $results = array_reverse($results, $preserve_keys = true);
     }
     return $results;
   }
-
 
   final public function executeWithCursorPager(AphrontCursorPagerView $pager) {
     $this->setLimit($pager->getPageSize() + 1);
@@ -123,12 +106,12 @@ abstract class PhabricatorCursorPagedPolicyAwareQuery
 
     $sliced_results = $pager->sliceResults($results);
 
-    if ($this->beforeID || (count($results) > $pager->getPageSize())) {
+    if ($pager->getBeforeID() || (count($results) > $pager->getPageSize())) {
       $pager->setNextPageID($this->getPagingValue(last($sliced_results)));
     }
 
-    if ($this->afterID ||
-       ($this->beforeID && (count($results) > $pager->getPageSize()))) {
+    if ($pager->getAfterID() ||
+       ($pager->getBeforeID() && (count($results) > $pager->getPageSize()))) {
       $pager->setPrevPageID($this->getPagingValue(head($sliced_results)));
     }
 

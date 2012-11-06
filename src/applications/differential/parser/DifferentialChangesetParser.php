@@ -1,21 +1,5 @@
 <?php
 
-/*
- * Copyright 2012 Facebook, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 final class DifferentialChangesetParser {
 
   protected $visible      = array();
@@ -60,7 +44,7 @@ final class DifferentialChangesetParser {
   private $markupEngine;
   private $highlightErrors;
 
-  const CACHE_VERSION = 6;
+  const CACHE_VERSION = 8;
   const CACHE_MAX_SIZE = 8e6;
 
   const ATTR_GENERATED  = 'attr:generated';
@@ -132,8 +116,8 @@ final class DifferentialChangesetParser {
     foreach ($changeset->getHunks() as $hunk) {
       $n_old = $hunk->getOldOffset();
       $n_new = $hunk->getNewOffset();
-      $changes = rtrim($hunk->getChanges(), "\n");
-      foreach (explode("\n", $changes) as $line) {
+      $changes = phutil_split_lines($hunk->getChanges());
+      foreach ($changes as $line) {
         $diff_type = $line[0]; // Change type in diff of diffs.
         $orig_type = $line[1]; // Change type in the original diff.
         if ($diff_type == ' ') {
@@ -250,7 +234,7 @@ final class DifferentialChangesetParser {
     return $this;
   }
 
-  public function setMarkupEngine(PhutilMarkupEngine $engine) {
+  public function setMarkupEngine(PhabricatorMarkupEngine $engine) {
     $this->markupEngine = $engine;
     return $this;
   }
@@ -267,12 +251,7 @@ final class DifferentialChangesetParser {
 
   public function parseHunk(DifferentialHunk $hunk) {
     $lines = $hunk->getChanges();
-
-    $lines = str_replace(
-      array("\t", "\r\n", "\r"),
-      array('  ', "\n",   "\n"),
-      $lines);
-    $lines = explode("\n", $lines);
+    $lines = phutil_split_lines($lines);
 
     $types = array();
     foreach ($lines as $line_index => $line) {
@@ -570,18 +549,28 @@ final class DifferentialChangesetParser {
     $old_corpus = array();
     foreach ($this->old as $o) {
       if ($o['type'] != '\\') {
-        $old_corpus[] = $o['text'];
+        if ($o['text'] === null) {
+          // There's no text on this side of the diff, but insert a placeholder
+          // newline so the highlighted line numbers match up.
+          $old_corpus[] = "\n";
+        } else {
+          $old_corpus[] = $o['text'];
+        }
       }
     }
-    $old_corpus_block = implode("\n", $old_corpus);
+    $old_corpus_block = implode('', $old_corpus);
 
     $new_corpus = array();
     foreach ($this->new as $n) {
       if ($n['type'] != '\\') {
-        $new_corpus[] = $n['text'];
+        if ($n['text'] === null) {
+          $new_corpus[] = "\n";
+        } else {
+          $new_corpus[] = $n['text'];
+        }
       }
     }
-    $new_corpus_block = implode("\n", $new_corpus);
+    $new_corpus_block = implode('', $new_corpus);
 
     $this->markGenerated($new_corpus_block);
 
@@ -600,6 +589,7 @@ final class DifferentialChangesetParser {
       'old' => $old_corpus_block,
       'new' => $new_corpus_block,
     );
+
     $this->highlightErrors = false;
     foreach (Futures($futures) as $key => $future) {
       try {
@@ -812,7 +802,9 @@ final class DifferentialChangesetParser {
           $text,
           $intra[$key]);
       }
-      if (isset($corpus[$key]) && strlen($corpus[$key]) > $this->lineWidth) {
+      if (isset($corpus[$key]) &&
+          strlen($corpus[$key]) > $this->lineWidth &&
+          strlen(rtrim($corpus[$key], "\r\n")) > $this->lineWidth) {
         $lines = phutil_utf8_hard_wrap_html($render[$key], $this->lineWidth);
         $render[$key] = implode($line_break, $lines);
       }
@@ -820,6 +812,14 @@ final class DifferentialChangesetParser {
   }
 
   protected function getHighlightFuture($corpus) {
+    if (preg_match('/\r(?!\n)/', $corpus)) {
+      // TODO: Pygments converts "\r" newlines into "\n" newlines, so we can't
+      // use it on files with "\r" newlines. If we have "\r" not followed by
+      // "\n" in the file, skip highlighting.
+      $result = phutil_escape_html($corpus);
+      return new ImmediateFuture($result);
+    }
+
     return $this->highlightEngine->getHighlightFuture(
       $this->highlightEngine->getLanguageFromFilename($this->filename),
       $corpus);
@@ -827,7 +827,7 @@ final class DifferentialChangesetParser {
 
   protected function processHighlightedSource($data, $result) {
 
-    $result_lines = explode("\n", $result);
+    $result_lines = phutil_split_lines($result);
     foreach ($data as $key => $info) {
       if (!$info) {
         unset($result_lines[$key]);
@@ -1505,7 +1505,7 @@ final class DifferentialChangesetParser {
             implode(' &bull; ', $contents).
           '</td>'.
           '<th class="show-context-line">'.$context_line.'</td>'.
-          '<td colspan="2" class="show-context">'.$context.'</td>');
+          '<td colspan="3" class="show-context">'.$context.'</td>');
 
         $html[] = $container;
 
@@ -1774,13 +1774,20 @@ final class DifferentialChangesetParser {
       $notice = $this->renderChangeTypeHeader($this->changeset, false);
     }
 
-    return implode(
+    $result = implode(
       "\n",
       array(
         $notice,
         $props,
         $table,
       ));
+
+    // TODO: Let the user customize their tab width / display style.
+    $result = str_replace("\t", '  ', $result);
+
+    // TODO: We should possibly post-process "\r" as well.
+
+    return $result;
   }
 
   protected function renderChangeTypeHeader($changeset, $force) {

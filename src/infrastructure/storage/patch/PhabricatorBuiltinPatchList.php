@@ -1,21 +1,5 @@
 <?php
 
-/*
- * Copyright 2012 Facebook, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 final class PhabricatorBuiltinPatchList extends PhabricatorSQLPatchList {
 
   public function getNamespace() {
@@ -1003,6 +987,30 @@ final class PhabricatorBuiltinPatchList extends PhabricatorSQLPatchList {
       'ponder-mailkey-populate.php' => array(
         'type'    => 'php',
         'name'    => $this->getPatchPath('ponder-mailkey-populate.php'),
+      ),
+      'phamepolicy.sql' => array(
+        'type'    => 'sql',
+        'name'    => $this->getPatchPath('phamepolicy.sql'),
+      ),
+      'phameoneblog.sql' => array(
+        'type'    => 'sql',
+        'name'    => $this->getPatchPath('phameoneblog.sql'),
+      ),
+      'statustxt.sql' => array(
+        'type'    => 'sql',
+        'name'    => $this->getPatchPath('statustxt.sql'),
+      ),
+      'daemontaskarchive.sql' => array(
+        'type'    => 'sql',
+        'name'    => $this->getPatchPath('daemontaskarchive.sql'),
+      ),
+      'drydocktaskid.sql' => array(
+        'type'    => 'sql',
+        'name'    => $this->getPatchPath('drydocktaskid.sql'),
+      ),
+      'drydockresoucetype.sql' => array(
+        'type'    => 'sql',
+        'name'    => $this->getPatchPath('drydockresourcetype.sql'),
       ),
     );
   }

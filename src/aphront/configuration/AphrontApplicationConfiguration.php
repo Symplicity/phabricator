@@ -1,21 +1,5 @@
 <?php
 
-/*
- * Copyright 2012 Facebook, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 /**
  * @task  routing URI Routing
  * @group aphront
@@ -137,8 +121,18 @@ abstract class AphrontApplicationConfiguration {
     if ($host != id(new PhutilURI($base_uri))->getDomain() &&
         $host != id(new PhutilURI($prod_uri))->getDomain() &&
         $host != id(new PhutilURI($file_uri))->getDomain()) {
-      $blogs = id(new PhameBlogQuery())->withDomain($host)->execute();
-      $blog = reset($blogs);
+
+      try {
+        $blog = id(new PhameBlogQuery())
+          ->setViewer(new PhabricatorUser())
+          ->withDomain($host)
+          ->executeOne();
+      } catch (PhabricatorPolicyException $ex) {
+        throw new Exception(
+          "This blog is not visible to logged out users, so it can not be ".
+          "visited from a custom domain.");
+      }
+
       if (!$blog) {
         if ($prod_uri && $prod_uri != $base_uri) {
           $prod_str = ' or '.$prod_uri;
@@ -151,21 +145,10 @@ abstract class AphrontApplicationConfiguration {
         );
       }
 
-      // 2 basic cases
-      // -- looking at a list of blog posts, path is nothing or '/'
-      //    -- we have to fudge the URI in this case
-      // -- looking at an actual blog post, path is like
-      // /phame/posts/<author>/post_title
-      // NOTE: it is possible to get other phame pages, we just do
-      // not link to them at this time.
-      if (!$path || $path == '/') {
-        $path = $blog->getViewURI();
-      }
+      // TODO: Make this more flexible and modular so any application can
+      // do crazy stuff here if it wants.
 
-      PhameBlog::setRequestBlog($blog);
-
-      $celerity = CelerityAPI::getStaticResourceResponse();
-      $celerity->setUseFullURI(true);
+      $path = '/phame/live/'.$blog->getID().'/'.$path;
     }
 
     list($controller, $uri_data) = $this->buildControllerForPath($path);

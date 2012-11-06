@@ -1,21 +1,5 @@
 <?php
 
-/*
- * Copyright 2012 Facebook, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 final class PhabricatorFeedStoryPublisher {
 
   private $relatedPHIDs;
@@ -25,6 +9,7 @@ final class PhabricatorFeedStoryPublisher {
   private $storyAuthorPHID;
   private $primaryObjectPHID;
   private $subscribedPHIDs = array();
+  private $mailRecipientPHIDs = array();
 
   public function setRelatedPHIDs(array $phids) {
     $this->relatedPHIDs = $phids;
@@ -60,9 +45,29 @@ final class PhabricatorFeedStoryPublisher {
     return $this;
   }
 
+  public function setMailRecipientPHIDs(array $phids) {
+    $this->mailRecipientPHIDs = $phids;
+    return $this;
+  }
+
   public function publish() {
-    if (!$this->storyType) {
+    $class = $this->storyType;
+    if (!$class) {
       throw new Exception("Call setStoryType() before publishing!");
+    }
+
+    if (!class_exists($class)) {
+      throw new Exception(
+        "Story type must be a valid class name and must subclass ".
+        "PhabricatorFeedStory. ".
+        "'{$class}' is not a loadable class.");
+    }
+
+    if (!is_subclass_of($class, 'PhabricatorFeedStory')) {
+      throw new Exception(
+        "Story type must be a valid class name and must subclass ".
+        "PhabricatorFeedStory. ".
+        "'{$class}' is not a subclass of PhabricatorFeedStory.");
     }
 
     $chrono_key = $this->generateChronologicalKey();
@@ -98,9 +103,17 @@ final class PhabricatorFeedStoryPublisher {
       $this->insertNotifications($chrono_key);
       $this->sendNotification($chrono_key);
     }
+
+    $uris = PhabricatorEnv::getEnvConfig('feed.http-hooks', array());
+    foreach ($uris as $uri) {
+      $task = PhabricatorWorker::scheduleTask(
+        'FeedPublisherWorker',
+        array('chrono_key' => $chrono_key, 'uri' => $uri)
+      );
+    }
+
     return $story;
   }
-
 
   private function insertNotifications($chrono_key) {
     $subscribed_phids = $this->subscribedPHIDs;
@@ -121,14 +134,22 @@ final class PhabricatorFeedStoryPublisher {
     $sql = array();
     $conn = $notif->establishConnection('w');
 
+    $will_receive_mail = array_fill_keys($this->mailRecipientPHIDs, true);
+
     foreach (array_unique($subscribed_phids) as $user_phid) {
+      if (isset($will_receive_mail[$user_phid])) {
+        $mark_read = 1;
+      } else {
+        $mark_read = 0;
+      }
+
       $sql[] = qsprintf(
         $conn,
         '(%s, %s, %s, %d)',
         $this->primaryObjectPHID,
         $user_phid,
         $chrono_key,
-        0);
+        $mark_read);
     }
 
     queryfx(

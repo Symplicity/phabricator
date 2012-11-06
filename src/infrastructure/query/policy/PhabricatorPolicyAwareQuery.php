@@ -1,21 +1,5 @@
 <?php
 
-/*
- * Copyright 2012 Facebook, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 /**
  * A @{class:PhabricatorQuery} which filters results according to visibility
  * policies for the querying user. Broadly, this class allows you to implement
@@ -188,7 +172,8 @@ abstract class PhabricatorPolicyAwareQuery extends PhabricatorOffsetPagedQuery {
 
       $page = $this->loadPage();
 
-      $visible = $filter->apply($page);
+      $visible = $this->willFilterPage($page);
+      $visible = $filter->apply($visible);
       foreach ($visible as $key => $result) {
         ++$count;
 
@@ -221,6 +206,8 @@ abstract class PhabricatorPolicyAwareQuery extends PhabricatorOffsetPagedQuery {
 
       $this->nextPage($page);
     } while (true);
+
+    $results = $this->didLoadResults($results);
 
     return $results;
   }
@@ -274,5 +261,33 @@ abstract class PhabricatorPolicyAwareQuery extends PhabricatorOffsetPagedQuery {
    * @task policyimpl
    */
   abstract protected function nextPage(array $page);
+
+
+  /**
+   * Hook for applying a page filter prior to the privacy filter. This allows
+   * you to drop some items from the result set without creating problems with
+   * pagination or cursor updates.
+   *
+   * @param   list<wild>  Results from `loadPage()`.
+   * @return  list<PhabricatorPolicyInterface> Objects for policy filtering.
+   * @task policyimpl
+   */
+  protected function willFilterPage(array $page) {
+    return $page;
+  }
+
+
+  /**
+   * Hook for applying final adjustments before results are returned. This is
+   * used by @{class:PhabricatorCursorPagedPolicyAwareQuery} to reverse results
+   * that are queried during reverse paging.
+   *
+   * @param   list<PhabricatorPolicyInterface> Query results.
+   * @return  list<PhabricatorPolicyInterface> Final results.
+   * @task policyimpl
+   */
+  protected function didLoadResults(array $results) {
+    return $results;
+  }
 
 }

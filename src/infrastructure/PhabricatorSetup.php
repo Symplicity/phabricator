@@ -1,21 +1,5 @@
 <?php
 
-/*
- * Copyright 2012 Facebook, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 final class PhabricatorSetup {
 
   public static function runSetup() {
@@ -355,6 +339,21 @@ final class PhabricatorSetup {
           "If you are using localhost, create an entry in the hosts file like ".
           "'127.0.0.1 example.com', and access the localhost with ".
           "'http://example.com/'.");
+        return;
+      }
+
+      $host_path = $host_uri->getPath();
+      if ($host_path == '/') {
+        self::write(" okay  phabricator.base-uri path\n");
+      } else {
+        self::writeFailure();
+        self::write(
+          "Your 'phabricator.base-uri' setting includes a path, but should ".
+          "not (e.g., 'http://phabricator.example.com/' is OK, but ".
+          "'http://example.com/phabricator/' is not). Phabricator must be ".
+          "installed on an entire domain, it can not be installed on a ".
+          "path alongside other applications. Consult the documentation ".
+          "for more details.");
         return;
       }
     }

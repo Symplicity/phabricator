@@ -1,21 +1,5 @@
 <?php
 
-/*
- * Copyright 2012 Facebook, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 final class PhabricatorInlineSummaryView extends AphrontView {
 
   private $groups = array();
@@ -27,29 +11,6 @@ final class PhabricatorInlineSummaryView extends AphrontView {
       $this->groups[$name] = array_merge($this->groups[$name], $items);
     }
     return $this;
-  }
-
-  public static function renderCommentContent(
-    PhabricatorInlineCommentInterface $inline,
-    PhutilMarkupEngine $engine) {
-
-    $inline_content = $inline->getContent();
-    if (strlen($inline_content)) {
-      $inline_cache = $inline->getCache();
-      if ($inline_cache) {
-        $inline_content = $inline_cache;
-      } else {
-        $inline_content = $engine->markupText($inline_content);
-        if ($inline->getID()) {
-          $inline->setCache($inline_content);
-          $unguarded = AphrontWriteGuard::beginScopedUnguardedWrites();
-          $inline->save();
-          unset($unguarded);
-        }
-      }
-    }
-
-    return $inline_content;
   }
 
   public function render() {

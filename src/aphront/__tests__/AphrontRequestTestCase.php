@@ -1,25 +1,9 @@
 <?php
 
-/*
- * Copyright 2012 Facebook, Inc.
- *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *   http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
-
 final class AphrontRequestTestCase extends PhabricatorTestCase {
 
   public function testRequestDataAccess() {
-    $r = new AphrontRequest('http://example.com/', '/');
+    $r = new AphrontRequest('example.com', '/');
     $r->setRequestData(
       array(
         'str_empty' => '',
@@ -76,6 +60,23 @@ final class AphrontRequestTestCase extends PhabricatorTestCase {
 
     $this->assertEqual(true, $r->getExists('str'));
     $this->assertEqual(false, $r->getExists('does-not-exist'));
+  }
+
+  public function testHostAttacks() {
+    static $tests = array(
+      'domain.com'                    => 'domain.com',
+      'domain.com:80'                 => 'domain.com',
+      'evil.com:evil.com@real.com'    => 'real.com',
+      'evil.com:evil.com@real.com:80' => 'real.com',
+    );
+
+    foreach ($tests as $input => $expect) {
+      $r = new AphrontRequest($input, '/');
+      $this->assertEqual(
+        $expect,
+        $r->getHost(),
+        'Host: '.$input);
+    }
   }
 
 }
