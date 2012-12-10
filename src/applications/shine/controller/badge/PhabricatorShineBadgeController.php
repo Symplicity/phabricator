@@ -198,12 +198,10 @@ class PhabricatorShineBadgeController
       $this->getBadgeData(array(strtotime('30 days ago'), time())),
       "30 Days");
 
-    $badge = new ShineBadge();
-    $data = queryfx_all(
-      $badge->establishConnection('r'),
-      'SELECT UserPHID AS user, SUM(tally) AS score, GROUP_CONCAT(CONCAT(title, \': \', tally)) as details FROM %T GROUP BY user ORDER BY score DESC limit 20',
-      $badge->getTableName());
-    $this->renderTopScoreList($result_markup, $data, "All Days");
+    $this->renderTopScoreList(
+      $result_markup,
+      $this->getBadgeData(array(strtotime('365 days ago'), time())),
+      "365 Days");
 
     return $result_markup;
   }
