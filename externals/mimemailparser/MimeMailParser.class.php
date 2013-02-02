@@ -2,6 +2,10 @@
 
 require_once('attachment.class.php');
 
+if (!extension_loaded('mailparse')) {
+	dl('mailparse.so');
+}
+
 /**
  * Fast Mime Mail parser Class using PHP's MailParse Extension
  * @author gabe@fijiwebdesign.com
