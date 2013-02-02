@@ -4,6 +4,7 @@ final class AphrontTableView extends AphrontView {
 
   protected $data;
   protected $headers;
+  protected $shortHeaders;
   protected $rowClasses = array();
   protected $columnClasses = array();
   protected $cellClasses = array();
@@ -11,12 +12,14 @@ final class AphrontTableView extends AphrontView {
   protected $noDataString;
   protected $className;
   protected $columnVisibility = array();
+  private $deviceVisibility = array();
 
   protected $sortURI;
   protected $sortParam;
   protected $sortSelected;
   protected $sortReverse;
   protected $sortValues;
+  private $deviceReadyTable;
 
   public function __construct(array $data) {
     $this->data = $data;
@@ -62,6 +65,21 @@ final class AphrontTableView extends AphrontView {
     return $this;
   }
 
+  public function setDeviceVisibility(array $device_visibility) {
+    $this->deviceVisibility = $device_visibility;
+    return $this;
+  }
+
+  public function setDeviceReadyTable($ready) {
+    $this->deviceReadyTable = $ready;
+    return $this;
+  }
+
+  public function setShortHeaders(array $short_headers) {
+    $this->shortHeaders = $short_headers;
+    return $this;
+  }
+
   /**
    * Parse a sorting parameter:
    *
@@ -94,6 +112,11 @@ final class AphrontTableView extends AphrontView {
     require_celerity_resource('aphront-table-view-css');
 
     $table_class = $this->className;
+
+    if ($this->deviceReadyTable) {
+      $table_class .= ' aphront-table-view-device-ready';
+    }
+
     if ($table_class !== null) {
       $table_class = ' class="aphront-table-view '.$table_class.'"';
     } else {
@@ -111,11 +134,19 @@ final class AphrontTableView extends AphrontView {
     }
 
     $visibility = array_values($this->columnVisibility);
+    $device_visibility = array_values($this->deviceVisibility);
     $headers = $this->headers;
+    $short_headers = $this->shortHeaders;
     $sort_values = $this->sortValues;
     if ($headers) {
       while (count($headers) > count($visibility)) {
         $visibility[] = true;
+      }
+      while (count($headers) > count($device_visibility)) {
+        $device_visibility[] = true;
+      }
+      while (count($headers) > count($short_headers)) {
+        $short_headers[] = null;
       }
       while (count($headers) > count($sort_values)) {
         $sort_values[] = null;
@@ -132,14 +163,18 @@ final class AphrontTableView extends AphrontView {
           $classes[] = $col_classes[$col_num];
         }
 
+        if (empty($device_visiblity[$col_num])) {
+          $classes[] = 'aphront-table-nodevice';
+        }
+
         if ($sort_values[$col_num] !== null) {
           $classes[] = 'aphront-table-view-sortable';
 
           $sort_value = $sort_values[$col_num];
-          $sort_glyph = "\xE2\x86\x93";
+          $sort_glyph_class = 'aphront-table-down-sort';
           if ($sort_value == $this->sortSelected) {
             if ($this->sortReverse) {
-              $sort_glyph = "\xE2\x86\x91";
+              $sort_glyph_class = 'aphront-table-up-sort';
             } else if (!$this->sortReverse) {
               $sort_value = '-'.$sort_value;
             }
@@ -149,9 +184,9 @@ final class AphrontTableView extends AphrontView {
           $sort_glyph = phutil_render_tag(
             'span',
             array(
-              'class' => 'aphront-table-view-sort-glyph',
+              'class' => $sort_glyph_class,
             ),
-            $sort_glyph);
+            '');
 
           $header = phutil_render_tag(
             'a',
@@ -159,13 +194,30 @@ final class AphrontTableView extends AphrontView {
               'href'  => $this->sortURI->alter($this->sortParam, $sort_value),
               'class' => 'aphront-table-view-sort-link',
             ),
-            $sort_glyph.' '.$header);
+            $header.' '.$sort_glyph);
         }
 
         if ($classes) {
           $class = ' class="'.implode(' ', $classes).'"';
         } else {
           $class = null;
+        }
+
+        if ($short_headers[$col_num] !== null) {
+          $header_nodevice = phutil_render_tag(
+            'span',
+            array(
+              'class' => 'aphront-table-view-nodevice',
+            ),
+            $header);
+          $header_device = phutil_render_tag(
+            'span',
+            array(
+              'class' => 'aphront-table-view-device',
+            ),
+            phutil_escape_html($short_headers[$col_num]));
+
+          $header = $header_nodevice.$header_device;
         }
 
         $table[] = '<th'.$class.'>'.$header.'</th>';
@@ -237,7 +289,8 @@ final class AphrontTableView extends AphrontView {
         '</td></tr>';
     }
     $table[] = '</table>';
-    return implode('', $table);
+    $html = implode('', $table);
+    return '<div class="aphront-table-wrap">'.$html.'</div>';
   }
 
   public static function renderSingleDisplayLine($line) {

@@ -7,6 +7,7 @@ final class PhabricatorRemarkupRuleEmbedFile
   extends PhutilRemarkupRule {
 
   const KEY_RULE_EMBED_FILE = 'rule.embed.file';
+  const KEY_EMBED_FILE_PHIDS = 'phabricator.embedded-file-phids';
 
   public function apply($text) {
     return preg_replace_callback(
@@ -43,20 +44,34 @@ final class PhabricatorRemarkupRuleEmbedFile
 
     if (!empty($matches[2])) {
       $matches[2] = trim($matches[2], ', ');
-      $options = PhutilSimpleOptions::parse($matches[2]) + $options;
+      $parser = new PhutilSimpleOptions();
+      $options = $parser->parse($matches[2]) + $options;
     }
     $file_name = coalesce($options['name'], $file->getName());
     $options['name'] = $file_name;
 
     $attrs = array();
-    switch ($options['size']) {
+    switch ((string)$options['size']) {
       case 'full':
         $attrs['src'] = $file->getBestURI();
         $options['image_class'] = null;
+        $file_data = $file->getMetadata();
+        $height = idx($file_data, PhabricatorFile::METADATA_IMAGE_HEIGHT);
+        if ($height) {
+          $attrs['height'] = $height;
+        }
+        $width = idx($file_data, PhabricatorFile::METADATA_IMAGE_WIDTH);
+        if ($width) {
+          $attrs['width'] = $width;
+        }
         break;
       case 'thumb':
       default:
         $attrs['src'] = $file->getPreview220URI();
+        $dimensions =
+          PhabricatorImageTransformer::getPreviewDimensions($file, 220);
+        $attrs['width'] = $dimensions['sdx'];
+        $attrs['height'] = $dimensions['sdy'];
         $options['image_class'] = 'phabricator-remarkup-embed-image';
         break;
     }
@@ -86,6 +101,7 @@ final class PhabricatorRemarkupRuleEmbedFile
       return;
     }
 
+    $file_phids = array();
     foreach ($metadata as $phid => $bundles) {
       foreach ($bundles as $data) {
 
@@ -110,7 +126,7 @@ final class PhabricatorRemarkupRuleEmbedFile
         $embed = javelin_render_tag(
           'a',
           array(
-            'href'        => '#',
+            'href'        => $meta['uri'],
             'class'       => $options['image_class'],
             'sigil'       => 'lightboxable',
             'mustcapture' => true,
@@ -158,7 +174,9 @@ final class PhabricatorRemarkupRuleEmbedFile
 
         $engine->overwriteStoredText($data['token'], $embed);
       }
+      $file_phids[] = $phid;
     }
+    $engine->setTextMetadata(self::KEY_EMBED_FILE_PHIDS, $file_phids);
     $engine->setTextMetadata($metadata_key, array());
   }
 

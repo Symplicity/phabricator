@@ -4,6 +4,9 @@ final class DiffusionBrowseFileController extends DiffusionController {
 
   private $corpusType = 'text';
 
+  private $lintCommit;
+  private $lintMessages;
+
   public function processRequest() {
 
     $request = $this->getRequest();
@@ -45,6 +48,8 @@ final class DiffusionBrowseFileController extends DiffusionController {
       return $this->buildRawResponse($path, $data);
     }
 
+    $this->loadLintMessages();
+
     // Build the content of the file.
     $corpus = $this->buildCorpus(
       $selected,
@@ -64,12 +69,6 @@ final class DiffusionBrowseFileController extends DiffusionController {
 
     // Render the page.
     $content = array();
-    $content[] = $this->buildCrumbs(
-      array(
-        'branch' => true,
-        'path'   => true,
-        'view'   => 'browse',
-      ));
 
     $follow  = $request->getStr('follow');
     if ($follow) {
@@ -109,14 +108,50 @@ final class DiffusionBrowseFileController extends DiffusionController {
 
     $nav = $this->buildSideNav('browse', true);
     $nav->appendChild($content);
+    $crumbs = $this->buildCrumbs(
+      array(
+        'branch' => true,
+        'path'   => true,
+        'view'   => 'browse',
+      ));
+    $nav->setCrumbs($crumbs);
 
     $basename = basename($this->getDiffusionRequest()->getPath());
 
-    return $this->buildStandardPageResponse(
+    return $this->buildApplicationPage(
       $nav,
       array(
         'title' => $basename,
       ));
+  }
+
+  private function loadLintMessages() {
+    $drequest = $this->getDiffusionRequest();
+    $branch = $drequest->loadBranch();
+
+    if (!$branch || !$branch->getLintCommit()) {
+      return;
+    }
+
+    $this->lintCommit = $branch->getLintCommit();
+
+    $conn = id(new PhabricatorRepository())->establishConnection('r');
+
+    $where = '';
+    if ($drequest->getLint()) {
+      $where = qsprintf(
+        $conn,
+        'AND code = %s',
+        $drequest->getLint());
+    }
+
+    $this->lintMessages = queryfx_all(
+      $conn,
+      'SELECT * FROM %T WHERE branchID = %d %Q AND path = %s',
+      PhabricatorRepository::TABLE_LINTMESSAGE,
+      $branch->getID(),
+      $where,
+      '/'.$drequest->getPath());
   }
 
   private function buildCorpus($selected,
@@ -267,6 +302,7 @@ final class DiffusionBrowseFileController extends DiffusionController {
     );
 
     $user = $this->getRequest()->getUser();
+    $base_uri = $this->getRequest()->getRequestURI();
 
     $blame_on = ($selected == 'blame' || $selected == 'plainblame');
     if ($blame_on) {
@@ -277,7 +313,7 @@ final class DiffusionBrowseFileController extends DiffusionController {
 
     $blame_button = $this->createViewAction(
       $blame_text,
-      $toggle_blame[$selected],
+      $base_uri->alter('view', $toggle_blame[$selected]),
       $user);
 
 
@@ -289,13 +325,41 @@ final class DiffusionBrowseFileController extends DiffusionController {
     }
     $highlight_button = $this->createViewAction(
       $highlight_text,
-      $toggle_highlight[$selected],
+      $base_uri->alter('view', $toggle_highlight[$selected]),
       $user);
+
+
+    $href = null;
+    if ($this->getRequest()->getStr('lint') !== null) {
+      $lint_text = pht('Hide %d Lint Message(s)', count($this->lintMessages));
+      $href = $base_uri->alter('lint', null);
+
+    } else if ($this->lintCommit === null) {
+      $lint_text = pht('Lint not Available');
+
+    } else {
+      $lint_text = pht(
+        'Show %d Lint Message(s)',
+        count($this->lintMessages));
+      $href = $this->getDiffusionRequest()->generateURI(array(
+        'action' => 'browse',
+        'commit' => $this->lintCommit,
+      ))->alter('lint', '');
+    }
+
+    $lint_button = $this->createViewAction(
+      $lint_text,
+      $href,
+      $user);
+
+    if (!$href) {
+      $lint_button->setDisabled(true);
+    }
 
 
     $raw_button = $this->createViewAction(
       pht('View Raw File'),
-      'raw',
+      $base_uri->alter('view', 'raw'),
       $user,
       'file');
 
@@ -305,23 +369,23 @@ final class DiffusionBrowseFileController extends DiffusionController {
       ->setUser($user)
       ->addAction($blame_button)
       ->addAction($highlight_button)
+      ->addAction($lint_button)
       ->addAction($raw_button)
       ->addAction($edit_button);
   }
 
   private function createViewAction(
     $localized_text,
-    $view_mode,
+    $href,
     $user,
     $icon = null) {
 
-    $base_uri = $this->getRequest()->getRequestURI();
     return id(new PhabricatorActionView())
           ->setName($localized_text)
           ->setIcon($icon)
           ->setUser($user)
           ->setRenderAsForm(true)
-          ->setHref($base_uri->alter('view', $view_mode));
+          ->setHref($href);
   }
 
   private function createEditAction() {
@@ -403,8 +467,6 @@ final class DiffusionBrowseFileController extends DiffusionController {
         // with same color; otherwise generate blame info. The newer a change
         // is, the more saturated the color.
 
-        // TODO: SVN doesn't always give us blame for the last line, if empty?
-        // Bug with our stuff or with SVN?
         $rev = idx($rev_list, $k, $last_rev);
 
         if ($last_rev == $rev) {
@@ -482,7 +544,36 @@ final class DiffusionBrowseFileController extends DiffusionController {
 
     Javelin::initBehavior('phabricator-oncopy', array());
 
-    $rows = array();
+    $engine = null;
+    $inlines = array();
+    if ($this->getRequest()->getStr('lint') !== null && $this->lintMessages) {
+      $engine = new PhabricatorMarkupEngine();
+      $engine->setViewer($user);
+
+      foreach ($this->lintMessages as $message) {
+        $inline = id(new PhabricatorAuditInlineComment())
+          ->setID($message['id'])
+          ->setSyntheticAuthor(
+            ArcanistLintSeverity::getStringForSeverity($message['severity']).
+            ' '.$message['code'].' ('.$message['name'].')')
+          ->setLineNumber($message['line'])
+          ->setContent($message['description']);
+        $inlines[$message['line']][] = $inline;
+
+        $engine->addObject(
+          $inline,
+          PhabricatorInlineCommentInterface::MARKUP_FIELD_BODY);
+      }
+
+      $engine->process();
+      require_celerity_resource('differential-changeset-view-css');
+    }
+
+    $rows = $this->renderInlines(
+      idx($inlines, 0, array()),
+      $needs_blame,
+      $engine);
+
     foreach ($display as $line) {
 
       $line_href = $drequest->generateURI(
@@ -654,64 +745,30 @@ final class DiffusionBrowseFileController extends DiffusionController {
         ),
         $blame.
         $line_text);
+
+      $rows = array_merge($rows, $this->renderInlines(
+        idx($inlines, $line['line'], array()),
+        $needs_blame,
+        $engine));
     }
 
     return $rows;
   }
 
-
-  private static function renderRevision(DiffusionRequest $drequest,
-    $revision) {
-
-    $callsign = $drequest->getCallsign();
-
-    $name = 'r'.$callsign.$revision;
-    return phutil_render_tag(
-      'a',
-      array(
-           'href' => '/'.$name,
-      ),
-      $name
-    );
-  }
-
-
-  private static function renderBrowse(
-    DiffusionRequest $drequest,
-    $path,
-    $name = null,
-    $rev = null,
-    $line = null,
-    $view = null,
-    $title = null) {
-
-    $callsign = $drequest->getCallsign();
-
-    if ($name === null) {
-      $name = $path;
+  private function renderInlines(array $inlines, $needs_blame, $engine) {
+    $rows = array();
+    foreach ($inlines as $inline) {
+      $inline_view = id(new DifferentialInlineCommentView())
+        ->setMarkupEngine($engine)
+        ->setInlineComment($inline)
+        ->render();
+      $rows[] =
+        '<tr class="inline">'.
+          str_repeat('<th></th>', ($needs_blame ? 5 : 1)).
+          '<td>'.$inline_view.'</td>'.
+        '</tr>';
     }
-
-    $at = null;
-    if ($rev) {
-      $at = ';'.$rev;
-    }
-
-    if ($view) {
-      $view = '?view='.$view;
-    }
-
-    if ($line) {
-      $line = '$'.$line;
-    }
-
-    return phutil_render_tag(
-      'a',
-      array(
-        'href' => "/diffusion/{$callsign}/browse/{$path}{$at}{$line}{$view}",
-        'title' => $title,
-      ),
-      $name
-    );
+    return $rows;
   }
 
   private function loadFileForData($path, $data) {
@@ -748,10 +805,11 @@ final class DiffusionBrowseFileController extends DiffusionController {
   private function buildBinaryCorpus($file_uri, $data) {
     $properties = new PhabricatorPropertyListView();
 
+    $size = strlen($data);
     $properties->addTextContent(
-      pht('This is a binary file. It is %d bytes in length.',
-          number_format(strlen($data)))
-    );
+      pht(
+        'This is a binary file. It is %s byte(s) in length.',
+        new PhutilNumber($size)));
 
     $actions = id(new PhabricatorActionListView())
       ->setUser($this->getRequest()->getUser())

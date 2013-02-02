@@ -157,6 +157,11 @@ final class DifferentialChangesetViewController extends DifferentialController {
     $parser->setLeftSideCommentMapping($left_source, $left_new);
     $parser->setWhitespaceMode($request->getStr('whitespace'));
 
+    if ($request->getStr('renderer') == '1up') {
+      $parser->setRenderer(new DifferentialChangesetOneUpRenderer());
+    }
+
+
     if ($left && $right) {
       $parser->setOriginals($left, $right);
     }
@@ -234,14 +239,11 @@ final class DifferentialChangesetViewController extends DifferentialController {
     $detail->appendChild($output);
     $detail->setVsChangesetID($left_source);
 
-    $panel = id(new DifferentialPrimaryPaneView())
-      ->setLineWidthFromChangesets(array($changeset));
-
+    $panel = new DifferentialPrimaryPaneView();
     $panel->appendChild(phutil_render_tag('div',
       array(
         'class' => 'differential-review-stage',
         'id'    => 'differential-review-stage',
-        'style' => "max-width: {$panel->calculateSideBySideWidth()}px;"
       ), $detail->render())
     );
 
@@ -250,7 +252,7 @@ final class DifferentialChangesetViewController extends DifferentialController {
         $panel
       ),
       array(
-        'title' => 'Changeset View',
+        'title' => pht('Changeset View'),
       ));
   }
 

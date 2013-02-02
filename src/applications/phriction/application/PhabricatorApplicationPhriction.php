@@ -10,7 +10,7 @@ final class PhabricatorApplicationPhriction extends PhabricatorApplication {
     return '/w/';
   }
 
-  public function getAutospriteName() {
+  public function getIconName() {
     return 'phriction';
   }
 
@@ -20,6 +20,10 @@ final class PhabricatorApplicationPhriction extends PhabricatorApplication {
 
   public function isEnabled() {
     return PhabricatorEnv::getEnvConfig('phriction.enabled');
+  }
+
+  public function getTitleGlyph() {
+    return "\xE2\x9A\xA1";
   }
 
   public function getRoutes() {
@@ -38,6 +42,7 @@ final class PhabricatorApplicationPhriction extends PhabricatorApplication {
 
         'edit/(?:(?P<id>[1-9]\d*)/)?' => 'PhrictionEditController',
         'delete/(?P<id>[1-9]\d*)/'    => 'PhrictionDeleteController',
+        'new/'                        => 'PhrictionNewController',
 
         'preview/' => 'PhrictionDocumentPreviewController',
         'diff/(?P<id>[1-9]\d*)/' => 'PhrictionDiffController',

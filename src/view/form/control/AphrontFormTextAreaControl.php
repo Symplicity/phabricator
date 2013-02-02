@@ -11,8 +11,16 @@ class AphrontFormTextAreaControl extends AphrontFormControl {
 
   private $height;
   private $readOnly;
-  private $enableDragAndDropFileUploads;
   private $customClass;
+  private $placeHolder;
+
+  public function setPlaceHolder($place_holder) {
+    $this->placeHolder = $place_holder;
+    return $this;
+  }
+  private function getPlaceHolder() {
+    return $this->placeHolder;
+  }
 
   public function setHeight($height) {
     $this->height = $height;
@@ -56,12 +64,13 @@ class AphrontFormTextAreaControl extends AphrontFormControl {
     return phutil_render_tag(
       'textarea',
       array(
-        'name'      => $this->getName(),
-        'disabled'  => $this->getDisabled() ? 'disabled' : null,
-        'readonly'  => $this->getReadonly() ? 'readonly' : null,
-        'class'     => $classes,
-        'style'     => $this->getControlStyle(),
-        'id'        => $this->getID(),
+        'name'        => $this->getName(),
+        'disabled'    => $this->getDisabled() ? 'disabled' : null,
+        'readonly'    => $this->getReadonly() ? 'readonly' : null,
+        'class'       => $classes,
+        'style'       => $this->getControlStyle(),
+        'id'          => $this->getID(),
+        'placeholder' => $this->getPlaceHolder(),
       ),
       phutil_escape_html($this->getValue()));
   }

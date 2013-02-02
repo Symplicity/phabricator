@@ -45,7 +45,6 @@ $commit_object = new PhabricatorRepositoryCommit();
 $commit_conn = $commit_object->establishConnection('r');
 
 $search_type = PhabricatorPHIDConstants::PHID_TYPE_SOURCE;
-PhutilSymbolLoader::loadClass('PhabricatorSearchDocument');
 $search_object = newv('PhabricatorSearchDocument', array());
 
 $engine = PhabricatorSearchEngineSelector::newSelector()->newEngine();

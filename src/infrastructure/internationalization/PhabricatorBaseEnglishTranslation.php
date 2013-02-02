@@ -150,6 +150,146 @@ abstract class PhabricatorBaseEnglishTranslation
         '%d Assigned Tasks',
       ),
 
+      'Show %d Lint Message(s)' => array(
+        'Show %d Lint Message',
+        'Show %d Lint Messages',
+      ),
+      'Hide %d Lint Message(s)' => array(
+        'Hide %d Lint Message',
+        'Hide %d Lint Messages',
+      ),
+      'Switch for %d Lint Message(s)' => array(
+        'Switch for %d Lint Message',
+        'Switch for %d Lint Messages',
+      ),
+      '%d Lint Message(s)' => array(
+        '%d Lint Message',
+        '%d Lint Messages',
+      ),
+
+      'This is a binary file. It is %s byte(s) in length.' => array(
+        'This is a binary file. It is %s byte in length.',
+        'This is a binary file. It is %s bytes in length.',
+      ),
+
+      '%d Action(s) Have No Effect' => array(
+        'Action Has No Effect',
+        'Actions Have No Effect',
+      ),
+
+      '%d Action(s) With No Effect' => array(
+        'Action With No Effect',
+        'Actions With No Effect',
+      ),
+
+      '%s added %d subscriber(s): %s.' => array(
+        array(
+          '%s added a subscriber: %3$s.',
+          '%s added subscribers: %3$s.',
+        ),
+        array(
+          '%s added a subscriber: %3$s.',
+          '%s added subscribers: %3$s.',
+        ),
+      ),
+
+      '%s removed %d subscriber(s): %s.' => array(
+        array(
+          '%s removed a subscriber: %3$s.',
+          '%s removed subscribers: %3$s.',
+        ),
+        array(
+          '%s removed a subscriber: %3$s.',
+          '%s removed subscribers: %3$s.',
+        ),
+      ),
+
+      '%s added %d participant(s): %s.' => array(
+        array(
+          '%s added a participant: %3$s.',
+          '%s added participants: %3$s.',
+        ),
+        array(
+          '%s added a participant: %3$s.',
+          '%s added participants: %3$s.',
+        ),
+      ),
+
+      '%s removed %d participant(s): %s.' => array(
+        array(
+          '%s removed a participant: %3$s.',
+          '%s removed participants: %3$s.',
+        ),
+        array(
+          '%s removed a participant: %3$s.',
+          '%s removed participants: %3$s.',
+        ),
+      ),
+
+      '%s Line(s)' => array(
+        '%s Line',
+        '%s Lines',
+      ),
+
+      "Indexing %d object(s) of type %s." => array(
+        "Indexing %d object of type %s.",
+        "Indexing %d object of type %s.",
+      ),
+
+      'Run these %d command(s):' => array(
+        'Run this command:',
+        'Run these commands:',
+      ),
+
+      'Install these %d PHP extension(s):' => array(
+        'Install this %d PHP extension:',
+        'Install these %d PHP extensions:',
+      ),
+
+      'The current Phabricator configuration has these %d value(s):' => array(
+        'The current Phabricator configuration has this %d value:',
+        'The current Phabricator configuration has these %d values:',
+      ),
+
+      'To update these %d value(s), run these command(s) from the command line:'
+      => array(
+        'To update this %d value, run this command from the command line:',
+        'To update these %d values, run these commands from the command line:',
+      ),
+
+      'You can update these %d value(s) here:' => array(
+        'You can update this %d value here:',
+        'You can update these %d values here:',
+      ),
+
+      'The current PHP configuration has these %d value(s):' => array(
+        'The current PHP configuration has this %d value:',
+        'The current PHP configuration has these %d values:',
+      ),
+
+      'To update these %d value(s), edit your PHP configuration file.' => array(
+        'To update this %d value, edit your PHP configuration file.',
+        'To update these %d values, edit your PHP configuration file.',
+      ),
+
+      'To update these %d value(s), edit your PHP configuration file, located '.
+      'here:' => array(
+        'To update this %d value, edit your PHP configuration file, located '.
+        'here:',
+        'To update these %d values, edit your PHP configuration file, located '.
+        'here:',
+      ),
+
+      'PHP also loaded these configuration file(s):' => array(
+        'PHP also loaded this configuration file:',
+        'PHP also loaded these configuration files:',
+      ),
+
+      'You have %d unresolved setup issue(s)...' => array(
+        'You have %d unresolved setup issue...',
+        'You have %d unresolved setup issues...',
+      ),
+
     );
   }
 

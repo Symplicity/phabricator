@@ -157,17 +157,9 @@ final class PhrictionEditController
     if ($document->getID()) {
       $panel_header = 'Edit Phriction Document';
       $submit_button = 'Save Changes';
-      $delete_button = phutil_render_tag(
-        'a',
-        array(
-          'href' => '/phriction/delete/'.$document->getID().'/',
-          'class' => 'grey button',
-        ),
-        'Delete Document');
     } else {
       $panel_header = 'Create New Phriction Document';
       $submit_button = 'Create Document';
-      $delete_button = null;
     }
 
     $uri = $document->getSlug();
@@ -220,7 +212,8 @@ final class PhrictionEditController
           ->setValue($content_text)
           ->setHeight(AphrontFormTextAreaControl::HEIGHT_VERY_TALL)
           ->setName('content')
-          ->setID('document-textarea'))
+          ->setID('document-textarea')
+          ->setUser($user))
       ->appendChild(
         id(new AphrontFormTextControl())
           ->setLabel('Edit Notes')
@@ -236,10 +229,6 @@ final class PhrictionEditController
       ->setWidth(AphrontPanelView::WIDTH_WIDE)
       ->setHeader($panel_header)
       ->appendChild($form);
-
-    if ($delete_button) {
-      $panel->addButton($delete_button);
-    }
 
     $preview_panel =
       '<div class="aphront-panel-preview aphront-panel-preview-wide">

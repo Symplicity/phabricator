@@ -6,7 +6,6 @@ final class DifferentialRevisionUpdateHistoryView extends AphrontView {
   private $selectedVersusDiffID;
   private $selectedDiffID;
   private $selectedWhitespace;
-  private $user;
 
   public function setDiffs(array $diffs) {
     assert_instances_of($diffs, 'DifferentialDiff');
@@ -27,15 +26,6 @@ final class DifferentialRevisionUpdateHistoryView extends AphrontView {
   public function setSelectedWhitespace($whitespace) {
     $this->selectedWhitespace = $whitespace;
     return $this;
-  }
-
-  public function setUser($user) {
-    $this->user = $user;
-    return $this;
-  }
-
-  public function getUser() {
-    return $this->user;
   }
 
   public function render() {
@@ -155,10 +145,14 @@ final class DifferentialRevisionUpdateHistoryView extends AphrontView {
       }
       $last_base = $base;
 
+      $id_link = phutil_render_tag(
+        'a',
+        array('href' => '/differential/diff/'.$id.'/'),
+        phutil_escape_html($id));
       $rows[] =
         '<tr'.$class.'>'.
           '<td class="revhistory-name">'.phutil_escape_html($name).'</td>'.
-          '<td class="revhistory-id">'.phutil_escape_html($id).'</td>'.
+          '<td class="revhistory-id">'.$id_link.'</td>'.
           '<td class="revhistory-base">'.phutil_escape_html($base).'</td>'.
           '<td class="revhistory-desc">'.phutil_escape_html($desc).'</td>'.
           '<td class="revhistory-age">'.$age.'</td>'.
@@ -198,24 +192,26 @@ final class DifferentialRevisionUpdateHistoryView extends AphrontView {
     $select .= '</select>';
 
     return
+      id(new PhabricatorHeaderView())
+        ->setHeader(pht('Revision Update History'))
+        ->render() .
       '<div class="differential-revision-history differential-panel">'.
-        '<h1>Revision Update History</h1>'.
         '<form action="#toc">'.
           '<table class="differential-revision-history-table">'.
             '<tr>'.
-              '<th>Diff</th>'.
-              '<th>ID</th>'.
-              '<th>Base</th>'.
-              '<th>Description</th>'.
-              '<th>Created</th>'.
-              '<th>Lint</th>'.
-              '<th>Unit</th>'.
+              '<th>'.pht('Diff').'</th>'.
+              '<th>'.pht('ID').'</th>'.
+              '<th>'.pht('Base').'</th>'.
+              '<th>'.pht('Description').'</th>'.
+              '<th>'.pht('Created').'</th>'.
+              '<th>'.pht('Lint').'</th>'.
+              '<th>'.pht('Unit').'</th>'.
             '</tr>'.
             implode("\n", $rows).
             '<tr>'.
-              '<td colspan="8" class="diff-differ-submit">'.
-                '<label>Whitespace Changes: '.$select.'</label>'.
-                '<button>Show Diff</button>'.
+              '<td colspan="9" class="diff-differ-submit">'.
+                '<label>'.pht('Whitespace Changes: %s', $select).'</label>'.
+                '<button>'.pht('Show Diff').'</button>'.
               '</td>'.
             '</tr>'.
           '</table>'.

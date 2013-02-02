@@ -46,7 +46,7 @@ class DifferentialReplyHandler extends PhabricatorMailReplyHandler {
 
     $comment_command_printed = false;
     if (in_array(DifferentialAction::ACTION_COMMENT, $supported_commands)) {
-      $text .= 'Reply to comment';
+      $text .= pht('Reply to comment');
       $comment_command_printed = true;
 
       $supported_commands = array_diff(
@@ -147,10 +147,15 @@ class DifferentialReplyHandler extends PhabricatorMailReplyHandler {
       return $comment->getID();
 
     } catch (Exception $ex) {
+      if ($this->receivedMail) {
+        $error_body = $this->receivedMail->getRawTextBody();
+      } else {
+        $error_body = $body;
+      }
       $exception_mail = new DifferentialExceptionMail(
         $this->getMailReceiver(),
         $ex,
-        $this->receivedMail->getRawTextBody());
+        $error_body);
 
       $exception_mail->setToPHIDs(array($this->getActor()->getPHID()));
       $exception_mail->send();

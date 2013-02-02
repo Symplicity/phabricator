@@ -5,17 +5,17 @@ final class DiffusionBrowseController extends DiffusionController {
   public function processRequest() {
     $drequest = $this->diffusionRequest;
 
-    $browse_query = DiffusionBrowseQuery::newFromDiffusionRequest($drequest);
-    $results = $browse_query->loadPaths();
+    if ($this->getRequest()->getStr('before')) {
+      $results = array();
+      $is_file = true;
+    } else {
+      $browse_query = DiffusionBrowseQuery::newFromDiffusionRequest($drequest);
+      $results = $browse_query->loadPaths();
+      $reason = $browse_query->getReasonForEmptyResultSet();
+      $is_file = ($reason == DiffusionBrowseQuery::REASON_IS_FILE);
+    }
 
     $content = array();
-
-    $content[] = $this->buildCrumbs(
-      array(
-        'branch' => true,
-        'path'   => true,
-        'view'   => 'browse',
-      ));
 
     if ($drequest->getTagContent()) {
       $title = 'Tag: '.$drequest->getSymbolicCommit();
@@ -30,10 +30,10 @@ final class DiffusionBrowseController extends DiffusionController {
 
     if (!$results) {
 
-      if ($browse_query->getReasonForEmptyResultSet() ==
-          DiffusionBrowseQuery::REASON_IS_FILE) {
+      if ($is_file) {
         $controller = new DiffusionBrowseFileController($this->getRequest());
         $controller->setDiffusionRequest($drequest);
+        $controller->setCurrentApplication($this->getCurrentApplication());
         return $this->delegateToController($controller);
       }
 
@@ -45,8 +45,6 @@ final class DiffusionBrowseController extends DiffusionController {
 
     } else {
 
-      $readme = null;
-
       $phids = array();
       foreach ($results as $result) {
         $data = $result->getLastCommitData();
@@ -54,11 +52,6 @@ final class DiffusionBrowseController extends DiffusionController {
           if ($data->getCommitDetail('authorPHID')) {
             $phids[$data->getCommitDetail('authorPHID')] = true;
           }
-        }
-
-        $path = $result->getPath();
-        if (preg_match('/^readme(|\.txt|\.remarkup)$/i', $path)) {
-          $readme = $result;
         }
       }
 
@@ -73,6 +66,7 @@ final class DiffusionBrowseController extends DiffusionController {
 
       $browse_panel = new AphrontPanelView();
       $browse_panel->appendChild($browse_table);
+      $browse_panel->setNoBackground();
 
       $content[] = $browse_panel;
     }
@@ -92,7 +86,15 @@ final class DiffusionBrowseController extends DiffusionController {
     $nav = $this->buildSideNav('browse', false);
     $nav->appendChild($content);
 
-    return $this->buildStandardPageResponse(
+    $crumbs = $this->buildCrumbs(
+      array(
+        'branch' => true,
+        'path'   => true,
+        'view'   => 'browse',
+      ));
+    $nav->setCrumbs($crumbs);
+
+    return $this->buildApplicationPage(
       $nav,
       array(
         'title' => array(

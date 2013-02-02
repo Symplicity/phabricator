@@ -7,7 +7,6 @@ final class PonderPostBodyView extends AphrontView {
   private $handles;
   private $preview;
   private $anchorName;
-  private $user;
   private $action;
 
   public function setQuestion($question) {
@@ -33,11 +32,6 @@ final class PonderPostBodyView extends AphrontView {
 
   public function setPreview($preview) {
     $this->preview = $preview;
-    return $this;
-  }
-
-  public function setUser(PhabricatorUser $user) {
-    $this->user = $user;
     return $this;
   }
 
@@ -78,8 +72,7 @@ final class PonderPostBodyView extends AphrontView {
 
     if ($this->target instanceof PonderAnswer) {
       $xaction_view->addClass("ponder-answer");
-    }
-    else {
+    } else {
       $xaction_view->addClass("ponder-question");
     }
 
@@ -110,8 +103,7 @@ final class PonderPostBodyView extends AphrontView {
 
       if ($this->target instanceof PonderAnswer) {
         $outerview->setURI('/ponder/answer/vote/');
-      }
-      else {
+      } else {
         $outerview->setURI('/ponder/question/vote/');
       }
 

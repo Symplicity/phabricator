@@ -14,7 +14,7 @@ final class PhabricatorApplicationManiphest extends PhabricatorApplication {
     return PhabricatorEnv::getEnvConfig('maniphest.enabled');
   }
 
-  public function getAutospriteName() {
+  public function getIconName() {
     return 'maniphest';
   }
 
@@ -30,6 +30,10 @@ final class PhabricatorApplicationManiphest extends PhabricatorApplication {
     return array(
       new ManiphestTask(),
     );
+  }
+
+  public function getQuickCreateURI() {
+    return $this->getBaseURI().'task/create/';
   }
 
   public function getRoutes() {

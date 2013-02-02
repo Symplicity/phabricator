@@ -2,7 +2,6 @@
 
 final class AphrontCalendarMonthView extends AphrontView {
 
-  private $user;
   private $month;
   private $year;
   private $holidays = array();
@@ -15,11 +14,6 @@ final class AphrontCalendarMonthView extends AphrontView {
   }
   private function getBrowseURI() {
     return $this->browseURI;
-  }
-
-  public function setUser(PhabricatorUser $user) {
-    $this->user = $user;
-    return $this;
   }
 
   public function addEvent(AphrontCalendarEventView $event) {
@@ -289,15 +283,24 @@ final class AphrontCalendarMonthView extends AphrontView {
       $info .= "\n\n".$event->getDescription();
     }
 
+    if ($user->getPHID() == $event->getUserPHID()) {
+      $tag  = 'a';
+      $href = '/calendar/status/edit/'.$event->getEventID().'/';
+    } else {
+      $tag  = 'div';
+      $href = null;
+    }
+
     $text_div = javelin_render_tag(
-      'div',
+      $tag,
       array(
         'sigil' => 'has-tooltip',
         'meta'  => array(
-          'tip'   => $info."\n\n".implode("\n", $when),
-          'size'  => 240,
+          'tip'  => $info."\n\n".implode("\n", $when),
+          'size' => 240,
         ),
         'class' => 'aphront-calendar-event-text',
+        'href'  => $href,
       ),
       phutil_escape_html(phutil_utf8_shorten($event->getName(), 32)));
 

@@ -2,7 +2,6 @@
 
 final class AphrontFormDateControl extends AphrontFormControl {
 
-  private $user;
   private $initialTime;
 
   private $valueDay;
@@ -14,11 +13,6 @@ final class AphrontFormDateControl extends AphrontFormControl {
   const TIME_END_OF_DAY           = 'end-of-day';
   const TIME_START_OF_BUSINESS    = 'start-of-business';
   const TIME_END_OF_BUSINESS      = 'end-of-business';
-
-  public function setUser(PhabricatorUser $user) {
-    $this->user = $user;
-    return $this;
-  }
 
   public function setInitialTime($time) {
     $this->initialTime = $time;
@@ -187,7 +181,7 @@ final class AphrontFormDateControl extends AphrontFormControl {
     $max_year = $this->getMaxYear();
 
     $days = range(1, 31);
-    $days = array_combine($days, $days);
+    $days = array_fuse($days);
 
     $months = array(
       1 => 'Jan',
@@ -205,7 +199,7 @@ final class AphrontFormDateControl extends AphrontFormControl {
     );
 
     $years = range($this->getMinYear(), $this->getMaxYear());
-    $years = array_combine($years, $years);
+    $years = array_fuse($years);
 
     $days_sel = AphrontFormSelectControl::renderSelectTag(
       $this->getDayInputValue(),

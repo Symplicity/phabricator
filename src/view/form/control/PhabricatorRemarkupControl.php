@@ -49,6 +49,12 @@ final class PhabricatorRemarkupControl extends AphrontFormTextAreaControl {
       'table' => array(
         'tip' => pht('Table'),
       ),
+      array(
+        'spacer' => true,
+      ),
+      'meme' => array(
+        'tip' => pht('Meme'),
+      ),
       'help'  => array(
         'tip' => pht('Help'),
         'align' => 'right',
@@ -91,6 +97,8 @@ final class PhabricatorRemarkupControl extends AphrontFormTextAreaControl {
         $meta['tip'] = $tip;
       }
 
+      require_celerity_resource('sprite-icon-css');
+
       $buttons[] = javelin_render_tag(
         'a',
         array(
@@ -105,7 +113,7 @@ final class PhabricatorRemarkupControl extends AphrontFormTextAreaControl {
         phutil_render_tag(
           'div',
           array(
-            'class' => 'remarkup-assist autosprite remarkup-assist-'.$action,
+            'class' => 'remarkup-assist sprite-icon remarkup-assist-'.$action,
           ),
           ''));
     }
@@ -117,7 +125,22 @@ final class PhabricatorRemarkupControl extends AphrontFormTextAreaControl {
       ),
       implode('', $buttons));
 
-    $this->setCustomClass('remarkup-assist-textarea');
+    $monospaced_textareas = null;
+    $monospaced_textareas_class = null;
+    $user = $this->getUser();
+
+    if ($user) {
+      $monospaced_textareas = $user
+        ->loadPreferences()
+        ->getPreference(
+          PhabricatorUserPreferences::PREFERENCE_MONOSPACED_TEXTAREAS);
+      if ($monospaced_textareas == 'enabled') {
+        $monospaced_textareas_class = 'PhabricatorMonospaced';
+      }
+    }
+
+    $this->setCustomClass(
+      'remarkup-assist-textarea '.$monospaced_textareas_class);
 
     return javelin_render_tag(
       'div',

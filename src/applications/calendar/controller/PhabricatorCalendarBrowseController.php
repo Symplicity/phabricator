@@ -36,25 +36,26 @@ final class PhabricatorCalendarBrowseController
       $event->setEpochRange($status->getDateFrom(), $status->getDateTo());
 
       $name_text = $handles[$status->getUserPHID()]->getName();
-      $status_text = $status->getTextStatus();
+      $status_text = $status->getHumanStatus();
       $event->setUserPHID($status->getUserPHID());
       $event->setName("{$name_text} ({$status_text})");
       $details = '';
       if ($status->getDescription()) {
-        $details = "\n\n".rtrim(phutil_escape_html($status->getDescription()));
+        $details = "\n\n".rtrim($status->getDescription());
       }
       $event->setDescription(
         $status->getTerseSummary($user).$details
       );
+      $event->setEventID($status->getID());
       $month_view->addEvent($event);
     }
 
     $nav = $this->buildSideNavView();
-    $nav->selectFilter('edit');
+    $nav->selectFilter('/');
     $nav->appendChild(
       array(
         $this->getNoticeView(),
-        '<div style="padding: 2em;">',
+        '<div style="padding: 20px;">',
           $month_view,
         '</div>',
       ));

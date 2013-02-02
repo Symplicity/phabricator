@@ -1,10 +1,29 @@
 <?php
 
-abstract class AphrontView {
+abstract class AphrontView extends Phobject {
 
+  protected $user;
   protected $children = array();
 
+  public function setUser(PhabricatorUser $user) {
+    $this->user = $user;
+    return $this;
+  }
+
+  protected function getUser() {
+    return $this->user;
+  }
+
+  protected function canAppendChild() {
+    return true;
+  }
+
   final public function appendChild($child) {
+    if (!$this->canAppendChild()) {
+      $class = get_class($this);
+      throw new Exception(
+        "View '{$class}' does not support children.");
+    }
     $this->children[] = $child;
     return $this;
   }
@@ -32,10 +51,5 @@ abstract class AphrontView {
   }
 
   abstract public function render();
-
-  public function __set($name, $value) {
-    phlog('Wrote to undeclared property '.get_class($this).'::$'.$name.'.');
-    $this->$name = $value;
-  }
 
 }

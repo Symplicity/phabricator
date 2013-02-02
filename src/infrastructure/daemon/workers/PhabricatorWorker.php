@@ -102,7 +102,7 @@ abstract class PhabricatorWorker {
   final public static function waitForTasks(array $task_ids) {
     $task_table = new PhabricatorWorkerActiveTask();
 
-    $waiting = array_combine($task_ids, $task_ids);
+    $waiting = array_fuse($task_ids);
     while ($waiting) {
       $conn_w = $task_table->establishConnection('w');
 
@@ -131,7 +131,29 @@ abstract class PhabricatorWorker {
       }
 
       $task = head($tasks)->executeTask();
+
+      $ex = $task->getExecutionException();
+      if ($ex) {
+        throw $ex;
+      }
     }
+
+    $tasks = id(new PhabricatorWorkerArchiveTask())->loadAllWhere(
+      'id IN (%Ld)',
+      $task_ids);
+
+    foreach ($tasks as $task) {
+      if ($task->getResult() != PhabricatorWorkerArchiveTask::RESULT_SUCCESS) {
+        throw new Exception("Task ".$task->getID()." failed!");
+      }
+    }
+  }
+
+  public function renderForDisplay() {
+    $data = PhutilReadableSerializer::printableValue($this->data);
+    $data = phutil_escape_html($data);
+    $data = '<pre>'.$data.'</pre>';
+    return $data;
   }
 
 }

@@ -3,15 +3,9 @@
 final class DifferentialLocalCommitsView extends AphrontView {
 
   private $localCommits;
-  private $user;
 
   public function setLocalCommits($local_commits) {
     $this->localCommits = $local_commits;
-    return $this;
-  }
-
-  public function setUser(PhabricatorUser $user) {
-    $this->user = $user;
     return $this;
   }
 
@@ -41,7 +35,16 @@ final class DifferentialLocalCommitsView extends AphrontView {
     }
 
     $rows = array();
+    $highlight = true;
     foreach ($local as $commit) {
+      if ($highlight) {
+        $class = 'alt';
+        $highlight = false;
+      } else {
+        $class = '';
+        $highlight = true;
+      }
+
 
       $row = array();
       if (idx($commit, 'commit')) {
@@ -106,28 +109,30 @@ final class DifferentialLocalCommitsView extends AphrontView {
       }
       $row[] = '<td>'.$date.'</td>';
 
-      $rows[] = '<tr>'.implode('', $row).'</tr>';
+      $rows[] = '<tr class="'.$class.'">'.implode('', $row).'</tr>';
     }
 
 
     $headers = array();
-    $headers[] = '<th>Commit</th>';
+    $headers[] = '<th>'.pht('Commit').'</th>';
     if ($has_tree) {
-      $headers[] = '<th>Tree</th>';
+      $headers[] = '<th>'.pht('Tree').'</th>';
     }
     if ($has_local) {
-      $headers[] = '<th>Local</th>';
+      $headers[] = '<th>'.pht('Local').'</th>';
     }
-    $headers[] = '<th>Parents</th>';
-    $headers[] = '<th>Author</th>';
-    $headers[] = '<th>Summary</th>';
-    $headers[] = '<th>Date</th>';
+    $headers[] = '<th>'.pht('Parents').'</th>';
+    $headers[] = '<th>'.pht('Author').'</th>';
+    $headers[] = '<th>'.pht('Summary').'</th>';
+    $headers[] = '<th>'.pht('Date').'</th>';
 
     $headers = '<tr>'.implode('', $headers).'</tr>';
 
     return
+      id(new PhabricatorHeaderView())
+        ->setHeader(pht('Local Commits'))
+        ->render().
       '<div class="differential-panel">'.
-        '<h1>Local Commits</h1>'.
         '<table class="differential-local-commits-table">'.
           $headers.
           implode("\n", $rows).

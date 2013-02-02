@@ -39,8 +39,8 @@ final class PonderCommentEditor extends PhabricatorEditor {
     $target   = $this->targetPHID;
     $comment->save();
 
-    $question->attachRelated();
-    PhabricatorSearchPonderIndexer::indexQuestion($question);
+    id(new PhabricatorSearchIndexer())
+      ->indexDocumentByPHID($question->getPHID());
 
     // subscribe author and @mentions
     $subeditor = id(new PhabricatorSubscriptionsEditor())
@@ -73,8 +73,7 @@ final class PonderCommentEditor extends PhabricatorEditor {
 
       if ($target === $question->getPHID()) {
         $target = $question;
-      }
-      else {
+      } else {
         $answers_by_phid = mgroup($question->getAnswers(), 'getPHID');
         $target = head($answers_by_phid[$target]);
       }

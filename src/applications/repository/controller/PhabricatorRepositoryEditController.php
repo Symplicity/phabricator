@@ -33,19 +33,13 @@ final class PhabricatorRepositoryEditController
       $this->view = head_key($views);
     }
 
-    $nav = new AphrontSideNavView();
+    $nav = new AphrontSideNavFilterView();
+    $base_uri = new PhutilURI('/repository/edit/'.$repository->getID().'/');
+    $nav->setBaseURI($base_uri);
     foreach ($views as $view => $name) {
-      $nav->addNavItem(
-        phutil_render_tag(
-          'a',
-          array(
-            'class' => ($view == $this->view
-              ? 'aphront-side-nav-selected'
-              : null),
-            'href'  => '/repository/edit/'.$repository->getID().'/'.$view.'/',
-          ),
-          phutil_escape_html($name)));
+      $nav->addFilter($view, $name);
     }
+    $nav->selectFilter($this->view, null);
 
     $nav->appendChild($this->renderDaemonNotice());
 
@@ -165,7 +159,7 @@ final class PhabricatorRepositoryEditController
     $panel->setHeader('Edit Repository');
     $panel->appendChild($form);
     $panel->setWidth(AphrontPanelView::WIDTH_FORM);
-
+    $panel->setNoBackground();
 
     $nav = $this->sideNav;
 
@@ -294,12 +288,6 @@ final class PhabricatorRepositoryEditController
         }
         $repository->setDetail('svn-subpath', $subpath);
       }
-
-      $repository->setDetail(
-        'detail-parser',
-        $request->getStr(
-          'detail-parser',
-          'PhabricatorRepositoryDefaultCommitMessageDetailParser'));
 
       if ($tracking) {
         if (!$repository->getDetail('remote-uri')) {
@@ -521,6 +509,12 @@ final class PhabricatorRepositoryEditController
     $inset->setTitle('Repository Information');
 
     if ($has_local) {
+      $default_local_path = '';
+      $default =
+        PhabricatorEnv::getEnvConfig('repository.default-local-path');
+      if (!$repository->getDetail('remote-uri') && $default) {
+        $default_local_path = $default.strtolower($repository->getCallsign());
+      }
       $inset->appendChild(
         '<p class="aphront-form-instructions">Select a path on local disk '.
         'which the daemons should <tt>'.$clone_command.'</tt> the repository '.
@@ -531,7 +525,7 @@ final class PhabricatorRepositoryEditController
         id(new AphrontFormTextControl())
           ->setName('path')
           ->setLabel('Local Path')
-          ->setValue($repository->getDetail('local-path'))
+          ->setValue($repository->getDetail('local-path', $default_local_path))
           ->setError($e_path));
     } else if ($is_svn) {
       $inset->appendChild(
@@ -650,28 +644,6 @@ final class PhabricatorRepositoryEditController
             'a repository. Feed stories are never published about commits '.
             'that are more than 24 hours old.'));
 
-    $parsers = id(new PhutilSymbolLoader())
-      ->setAncestorClass('PhabricatorRepositoryCommitMessageDetailParser')
-      ->selectSymbolsWithoutLoading();
-    $parsers = ipull($parsers, 'name', 'name');
-
-    $inset
-      ->appendChild(
-        '<p class="aphront-form-instructions">If you extend the commit '.
-        'message format, you can provide a new parser which will extract '.
-        'extra information from it when commits are imported. This is an '.
-        'advanced feature, and using the default parser will be suitable '.
-        'in most cases.</p>')
-      ->appendChild(
-        id(new AphrontFormSelectControl())
-          ->setName('detail-parser')
-          ->setLabel('Detail Parser')
-          ->setOptions($parsers)
-          ->setValue(
-            $repository->getDetail(
-              'detail-parser',
-              'PhabricatorRepositoryDefaultCommitMessageDetailParser')));
-
     if ($is_svn) {
       $inset
         ->appendChild(
@@ -693,6 +665,7 @@ final class PhabricatorRepositoryEditController
     $panel->setHeader('Repository Tracking');
     $panel->appendChild($form);
     $panel->setWidth(AphrontPanelView::WIDTH_WIDE);
+    $panel->setNoBackground();
 
     $nav = $this->sideNav;
     $nav->appendChild($error_view);

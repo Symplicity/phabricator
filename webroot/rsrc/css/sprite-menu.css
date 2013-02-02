@@ -1,0 +1,59 @@
+/**
+ * @provides sprite-menu-css
+ * @generated
+ */
+
+.sprite-menu {
+  background-image: url(/rsrc/image/sprite-menu.png);
+  background-repeat: no-repeat;
+}
+
+@media
+only screen and (min-device-pixel-ratio: 1.5),
+only screen and (-webkit-min-device-pixel-ratio: 1.5) {
+  .sprite-menu {
+    background-image: url(/rsrc/image/sprite-menu-X2.png);
+    background-size: 140px 88px;
+  }
+}
+
+
+.alert-notifications .phabricator-main-menu-alert-icon {
+  background-position: 0px 0px;
+}
+
+.alert-notifications:hover .phabricator-main-menu-alert-icon {
+  background-position: -15px 0px;
+}
+
+.alert-notifications.alert-unread .phabricator-main-menu-alert-icon {
+  background-position: -30px 0px;
+}
+
+.phabricator-crumb-divider {
+  background-position: 0px -56px;
+}
+
+.menu-icon-eye {
+  background-position: -10px -56px;
+}
+
+.menu-icon-app {
+  background-position: -35px -56px;
+}
+
+.phabricator-main-menu-logo-image {
+  background-position: 0px -30px;
+}
+
+.alert-notifications .phabricator-main-menu-message-icon {
+  background-position: 0px -15px;
+}
+
+.alert-notifications:hover .phabricator-main-menu-message-icon {
+  background-position: -15px -15px;
+}
+
+.alert-notifications.message-unread .phabricator-main-menu-message-icon {
+  background-position: -30px -15px;
+}

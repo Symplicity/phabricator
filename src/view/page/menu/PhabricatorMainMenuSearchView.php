@@ -2,14 +2,8 @@
 
 final class PhabricatorMainMenuSearchView extends AphrontView {
 
-  private $user;
   private $scope;
   private $id;
-
-  public function setUser(PhabricatorUser $user) {
-    $this->user = $user;
-    return $this;
-  }
 
   public function setScope($scope) {
     $this->scope = $scope;
@@ -79,10 +73,7 @@ final class PhabricatorMainMenuSearchView extends AphrontView {
         $target.
       '</div>');
 
-    $group = new PhabricatorMainMenuGroupView();
-    $group->addClass('phabricator-main-menu-search');
-    $group->appendChild($form);
-    return $group->render();
+    return $form;
   }
 
 }

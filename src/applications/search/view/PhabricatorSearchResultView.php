@@ -26,6 +26,9 @@ final class PhabricatorSearchResultView extends AphrontView {
 
   public function render() {
     $handle = $this->handle;
+    if (!$handle->isComplete()) {
+      return;
+    }
 
     $type_name = nonempty($handle->getTypeName(), 'Document');
 
@@ -54,9 +57,10 @@ final class PhabricatorSearchResultView extends AphrontView {
       case PhabricatorPHIDConstants::PHID_TYPE_CMIT:
         $object_name = $handle->getName();
         if ($this->object) {
-          $data = $this->object->getCommitData();
-          $summary = $data->getSummary();
-          if (strlen($summary)) {
+          $data = $this->object->loadOneRelative(
+            new PhabricatorRepositoryCommitData(),
+            'commitID');
+          if ($data && strlen($data->getSummary())) {
             $object_name = $handle->getName().': '.$data->getSummary();
           }
         }
@@ -66,19 +70,10 @@ final class PhabricatorSearchResultView extends AphrontView {
         break;
     }
 
-    $index_link = phutil_render_tag(
-      'a',
-      array(
-        'href' => '/search/index/'.$handle->getPHID().'/',
-        'style' => 'float: right',
-      ),
-      'Examine Index');
-
     return
       '<div class="phabricator-search-result">'.
         $img.
         '<div class="result-desc">'.
-          $index_link.
           phutil_render_tag(
             'a',
             array(

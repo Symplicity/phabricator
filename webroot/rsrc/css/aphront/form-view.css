@@ -6,8 +6,8 @@
  * These styles are overrides for .aphront-form-view
  */
 .aphront-form-view-shaded {
-  border: 1px solid #c4c4c4;
-  background: #e7e7e7;
+  border: 1px solid #d4dae0;
+  background: #f4f5f8;
 }
 
 .aphront-form-view-padded {
@@ -25,12 +25,36 @@
   color: #666666;
 }
 
+.device-phone .aphront-form-view label.aphront-form-label {
+  display: block;
+  float: none;
+  text-align: left;
+  width: 100%;
+}
+
 .aphront-form-input {
   margin-left: 20%;
   margin-right: 25%;
   width: 55%;
 }
 
+.device-phone .aphront-form-input {
+  margin-left: 0%;
+  margin-right: 0%;
+  width: 100%;
+}
+
+.aphront-form-control-text .aphront-form-input input,
+.aphront-form-control-password .aphront-form-input input {
+  font-size: 13px;
+  padding: 4px 4px;
+  color: #333;
+  vertical-align: middle;
+  background-color: #ffffff;
+  border: 1px solid #96A6C5;
+  border-radius: 3px;
+  box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.075);
+}
 
 .aphront-form-error {
   width: 23%;
@@ -38,6 +62,15 @@
   color: #aa0000;
   font-weight: bold;
   padding-top: 4px;
+}
+
+.device-phone .aphront-form-error {
+  float: none;
+  width: 100%;
+}
+
+.device-phone .aphront-form-drag-and-drop-upload {
+  display: none;
 }
 
 .aphront-form-required {
@@ -48,7 +81,7 @@
 
 .aphront-form-input input,
 .aphront-form-input textarea {
-  font-size: 12px;
+  font-size: 13px;
   display: block;
   width: 100%;
   box-sizing: border-box;
@@ -71,6 +104,9 @@
 
 .aphront-form-control-textarea textarea.aphront-textarea-very-short {
   height: 3em;
+  border: 1px solid #96A6C5;
+  border-radius: 3px;
+  box-shadow: inset 0 1px 1px rgba(0, 0, 0, 0.075);
 }
 
 .aphront-form-control-textarea textarea.aphront-textarea-very-tall {
@@ -83,11 +119,16 @@
 
 
 .aphront-form-view .aphront-form-caption {
-  font-size: 11px;
-  color: #444444;
+  font-size: 12px;
+  color: #888;
+  padding: 2px;
   text-align: right;
   margin-right: 25%;
   margin-left: 20%;
+}
+
+.device-phone .aphront-form-view .aphront-form-caption {
+  margin-right: 0%;
 }
 
 /* override for when inside an aphront-panel-view */
@@ -155,6 +196,7 @@ table.aphront-form-control-checkbox-layout th {
 }
 
 .aphront-form-control-image .default-image {
+  display: inline;
   width: 12px;
 }
 
@@ -200,7 +242,6 @@ table.aphront-form-control-checkbox-layout th {
   padding: 8px 12px;
   margin: 2px 8px 2px 2px;
   position: relative;
-  z-index: 8;
   border: 1px solid transparent;
 }
 
@@ -222,7 +263,6 @@ table.aphront-form-control-checkbox-layout th {
 .fancy-datepicker {
   position: absolute;
   width: 240px;
-  z-index: 7;
 }
 
 .fancy-datepicker-core {

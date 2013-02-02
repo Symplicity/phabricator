@@ -3,29 +3,30 @@
 abstract class DifferentialFreeformFieldSpecification
   extends DifferentialFieldSpecification {
 
-  public function didParseCommit(
-    PhabricatorRepository $repository,
-    PhabricatorRepositoryCommit $commit,
-    PhabricatorRepositoryCommitData $data) {
-
-    $user = id(new PhabricatorUser())->loadOneWhere(
-      'phid = %s',
-      $data->getCommitDetail('authorPHID'));
-    if (!$user) {
-      return;
+  private function findMentionedTasks($message) {
+    if (!PhabricatorEnv::getEnvConfig('maniphest.enabled')) {
+      return array();
     }
 
     $prefixes = array(
+      'resolve'       => ManiphestTaskStatus::STATUS_CLOSED_RESOLVED,
       'resolves'      => ManiphestTaskStatus::STATUS_CLOSED_RESOLVED,
+      'resolved'      => ManiphestTaskStatus::STATUS_CLOSED_RESOLVED,
+      'fix'           => ManiphestTaskStatus::STATUS_CLOSED_RESOLVED,
       'fixes'         => ManiphestTaskStatus::STATUS_CLOSED_RESOLVED,
+      'fixed'         => ManiphestTaskStatus::STATUS_CLOSED_RESOLVED,
       'wontfix'       => ManiphestTaskStatus::STATUS_CLOSED_WONTFIX,
       'wontfixes'     => ManiphestTaskStatus::STATUS_CLOSED_WONTFIX,
+      'wontfixed'     => ManiphestTaskStatus::STATUS_CLOSED_WONTFIX,
       'spite'         => ManiphestTaskStatus::STATUS_CLOSED_SPITE,
       'spites'        => ManiphestTaskStatus::STATUS_CLOSED_SPITE,
+      'spited'        => ManiphestTaskStatus::STATUS_CLOSED_SPITE,
       'invalidate'    => ManiphestTaskStatus::STATUS_CLOSED_INVALID,
       'invaldiates'   => ManiphestTaskStatus::STATUS_CLOSED_INVALID,
+      'invalidated'   => ManiphestTaskStatus::STATUS_CLOSED_INVALID,
       'close'         => ManiphestTaskStatus::STATUS_CLOSED_RESOLVED,
       'closes'        => ManiphestTaskStatus::STATUS_CLOSED_RESOLVED,
+      'closed'        => ManiphestTaskStatus::STATUS_CLOSED_RESOLVED,
       'ref'           => null,
       'refs'          => null,
       'references'    => null,
@@ -55,16 +56,13 @@ abstract class DifferentialFreeformFieldSpecification
     $suffix_regex = implode('|', $suffix_regex);
 
     $matches = null;
-    $ok = preg_match_all(
+    preg_match_all(
       "/({$prefix_regex})\s+T(\d+)\s*({$suffix_regex})/i",
-      $this->renderValueForCommitMessage($is_edit = false),
+      $message,
       $matches,
       PREG_SET_ORDER);
 
-    if (!$ok) {
-      return;
-    }
-
+    $tasks_statuses = array();
     foreach ($matches as $set) {
       $prefix = strtolower($set[1]);
       $task_id = (int)$set[2];
@@ -75,16 +73,63 @@ abstract class DifferentialFreeformFieldSpecification
         $status = idx($prefixes, $prefix);
       }
 
-      $tasks = id(new ManiphestTaskQuery())
-        ->withTaskIDs(array($task_id))
-        ->execute();
-      $task = idx($tasks, $task_id);
+      $tasks_statuses[$task_id] = $status;
+    }
 
-      if (!$task) {
-        // Task doesn't exist, or the user can't see it.
-        continue;
-      }
+    return $tasks_statuses;
+  }
 
+  public function didWriteRevision(DifferentialRevisionEditor $editor) {
+    $message = $this->renderValueForCommitMessage(false);
+    $tasks = $this->findMentionedTasks($message);
+    if (!$tasks) {
+      return;
+    }
+
+    $revision_phid = $editor->getRevision()->getPHID();
+    $edge_type = PhabricatorEdgeConfig::TYPE_DREV_HAS_RELATED_TASK;
+
+    $add_phids = id(new ManiphestTask())
+      ->loadAllWhere('id IN (%Ld)', array_keys($tasks));
+    $add_phids = mpull($add_phids, 'getPHID');
+
+    $old_phids = PhabricatorEdgeQuery::loadDestinationPHIDs(
+      $revision_phid,
+      $edge_type);
+
+    $add_phids = array_diff($add_phids, $old_phids);
+
+    $edge_editor = id(new PhabricatorEdgeEditor())->setActor($this->getUser());
+    foreach ($add_phids as $phid) {
+      $edge_editor->addEdge($revision_phid, $edge_type, $phid);
+    }
+    // NOTE: Deletes only through Maniphest Tasks field.
+    $edge_editor->save();
+  }
+
+  public function didParseCommit(
+    PhabricatorRepository $repository,
+    PhabricatorRepositoryCommit $commit,
+    PhabricatorRepositoryCommitData $data) {
+
+    $user = id(new PhabricatorUser())->loadOneWhere(
+      'phid = %s',
+      $data->getCommitDetail('authorPHID'));
+    if (!$user) {
+      return;
+    }
+
+    $message = $this->renderValueForCommitMessage($is_edit = false);
+    $tasks_statuses = $this->findMentionedTasks($message);
+    if (!$tasks_statuses) {
+      return;
+    }
+
+    $tasks = id(new ManiphestTaskQuery())
+      ->withTaskIDs(array_keys($tasks_statuses))
+      ->execute();
+
+    foreach ($tasks as $task_id => $task) {
       id(new PhabricatorEdgeEditor())
         ->setActor($user)
         ->addEdge(
@@ -93,6 +138,7 @@ abstract class DifferentialFreeformFieldSpecification
           $commit->getPHID())
         ->save();
 
+      $status = $tasks_statuses[$task_id];
       if (!$status) {
         // Text like "Ref T123", don't change the task status.
         continue;

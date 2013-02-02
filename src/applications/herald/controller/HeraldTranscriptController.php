@@ -70,12 +70,18 @@ final class HeraldTranscriptController extends HeraldController {
       $nav->appendChild($object_xscript_panel);
     }
 
-    $main_nav = $this->renderNav();
-    $main_nav->selectFilter('transcript');
-    $main_nav->appendChild($nav);
+    $crumbs = id($this->buildApplicationCrumbs())
+      ->addCrumb(
+        id(new PhabricatorCrumbView())
+          ->setName(pht('Transcripts'))
+          ->setHref($this->getApplicationURI('/transcript/')))
+      ->addCrumb(
+        id(new PhabricatorCrumbView())
+          ->setName($xscript->getID()));
+    $nav->setCrumbs($crumbs);
 
     return $this->buildStandardPageResponse(
-      $main_nav,
+      $nav,
       array(
         'title' => 'Transcript',
       ));
@@ -107,23 +113,15 @@ final class HeraldTranscriptController extends HeraldController {
   }
 
   private function buildSideNav() {
-    $nav = new AphrontSideNavView();
+    $nav = new AphrontSideNavFilterView();
+    $nav->setBaseURI(new PhutilURI('/herald/transcript/'.$this->id.'/'));
 
     $items = array();
     $filters = $this->getFilterMap();
     foreach ($filters as $key => $name) {
-      $nav->addNavItem(
-        phutil_render_tag(
-          'a',
-          array(
-            'href' => '/herald/transcript/'.$this->id.'/'.$key.'/',
-            'class' =>
-              ($key == $this->filter)
-                ? 'aphront-side-nav-selected'
-                : null,
-          ),
-          phutil_escape_html($name)));
+      $nav->addFilter($key, $name);
     }
+    $nav->selectFilter($this->filter, null);
 
     return $nav;
   }
@@ -331,8 +329,9 @@ final class HeraldTranscriptController extends HeraldController {
       ));
 
     $panel = new AphrontPanelView();
-    $panel->setHeader('Actions Taken');
+    $panel->setHeader(pht('Actions Taken'));
     $panel->appendChild($table);
+    $panel->setNoBackground();
 
     return $panel;
   }

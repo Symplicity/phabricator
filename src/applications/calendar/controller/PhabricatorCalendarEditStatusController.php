@@ -102,6 +102,7 @@ final class PhabricatorCalendarEditStatusController
     $status_select = id(new AphrontFormSelectControl())
       ->setLabel(pht('Status'))
       ->setName('status')
+      ->setValue($status->getStatus())
       ->setOptions($status->getStatusOptions());
 
     $description = id(new AphrontFormTextAreaControl())
@@ -124,7 +125,7 @@ final class PhabricatorCalendarEditStatusController
     } else {
       $submit->addCancelButton(
         $this->getApplicationURI('status/delete/'.$status->getID().'/'),
-        'Delete Status'
+        pht('Delete Status')
       );
     }
     $form->appendChild($submit);

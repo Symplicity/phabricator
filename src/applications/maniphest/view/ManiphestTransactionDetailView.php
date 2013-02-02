@@ -15,7 +15,6 @@ final class ManiphestTransactionDetailView extends ManiphestView {
 
   private $renderSummaryOnly;
   private $renderFullSummary;
-  private $user;
 
   private $auxiliaryFields;
 
@@ -71,11 +70,6 @@ final class ManiphestTransactionDetailView extends ManiphestView {
 
   public function setCommentNumber($comment_number) {
     $this->commentNumber = $comment_number;
-    return $this;
-  }
-
-  public function setUser(PhabricatorUser $user) {
-    $this->user = $user;
     return $this;
   }
 
@@ -212,7 +206,9 @@ final class ManiphestTransactionDetailView extends ManiphestView {
       $xaction_view->setEpoch($any_transaction->getDateCreated());
       if ($this->commentNumber) {
         $anchor_name = 'comment-'.$this->commentNumber;
-        $anchor_text = 'T'.$any_transaction->getTaskID().'#'.$anchor_name;
+        $anchor_text =
+          'T'.$any_transaction->getTaskID().
+          '#'.$this->commentNumber;
 
         $xaction_view->setAnchor($anchor_name, $anchor_text);
       }
@@ -575,6 +571,7 @@ final class ManiphestTransactionDetailView extends ManiphestView {
         $parser = new DifferentialChangesetParser();
         $parser->setChangeset($changeset);
         $parser->setRenderingReference($id);
+        $parser->setMarkupEngine($this->markupEngine);
         $parser->setWhitespaceMode($whitespace_mode);
 
         $spec = $this->getRangeSpecification();

@@ -41,7 +41,7 @@ final class PhabricatorMarkupEngine {
 
   private $objects = array();
   private $viewer;
-  private $version = 0;
+  private $version = 2;
 
 
 /* -(  Markup Pipeline  )---------------------------------------------------- */
@@ -188,10 +188,14 @@ final class PhabricatorMarkupEngine {
     }
 
     if ($use_cache) {
-      $blocks = id(new PhabricatorMarkupCache())->loadAllWhere(
-        'cacheKey IN (%Ls)',
-        array_keys($use_cache));
-      $blocks = mpull($blocks, null, 'getCacheKey');
+      try {
+        $blocks = id(new PhabricatorMarkupCache())->loadAllWhere(
+          'cacheKey IN (%Ls)',
+          array_keys($use_cache));
+        $blocks = mpull($blocks, null, 'getCacheKey');
+      } catch (Exception $ex) {
+        phlog($ex);
+      }
     }
 
     foreach ($objects as $key => $info) {
@@ -220,11 +224,7 @@ final class PhabricatorMarkupEngine {
       if (isset($use_cache[$key])) {
         // This is just filling a cache and always safe, even on a read pathway.
         $unguarded = AphrontWriteGuard::beginScopedUnguardedWrites();
-          try {
-            $blocks[$key]->save();
-          } catch (AphrontQueryDuplicateKeyException $ex) {
-            // Ignore this, we just raced to write the cache.
-          }
+          $blocks[$key]->replace();
         unset($unguarded);
       }
     }
@@ -286,7 +286,6 @@ final class PhabricatorMarkupEngine {
     return self::newMarkupEngine(
       array(
         'macros'      => false,
-        'fileproxy'   => false,
         'youtube'     => false,
 
       ));
@@ -345,7 +344,6 @@ final class PhabricatorMarkupEngine {
   private static function getMarkupEngineDefaultConfiguration() {
     return array(
       'pygments'      => PhabricatorEnv::getEnvConfig('pygments.enabled'),
-      'fileproxy'     => PhabricatorEnv::getEnvConfig('files.enable-proxy'),
       'youtube'       => PhabricatorEnv::getEnvConfig(
         'remarkup.enable-embedded-youtube'),
       'custom-inline' => array(),
@@ -364,7 +362,7 @@ final class PhabricatorMarkupEngine {
   /**
    * @task engine
    */
-  private static function newMarkupEngine(array $options) {
+  public static function newMarkupEngine(array $options) {
 
     $options += self::getMarkupEngineDefaultConfiguration();
 
@@ -394,10 +392,6 @@ final class PhabricatorMarkupEngine {
 
     $rules[] = new PhutilRemarkupRuleDocumentLink();
 
-    if ($options['fileproxy']) {
-      $rules[] = new PhabricatorRemarkupRuleProxyImage();
-    }
-
     if ($options['youtube']) {
       $rules[] = new PhabricatorRemarkupRuleYoutube();
     }
@@ -406,13 +400,17 @@ final class PhabricatorMarkupEngine {
     $rules[] = new PhabricatorRemarkupRulePhriction();
 
     $rules[] = new PhabricatorRemarkupRuleDifferentialHandle();
-    $rules[] = new PhabricatorRemarkupRuleManiphestHandle();
+    if (PhabricatorEnv::getEnvConfig('maniphest.enabled')) {
+      $rules[] = new PhabricatorRemarkupRuleManiphestHandle();
+    }
 
     $rules[] = new PhabricatorRemarkupRuleEmbedFile();
 
     $rules[] = new PhabricatorRemarkupRuleDifferential();
     $rules[] = new PhabricatorRemarkupRuleDiffusion();
-    $rules[] = new PhabricatorRemarkupRuleManiphest();
+    if (PhabricatorEnv::getEnvConfig('maniphest.enabled')) {
+      $rules[] = new PhabricatorRemarkupRuleManiphest();
+    }
     $rules[] = new PhabricatorRemarkupRulePaste();
 
     $rules[] = new PhabricatorRemarkupRuleCountdown();
@@ -421,6 +419,7 @@ final class PhabricatorMarkupEngine {
 
     if ($options['macros']) {
       $rules[] = new PhabricatorRemarkupRuleImageMacro();
+      $rules[] = new PhabricatorRemarkupRuleMeme();
     }
 
     $rules[] = new PhabricatorRemarkupRuleMention();
@@ -481,6 +480,22 @@ final class PhabricatorMarkupEngine {
     return $mentions;
   }
 
+  public static function extractFilePHIDsFromEmbeddedFiles(
+    array $content_blocks) {
+    $files = array();
+
+    $engine = self::newDifferentialMarkupEngine();
+
+    foreach ($content_blocks as $content_block) {
+      $engine->markupText($content_block);
+      $ids = $engine->getTextMetadata(
+        PhabricatorRemarkupRuleEmbedFile::KEY_EMBED_FILE_PHIDS,
+        array());
+      $files += $ids;
+    }
+
+    return $files;
+  }
 
   /**
    * Produce a corpus summary, in a way that shortens the underlying text

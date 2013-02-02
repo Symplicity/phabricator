@@ -3,6 +3,17 @@
 final class DifferentialLintFieldSpecification
   extends DifferentialFieldSpecification {
 
+  public function shouldAppearOnDiffView() {
+      return true;
+  }
+
+  public function renderLabelForDiffView() {
+    return $this->renderLabelForRevisionView();
+  }
+
+  public function renderValueForDiffView() {
+    return $this->renderValueForRevisionView();
+  }
   public function shouldAppearOnRevisionView() {
     return true;
   }
@@ -104,6 +115,17 @@ final class DifferentialLintFieldSpecification
               $name),
             'show'  => $show,
           );
+
+          if (isset($message['locations'])) {
+            $locations = array();
+            foreach ($message['locations'] as $location) {
+              $other_line = idx($location, 'line');
+              $locations[] =
+                idx($location, 'path', $path).
+                ($other_line ? ":{$other_line}" : "");
+            }
+            $description .= "\nOther locations: ".implode(", ", $locations);
+          }
 
           if (strlen($description)) {
             $rows[] = array(
@@ -207,30 +229,40 @@ final class DifferentialLintFieldSpecification
   }
 
   public function renderWarningBoxForRevisionAccept() {
-    $diff = $this->getDiff();
-    $lint_warning = null;
-    if ($diff->getLintStatus() >= DifferentialLintStatus::LINT_WARN) {
-      $titles =
-        array(
-          DifferentialLintStatus::LINT_WARN => 'Lint Warning',
-          DifferentialLintStatus::LINT_FAIL => 'Lint Failure',
-          DifferentialLintStatus::LINT_SKIP => 'Lint Skipped'
-        );
-      if ($diff->getLintStatus() == DifferentialLintStatus::LINT_SKIP) {
-        $content =
-          "<p>This diff was created without running lint. Make sure you are ".
-          "OK with that before you accept this diff.</p>";
-      } else {
-        $content =
-          "<p>This diff has Lint Problems. Make sure you are OK with them ".
-          "before you accept this diff.</p>";
-      }
-      $lint_warning = id(new AphrontErrorView())
-        ->setSeverity(AphrontErrorView::SEVERITY_ERROR)
-        ->appendChild($content)
-        ->setTitle(idx($titles, $diff->getLintStatus(), 'Warning'));
+    $status = $this->getDiff()->getLintStatus();
+    if ($status < DifferentialLintStatus::LINT_WARN) {
+      return null;
     }
-    return $lint_warning;
+
+    $severity = AphrontErrorView::SEVERITY_ERROR;
+    $titles = array(
+      DifferentialLintStatus::LINT_WARN => 'Lint Warning',
+      DifferentialLintStatus::LINT_FAIL => 'Lint Failure',
+      DifferentialLintStatus::LINT_SKIP => 'Lint Skipped',
+      DifferentialLintStatus::LINT_POSTPONED => 'Lint Postponed',
+    );
+
+    if ($status == DifferentialLintStatus::LINT_SKIP) {
+      $content =
+        "<p>This diff was created without running lint. Make sure you are ".
+        "OK with that before you accept this diff.</p>";
+
+    } else if ($status == DifferentialLintStatus::LINT_POSTPONED) {
+      $severity = AphrontErrorView::SEVERITY_WARNING;
+      $content =
+        "<p>Postponed linters didn't finish yet. Make sure you are OK with ".
+        "that before you accept this diff.</p>";
+
+    } else {
+      $content =
+        "<p>This diff has Lint Problems. Make sure you are OK with them ".
+        "before you accept this diff.</p>";
+    }
+
+    return id(new AphrontErrorView())
+      ->setSeverity($severity)
+      ->appendChild($content)
+      ->setTitle(idx($titles, $status, 'Warning'));
   }
 
 }

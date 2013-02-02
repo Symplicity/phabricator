@@ -99,12 +99,12 @@ final class PhabricatorFeedStoryPublisher {
         implode(', ', $sql));
     }
 
+    $this->insertNotifications($chrono_key);
     if (PhabricatorEnv::getEnvConfig('notification.enabled')) {
-      $this->insertNotifications($chrono_key);
       $this->sendNotification($chrono_key);
     }
 
-    $uris = PhabricatorEnv::getEnvConfig('feed.http-hooks', array());
+    $uris = PhabricatorEnv::getEnvConfig('feed.http-hooks');
     foreach ($uris as $uri) {
       $task = PhabricatorWorker::scheduleTask(
         'FeedPublisherWorker',

@@ -2,7 +2,6 @@
 
 final class DifferentialInlineCommentEditView extends AphrontView {
 
-  private $user;
   private $inputs = array();
   private $uri;
   private $title;
@@ -12,11 +11,6 @@ final class DifferentialInlineCommentEditView extends AphrontView {
 
   public function addHiddenInput($key, $value) {
     $this->inputs[] = array($key, $value);
-    return $this;
-  }
-
-  public function setUser(PhabricatorUser $user) {
-    $this->user = $user;
     return $this;
   }
 
@@ -65,9 +59,17 @@ final class DifferentialInlineCommentEditView extends AphrontView {
       $this->renderBody());
 
     if ($this->onRight) {
-      $core = '<th></th><td></td><th></th><td colspan="2">'.$content.'</td>';
+      $core =
+        '<th></th>'.
+        '<td class="left"></td>'.
+        '<th></th>'.
+        '<td colspan="3" class="right3">'.$content.'</td>';
     } else {
-      $core = '<th></th><td>'.$content.'</td><th></th><td colspan="2"></td>';
+      $core =
+        '<th></th>'.
+        '<td class="left">'.$content.'</td>'.
+        '<th></th>'.
+        '<td colspan="3" class="right3"></td>';
     }
 
     return '<table><tr class="inline-comment-splint">'.$core.'</tr></table>';
@@ -99,7 +101,7 @@ final class DifferentialInlineCommentEditView extends AphrontView {
         'sigil' => 'inline-edit-cancel',
         'class' => 'grey',
       ),
-      'Cancel');
+      pht('Cancel'));
 
     $buttons = implode('', $buttons);
 
@@ -111,7 +113,7 @@ final class DifferentialInlineCommentEditView extends AphrontView {
         'tabindex' => '-1',
         'target' => '_blank',
       ),
-      'Formatting Reference');
+      pht('Formatting Reference'));
 
     return javelin_render_tag(
       'div',

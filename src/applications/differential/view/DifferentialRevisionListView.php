@@ -9,10 +9,8 @@ final class DifferentialRevisionListView extends AphrontView {
   private $flags = array();
   private $drafts = array();
   private $handles;
-  private $user;
   private $fields;
   private $highlightAge;
-  const NO_DATA_STRING = 'No revisions found.';
 
   public function setFields(array $fields) {
     assert_instances_of($fields, 'DifferentialFieldSpecification');
@@ -44,11 +42,6 @@ final class DifferentialRevisionListView extends AphrontView {
   public function setHandles(array $handles) {
     assert_instances_of($handles, 'PhabricatorObjectHandle');
     $this->handles = $handles;
-    return $this;
-  }
-
-  public function setUser(PhabricatorUser $user) {
-    $this->user = $user;
     return $this;
   }
 
@@ -144,7 +137,7 @@ final class DifferentialRevisionListView extends AphrontView {
                 'width' => 16,
                 'height' => 16,
                 'alt' => 'Draft',
-                'title' => 'Draft Comment',
+                'title' => pht('Draft Comment'),
               )).
             '</a>';
       }
@@ -184,7 +177,7 @@ final class DifferentialRevisionListView extends AphrontView {
     $table->setColumnClasses($classes);
     $table->setCellClasses($cell_classes);
 
-    $table->setNoDataString(DifferentialRevisionListView::NO_DATA_STRING);
+    $table->setNoDataString(pht('No revisions found.'));
 
     require_celerity_resource('differential-revision-history-css');
 

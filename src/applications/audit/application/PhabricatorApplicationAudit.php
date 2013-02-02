@@ -3,14 +3,14 @@
 final class PhabricatorApplicationAudit extends PhabricatorApplication {
 
   public function getShortDescription() {
-    return 'Audit Code';
+    return pht('Audit Code');
   }
 
   public function getBaseURI() {
     return '/audit/';
   }
 
-  public function getAutospriteName() {
+  public function getIconName() {
     return 'audit';
   }
 

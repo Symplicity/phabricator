@@ -18,27 +18,24 @@ final class PhrictionListController
     $user = $request->getUser();
 
     $views = array(
-      'all'     => 'All Documents',
-      'updates' => 'Recently Updated',
+      'active'  => pht('Active Documents'),
+      'all'     => pht('All Documents'),
+      'updates' => pht('Recently Updated'),
     );
 
     if (empty($views[$this->view])) {
-      $this->view = 'all';
+      $this->view = 'active';
     }
 
-    $nav = new AphrontSideNavView();
-    foreach ($views as $view => $name) {
-      $nav->addNavItem(
-        phutil_render_tag(
-          'a',
-          array(
-            'href'  => '/phriction/list/'.$view.'/',
-            'class' => ($this->view == $view)
-              ? 'aphront-side-nav-selected'
-              : null,
-          ),
-          phutil_escape_html($name)));
-    }
+    $nav = $this->buildSideNavView($this->view);
+
+    $header = id(new PhabricatorHeaderView())
+      ->setHeader($views[$this->view]);
+
+    $nav->appendChild(
+      array(
+        $header,
+      ));
 
     $pager = new AphrontPagerView();
     $pager->setURI($request->getRequestURI(), 'page');
@@ -50,7 +47,6 @@ final class PhrictionListController
     $phids = mpull($content, 'getAuthorPHID');
 
     $handles = $this->loadViewerHandles($phids);
-
 
     $rows = array();
     foreach ($documents as $document) {
@@ -85,23 +81,19 @@ final class PhrictionListController
         'right',
       ));
 
-    $view_headers = array(
-      'all'       => 'All Documents',
-      'updates'   => 'Recently Updated Documents',
-    );
-    $view_header = $view_headers[$this->view];
+    $view_header = $views[$this->view];
 
     $panel = new AphrontPanelView();
-    $panel->setHeader($view_header);
     $panel->appendChild($document_table);
     $panel->appendChild($pager);
 
     $nav->appendChild($panel);
 
-    return $this->buildStandardPageResponse($nav,
-        array(
-          'title' => 'Phriction Main'
-        ));
+    return $this->buildApplicationPage(
+      $nav,
+      array(
+        'title' => pht('Phriction Main'),
+      ));
   }
 
   private function loadDocuments(AphrontPagerView $pager) {
@@ -113,6 +105,15 @@ final class PhrictionListController
     $conn = $document_dao->establishConnection('r');
 
     switch ($this->view) {
+      case 'active':
+        $data = queryfx_all(
+          $conn,
+          'SELECT * FROM %T WHERE status != %d ORDER BY id DESC LIMIT %d, %d',
+          $document_dao->getTableName(),
+          PhrictionDocumentStatus::STATUS_DELETED,
+          $pager->getOffset(),
+          $pager->getPageSize() + 1);
+        break;
       case 'all':
         $data = queryfx_all(
           $conn,

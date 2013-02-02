@@ -25,6 +25,10 @@ final class DifferentialSummaryFieldSpecification
       ->setValue($this->summary);
   }
 
+  public function shouldExtractMentions() {
+    return true;
+  }
+
   public function willWriteRevision(DifferentialRevisionEditor $editor) {
     $this->getRevision()->setSummary($this->summary);
   }
@@ -68,6 +72,18 @@ final class DifferentialSummaryFieldSpecification
     }
 
     return $this->summary;
+  }
+
+  public function shouldAddToSearchIndex() {
+    return true;
+  }
+
+  public function getValueForSearchIndex() {
+    return $this->summary;
+  }
+
+  public function getKeyForSearchIndex() {
+    return PhabricatorSearchField::FIELD_BODY;
   }
 
 }

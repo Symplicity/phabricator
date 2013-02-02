@@ -10,7 +10,7 @@ final class PhabricatorApplicationPonder extends PhabricatorApplication {
     return 'Find Answers';
   }
 
-  public function getAutospriteName() {
+  public function getIconName() {
     return 'ponder';
   }
 
@@ -18,6 +18,10 @@ final class PhabricatorApplicationPonder extends PhabricatorApplication {
     return array(
       new PonderQuestion(),
     );
+  }
+
+  public function getTitleGlyph() {
+    return "\xE2\x97\xB3";
   }
 
   public function loadStatus(PhabricatorUser $user) {
@@ -29,6 +33,10 @@ final class PhabricatorApplicationPonder extends PhabricatorApplication {
 
   public function getApplicationGroup() {
     return self::GROUP_COMMUNICATION;
+  }
+
+  public function isBeta() {
+    return true;
   }
 
   public function getroutes() {

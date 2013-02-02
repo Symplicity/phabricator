@@ -27,43 +27,33 @@ final class DrydockLogController extends DrydockController {
 
     $logs = $query->executeWithOffsetPager($pager);
 
-    $rows = array();
-    foreach ($logs as $log) {
-      $rows[] = array(
-        $log->getResourceID(),
-        $log->getLeaseID(),
-        phutil_escape_html($log->getMessage()),
-        phabricator_datetime($log->getEpoch(), $user),
-      );
-    }
+    $title = pht('Logs');
 
-    $table = new AphrontTableView($rows);
-    $table->setHeaders(
+    $header = id(new PhabricatorHeaderView())
+      ->setHeader($title);
+
+    $table = $this->buildLogTableView($logs);
+    $table->appendChild($pager);
+
+    $nav->appendChild(
       array(
-        'Resource',
-        'Lease',
-        'Message',
-        'Date',
-      ));
-    $table->setColumnClasses(
-      array(
-        '',
-        '',
-        'wide',
-        '',
+        $header,
+        $table,
+        $pager,
       ));
 
-    $panel = new AphrontPanelView();
-    $panel->setHeader('Drydock Logs');
-    $panel->appendChild($table);
-    $panel->appendChild($pager);
+    $crumbs = $this->buildApplicationCrumbs();
+    $crumbs->addCrumb(
+      id(new PhabricatorCrumbView())
+        ->setName($title)
+        ->setHref($this->getApplicationURI('/logs/')));
+    $nav->setCrumbs($crumbs);
 
-    $nav->appendChild($panel);
-
-    return $this->buildStandardPageResponse(
+    return $this->buildApplicationPage(
       $nav,
       array(
-        'title' => 'Logs',
+        'title' => $title,
+        'device' => true,
       ));
 
   }

@@ -1,7 +1,6 @@
 <?php
 
-final class DifferentialChangesetListView
-  extends DifferentialCodeWidthSensitiveView {
+final class DifferentialChangesetListView extends AphrontView {
 
   private $changesets = array();
   private $visibleChangesets = array();
@@ -14,12 +13,21 @@ final class DifferentialChangesetListView
   private $leftRawFileURI;
   private $rightRawFileURI;
 
-  private $user;
   private $symbolIndexes = array();
   private $repository;
   private $branch;
   private $diff;
   private $vsMap = array();
+
+  private $title;
+
+  public function setTitle($title) {
+    $this->title = $title;
+    return $this;
+  }
+  private function getTitle() {
+    return $this->title;
+  }
 
   public function setBranch($branch) {
     $this->branch = $branch;
@@ -41,11 +49,6 @@ final class DifferentialChangesetListView
 
   public function setInlineCommentControllerURI($uri) {
     $this->inlineURI = $uri;
-    return $this;
-  }
-
-  public function setUser(PhabricatorUser $user) {
-    $this->user = $user;
     return $this;
   }
 
@@ -189,12 +192,15 @@ final class DifferentialChangesetListView
       ));
     }
 
-    return phutil_render_tag(
+    return
+      id(new PhabricatorHeaderView())
+        ->setHeader($this->getTitle())
+        ->render().
+      phutil_render_tag(
       'div',
       array(
         'class' => 'differential-review-stage',
         'id'    => 'differential-review-stage',
-        'style' => "max-width: {$this->calculateSideBySideWidth()}px; ",
       ),
       implode("\n", $output));
   }
@@ -221,7 +227,7 @@ final class DifferentialChangesetListView
     $template =
       '<table><tr>'.
       '<th></th><td>%s</td>'.
-      '<th></th><td colspan="2">%s</td>'.
+      '<th></th><td colspan="3">%s</td>'.
       '</tr></table>';
 
     return array(

@@ -177,14 +177,16 @@ abstract class LiskDAO {
   const SERIALIZATION_PHP           = 'php';
 
   const IDS_AUTOINCREMENT           = 'ids-auto';
+  const IDS_COUNTER                 = 'ids-counter';
   const IDS_PHID                    = 'ids-phid';
   const IDS_MANUAL                  = 'ids-manual';
+
+  const COUNTER_TABLE_NAME          = 'lisk_counter';
 
   private $__dirtyFields            = array();
   private $__missingFields          = array();
   private static $processIsolationLevel       = 0;
   private static $transactionIsolationLevel   = 0;
-  private static $__checkedClasses = array();
 
   private $__ephemeral = false;
 
@@ -210,30 +212,6 @@ abstract class LiskDAO {
 
     if ($this->getConfigOption(self::CONFIG_PARTIAL_OBJECTS)) {
       $this->resetDirtyFields();
-
-      $this_class = get_class($this);
-      if (empty(self::$__checkedClasses[$this_class])) {
-        self::$__checkedClasses = true;
-
-        if (PhabricatorEnv::getEnvConfig('lisk.check_property_methods')) {
-          $class = new ReflectionClass(get_class($this));
-          $methods = $class->getMethods();
-          $properties = $this->getProperties();
-          foreach ($methods as $method) {
-            $name = strtolower($method->getName());
-            if (!(strncmp($name, 'get', 3) && strncmp($name, 'set', 3))) {
-              $name = substr($name, 3);
-              $declaring_class_name = $method->getDeclaringClass()->getName();
-              if (isset($properties[$name]) &&
-                  $declaring_class_name !== 'LiskDAO') {
-                throw new Exception(
-                  "Cannot implement method {$method->getName()} in ".
-                  "{$declaring_class_name}.");
-              }
-            }
-          }
-        }
-      }
     }
   }
 
@@ -327,8 +305,23 @@ abstract class LiskDAO {
    * Lisk objects need to have a unique identifying ID. The three mechanisms
    * available for generating this ID are IDS_AUTOINCREMENT (default, assumes
    * the ID column is an autoincrement primary key), IDS_PHID (to generate a
-   * unique PHID for each object) or IDS_MANUAL (you are taking full
-   * responsibility for ID management).
+   * unique PHID for each object), IDS_MANUAL (you are taking full
+   * responsibility for ID management), or IDS_COUNTER (see below).
+   *
+   * InnoDB does not persist the value of `auto_increment` across restarts,
+   * and instead initializes it to `MAX(id) + 1` during startup. This means it
+   * may reissue the same autoincrement ID more than once, if the row is deleted
+   * and then the database is restarted. To avoid this, you can set an object to
+   * use a counter table with IDS_COUNTER. This will generally behave like
+   * IDS_AUTOINCREMENT, except that the counter value will persist across
+   * restarts and inserts will be slightly slower. If a database stores any
+   * DAOs which use this mechanism, you must create a table there with this
+   * schema:
+   *
+   *   CREATE TABLE lisk_counter (
+   *     counterName VARCHAR(64) COLLATE utf8_bin PRIMARY KEY,
+   *     counterValue BIGINT UNSIGNED NOT NULL
+   *   ) ENGINE=InnoDB DEFAULT CHARSET=utf8;
    *
    * CONFIG_TIMESTAMPS
    * Lisk can automatically handle keeping track of a `dateCreated' and
@@ -364,7 +357,6 @@ abstract class LiskDAO {
    * by Lisk (use readField and writeField instead), and you should not
    * directly access or assign protected members of your class (use the getters
    * and setters).
-   *
    *
    * @return dictionary  Map of configuration options to values.
    *
@@ -1181,7 +1173,6 @@ abstract class LiskDAO {
     return $this;
   }
 
-
   /**
    * Internal implementation of INSERT and REPLACE.
    *
@@ -1193,6 +1184,8 @@ abstract class LiskDAO {
     $this->willSaveObject();
     $data = $this->getPropertyValues();
 
+    $conn = $this->establishConnection('w');
+
     $id_mechanism = $this->getConfigOption(self::CONFIG_IDS);
     switch ($id_mechanism) {
       case self::IDS_AUTOINCREMENT:
@@ -1202,6 +1195,17 @@ abstract class LiskDAO {
         $id_key = $this->getIDKeyForUse();
         if (empty($data[$id_key])) {
           unset($data[$id_key]);
+        }
+        break;
+      case self::IDS_COUNTER:
+        // If we are using counter IDs, assign a new ID if we don't already have
+        // one.
+        $id_key = $this->getIDKeyForUse();
+        if (empty($data[$id_key])) {
+          $counter_name = $this->getTableName();
+          $id = self::loadNextCounterID($conn, $counter_name);
+          $this->setID($id);
+          $data[$id_key] = $id;
         }
         break;
       case self::IDS_PHID:
@@ -1218,8 +1222,6 @@ abstract class LiskDAO {
     }
 
     $this->willWriteData($data);
-
-    $conn = $this->establishConnection('w');
 
     $columns = array_keys($data);
 
@@ -1759,6 +1761,39 @@ abstract class LiskDAO {
   public function __set($name, $value) {
     phlog('Wrote to undeclared property '.get_class($this).'::$'.$name.'.');
     $this->$name = $value;
+  }
+
+  /**
+   * Increments a named counter and returns the next value.
+   *
+   * @param   AphrontDatabaseConnection   Database where the counter resides.
+   * @param   string                      Counter name to create or increment.
+   * @return  int                         Next counter value.
+   *
+   * @task util
+   */
+  public static function loadNextCounterID(
+    AphrontDatabaseConnection $conn_w,
+    $counter_name) {
+
+    // NOTE: If an insert does not touch an autoincrement row or call
+    // LAST_INSERT_ID(), MySQL normally does not change the value of
+    // LAST_INSERT_ID(). This can cause a counter's value to leak to a
+    // new counter if the second counter is created after the first one is
+    // updated. To avoid this, we insert LAST_INSERT_ID(1), to ensure the
+    // LAST_INSERT_ID() is always updated and always set correctly after the
+    // query completes.
+
+    queryfx(
+      $conn_w,
+      'INSERT INTO %T (counterName, counterValue) VALUES
+          (%s, LAST_INSERT_ID(1))
+        ON DUPLICATE KEY UPDATE
+          counterValue = LAST_INSERT_ID(counterValue + 1)',
+      self::COUNTER_TABLE_NAME,
+      $counter_name);
+
+    return $conn_w->getInsertID();
   }
 
 }

@@ -3,7 +3,7 @@
 final class PhabricatorApplicationDaemons extends PhabricatorApplication {
 
   public function getName() {
-    return 'Daemon Console';
+    return 'Daemons';
   }
 
   public function getShortDescription() {
@@ -18,29 +18,30 @@ final class PhabricatorApplicationDaemons extends PhabricatorApplication {
     return "\xE2\x98\xAF";
   }
 
-  public function getAutospriteName() {
-    return 'daemons';
+  public function getIconName() {
+    return 'daemon';
   }
 
   public function getApplicationGroup() {
     return self::GROUP_ADMIN;
   }
 
+  public function canUninstall() {
+    return false;
+  }
+
   public function getRoutes() {
     return array(
       '/daemon/' => array(
+        '' => 'PhabricatorDaemonConsoleController',
         'task/(?P<id>[1-9]\d*)/' => 'PhabricatorWorkerTaskDetailController',
         'task/(?P<id>[1-9]\d*)/(?P<action>[^/]+)/'
           => 'PhabricatorWorkerTaskUpdateController',
         'log/' => array(
-          '(?P<running>running/)?' => 'PhabricatorDaemonLogListController',
+          '' => 'PhabricatorDaemonLogListController',
           'combined/' => 'PhabricatorDaemonCombinedLogController',
           '(?P<id>[1-9]\d*)/' => 'PhabricatorDaemonLogViewController',
         ),
-        'timeline/' => 'PhabricatorDaemonTimelineConsoleController',
-        'timeline/(?P<id>[1-9]\d*)/'
-          => 'PhabricatorDaemonTimelineEventController',
-        '' => 'PhabricatorDaemonConsoleController',
       ),
     );
   }

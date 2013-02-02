@@ -10,7 +10,7 @@ final class PhabricatorApplicationDiffusion extends PhabricatorApplication {
     return '/diffusion/';
   }
 
-  public function getAutospriteName() {
+  public function getIconName() {
     return 'diffusion';
   }
 
@@ -41,6 +41,7 @@ final class PhabricatorApplicationDiffusion extends PhabricatorApplication {
           'diff/'                       => 'DiffusionDiffController',
           'tags/(?P<dblob>.*)'          => 'DiffusionTagListController',
           'branches/(?P<dblob>.*)'      => 'DiffusionBranchTableController',
+          'lint/(?P<dblob>.*)'          => 'DiffusionLintController',
 
           'commit/(?P<commit>[a-z0-9]+)/branches/'
             => 'DiffusionCommitBranchesController',
@@ -62,6 +63,7 @@ final class PhabricatorApplicationDiffusion extends PhabricatorApplication {
         ),
         'symbol/(?P<name>[^/]+)/' => 'DiffusionSymbolController',
         'external/' => 'DiffusionExternalController',
+        'lint/' => 'DiffusionLintController',
       ),
     );
   }

@@ -6,7 +6,6 @@ final class DifferentialRevisionCommentListView extends AphrontView {
   private $handles;
   private $inlines;
   private $changesets;
-  private $user;
   private $target;
   private $versusDiffID;
   private $id;
@@ -32,11 +31,6 @@ final class DifferentialRevisionCommentListView extends AphrontView {
   public function setChangesets(array $changesets) {
     assert_instances_of($changesets, 'DifferentialChangeset');
     $this->changesets = $changesets;
-    return $this;
-  }
-
-  public function setUser(PhabricatorUser $user) {
-    $this->user = $user;
     return $this;
   }
 
@@ -171,7 +165,7 @@ final class DifferentialRevisionCommentListView extends AphrontView {
           'sigil' =>  "differential-all-comments-container",
         ),
         '<div class="differential-older-comments-are-hidden">'.
-          number_format(count($hidden)).' older comments are hidden. '.
+          pht('%d older comments are hidden. ', number_format(count($hidden))).
           javelin_render_tag(
             'a',
             array(
@@ -179,7 +173,7 @@ final class DifferentialRevisionCommentListView extends AphrontView {
               'mustcapture' => true,
               'sigil' => 'differential-show-all-comments',
             ),
-            'Show all comments.').
+            pht('Show all comments.')).
         '</div>');
     } else {
       $hidden = null;
