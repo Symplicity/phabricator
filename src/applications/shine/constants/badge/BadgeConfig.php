@@ -128,11 +128,9 @@ final class BadgeConfig {
         ArcanistDifferentialRevisionStatus::ACCEPTED,
         ArcanistDifferentialRevisionStatus::CLOSED);
     } elseif ($title == 'Profiller') {
-      $where = sprintf("WHERE title != '' AND blurb != '' AND profileImagePHID != '%s'",
-        PhabricatorEnv::getEnvConfig('user.default-profile-image-phid'));
+      $where = "WHERE title != '' AND blurb != '' AND profileImagePHID IS NOT NULL";
     } elseif ($title == 'Photogenic') {
-      $where = sprintf("WHERE profileImagePHID != '%s'",
-        PhabricatorEnv::getEnvConfig('user.default-profile-image-phid'));
+      $where = "WHERE profileImagePHID IS NOT NULL";
     } elseif ($title == 'Izerizer') {
       $where = sprintf("rc INNER JOIN repository_commitdata rcd ON rc.id=rcd.commitID"
         . " WHERE commitMessage rlike '[1-9][0-9]{5,}' AND epoch>%d",
