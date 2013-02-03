@@ -3,6 +3,7 @@
 final class PhabricatorSetupCheckExtraConfig extends PhabricatorSetupCheck {
 
   protected function executeChecks() {
+    /*
     $all_keys = PhabricatorEnv::getAllConfigKeys();
     $all_keys = array_keys($all_keys);
     sort($all_keys);
@@ -28,5 +29,6 @@ final class PhabricatorSetupCheckExtraConfig extends PhabricatorSetupCheck {
         ->setMessage($message)
         ->addPhabricatorConfig($key);
     }
+    */
   }
 }
