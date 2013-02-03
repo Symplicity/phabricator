@@ -644,24 +644,6 @@ return array(
   // The GitHub "Secret" to use for GitHub API access.
   'github.application-secret'   => null,
 
-  // Github (or compatible) OAuth authorization URI.
-  'github.auth-uri'         => 'https://github.com/login/oauth/authorize',
-
-  // Github (or compatible) OAuth token URI.
-  'github.token-uri'        => 'https://github.com/login/oauth/access_token',
-
-  // Github (or compatible) JSON user-info URI.
-  'github.user-info-uri'    => 'https://github.com/api/v2/json/user/show',
-
-  // Github (or compatible) user account URI prefix.
-  'github.user-account-uri' => 'https://github.com/',
-
-  // Github (or compatible) OAuth provider name.
-  'github.provider-name'    => 'Github',
-
-  // Github (or compatible) OAuth minimum scope.
-  'github.min-scope'        => null,
-
 // -- Google OAuth ---------------------------------------------------------- //
 
   // Can users use Google credentials to login to Phabricator?
