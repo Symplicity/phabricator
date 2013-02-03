@@ -35,7 +35,6 @@ class PhabricatorShineBadgeController
 
   public function processRequest()
   {
-
     $request = $this->getRequest();
     $this->user = $request->getUser();
 
@@ -44,19 +43,14 @@ class PhabricatorShineBadgeController
       $this->view = key($this->view_names);
     }
 
-    $nav = new AphrontSideNavView();
+    $nav = id(new AphrontSideNavFilterView())
+            ->setBaseURI(new PhutilURI('/shine/'))
+            ->addLabel('Shine');
+
     foreach ($this->view_names as $key => $name) {
-      $nav->addNavItem(
-        phutil_render_tag(
-          'a',
-          array(
-               'href' => '/shine/view/' . $key . '/',
-               'class' => ($this->view == $key)
-                       ? 'aphront-side-nav-selected'
-                       : null,
-          ),
-          phutil_escape_html($name)));
+      $nav->addFilter("view/{$key}", $name);
     }
+    $nav->selectFilter('view/' . $this->view);
 
     require_celerity_resource('phabricator-shine-css');
 
