@@ -88,7 +88,7 @@ final class AphrontCursorPagerView extends AphrontView {
     $links = array();
 
     if ($this->afterID || ($this->beforeID && $this->moreResults)) {
-      $links[] = phutil_render_tag(
+      $links[] = phutil_tag(
         'a',
         array(
           'href' => $this->uri
@@ -99,7 +99,7 @@ final class AphrontCursorPagerView extends AphrontView {
     }
 
     if ($this->prevPageID) {
-      $links[] = phutil_render_tag(
+      $links[] = phutil_tag(
         'a',
         array(
           'href' => $this->uri
@@ -110,7 +110,7 @@ final class AphrontCursorPagerView extends AphrontView {
     }
 
     if ($this->nextPageID) {
-      $links[] = phutil_render_tag(
+      $links[] = phutil_tag(
         'a',
         array(
           'href' => $this->uri
@@ -120,10 +120,10 @@ final class AphrontCursorPagerView extends AphrontView {
         "Next \xE2\x80\xBA");
     }
 
-    return
-      '<div class="aphront-pager-view">'.
-        implode('', $links).
-      '</div>';
+    return phutil_tag(
+      'div',
+      array('class' => 'aphront-pager-view'),
+      $links);
   }
 
 }

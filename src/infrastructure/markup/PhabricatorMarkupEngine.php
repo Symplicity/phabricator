@@ -41,7 +41,7 @@ final class PhabricatorMarkupEngine {
 
   private $objects = array();
   private $viewer;
-  private $version = 2;
+  private $version = 6;
 
 
 /* -(  Markup Pipeline  )---------------------------------------------------- */
@@ -355,6 +355,7 @@ final class PhabricatorMarkupEngine {
         'uri.allowed-protocols'),
       'syntax-highlighter.engine' => PhabricatorEnv::getEnvConfig(
         'syntax-highlighter.engine'),
+      'preserve-linebreaks' => true,
     );
   }
 
@@ -368,7 +369,7 @@ final class PhabricatorMarkupEngine {
 
     $engine = new PhutilRemarkupEngine();
 
-    $engine->setConfig('preserve-linebreaks', true);
+    $engine->setConfig('preserve-linebreaks', $options['preserve-linebreaks']);
     $engine->setConfig('pygments.enabled', $options['pygments']);
     $engine->setConfig(
       'uri.allowed-protocols',
@@ -397,34 +398,27 @@ final class PhabricatorMarkupEngine {
     }
 
     $rules[] = new PhutilRemarkupRuleHyperlink();
-    $rules[] = new PhabricatorRemarkupRulePhriction();
-
-    $rules[] = new PhabricatorRemarkupRuleDifferentialHandle();
-    if (PhabricatorEnv::getEnvConfig('maniphest.enabled')) {
-      $rules[] = new PhabricatorRemarkupRuleManiphestHandle();
-    }
+    $rules[] = new PhrictionRemarkupRule();
 
     $rules[] = new PhabricatorRemarkupRuleEmbedFile();
+    $rules[] = new PhabricatorCountdownRemarkupRule();
 
-    $rules[] = new PhabricatorRemarkupRuleDifferential();
-    $rules[] = new PhabricatorRemarkupRuleDiffusion();
-    if (PhabricatorEnv::getEnvConfig('maniphest.enabled')) {
-      $rules[] = new PhabricatorRemarkupRuleManiphest();
+    $applications = PhabricatorApplication::getAllInstalledApplications();
+    foreach ($applications as $application) {
+      foreach ($application->getRemarkupRules() as $rule) {
+        $rules[] = $rule;
+      }
     }
-    $rules[] = new PhabricatorRemarkupRulePaste();
-
-    $rules[] = new PhabricatorRemarkupRuleCountdown();
-
-    $rules[] = new PonderRuleQuestion();
 
     if ($options['macros']) {
       $rules[] = new PhabricatorRemarkupRuleImageMacro();
       $rules[] = new PhabricatorRemarkupRuleMeme();
     }
 
+    $rules[] = new DivinerRemarkupRuleSymbol();
+
     $rules[] = new PhabricatorRemarkupRuleMention();
 
-    $rules[] = new PhutilRemarkupRuleEscapeHTML();
     $rules[] = new PhutilRemarkupRuleBold();
     $rules[] = new PhutilRemarkupRuleItalic();
     $rules[] = new PhutilRemarkupRuleDel();
@@ -450,7 +444,6 @@ final class PhabricatorMarkupEngine {
     foreach ($blocks as $block) {
       if ($block instanceof PhutilRemarkupEngineRemarkupLiteralBlockRule) {
         $literal_rules = array();
-        $literal_rules[] = new PhutilRemarkupRuleEscapeHTML();
         $literal_rules[] = new PhutilRemarkupRuleLinebreaks();
         $block->setMarkupRules($literal_rules);
       } else if (

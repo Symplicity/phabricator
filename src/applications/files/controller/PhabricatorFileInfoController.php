@@ -32,8 +32,15 @@ final class PhabricatorFileInfoController extends PhabricatorFileController {
         ->setHref($this->getApplicationURI("/info/{$phid}/")));
 
     $header = id(new PhabricatorHeaderView())
-      ->setObjectName('F'.$file->getID())
       ->setHeader($file->getName());
+
+    $ttl = $file->getTTL();
+    if ($ttl !== null) {
+      $ttl_tag = id(new PhabricatorTagView())
+        ->setType(PhabricatorTagView::TYPE_OBJECT)
+        ->setName(pht("Temporary"));
+      $header->addTag($ttl_tag);
+    }
 
     $actions = $this->buildActionView($file);
     $properties = $this->buildPropertyView($file);
@@ -72,6 +79,7 @@ final class PhabricatorFileInfoController extends PhabricatorFileController {
         id(new PhabricatorActionView())
           ->setUser($user)
           ->setRenderAsForm(true)
+          ->setDownload(true)
           ->setName(pht('Download File'))
           ->setIcon('download')
           ->setHref($file->getViewURI()));
@@ -111,19 +119,19 @@ final class PhabricatorFileInfoController extends PhabricatorFileController {
 
     $view->addProperty(
       pht('Mime Type'),
-      phutil_escape_html($file->getMimeType()));
+      $file->getMimeType());
 
     $view->addProperty(
       pht('Engine'),
-      phutil_escape_html($file->getStorageEngine()));
+      $file->getStorageEngine());
 
     $view->addProperty(
       pht('Format'),
-      phutil_escape_html($file->getStorageFormat()));
+      $file->getStorageFormat());
 
     $view->addProperty(
       pht('Handle'),
-      phutil_escape_html($file->getStorageHandle()));
+      $file->getStorageHandle());
 
     $metadata = $file->getMetadata();
     if (!empty($metadata)) {
@@ -132,30 +140,27 @@ final class PhabricatorFileInfoController extends PhabricatorFileController {
       foreach ($metadata as $key => $value) {
         $view->addProperty(
           PhabricatorFile::getMetadataName($key),
-          phutil_escape_html($value));
+          $value);
       }
     }
 
     if ($file->isViewableImage()) {
 
-      // TODO: Clean this up after Pholio (dark backgrounds, standardization,
-      // etc.)
-
-      $image = phutil_render_tag(
+      $image = phutil_tag(
         'img',
         array(
           'src' => $file->getViewURI(),
           'class' => 'phabricator-property-list-image',
         ));
 
-      $linked_image = phutil_render_tag(
+      $linked_image = phutil_tag(
         'a',
         array(
           'href' => $file->getViewURI(),
         ),
         $image);
 
-      $view->addTextContent($linked_image);
+      $view->addImageContent($linked_image);
     }
 
     return $view;

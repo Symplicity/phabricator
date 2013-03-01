@@ -19,8 +19,11 @@ final class PhabricatorUserPreferences extends PhabricatorUserDAO {
 
   const PREFERENCE_DIFFUSION_VIEW       = 'diffusion-view';
 
+  const PREFERENCE_NAV_COLLAPSED        = 'nav-collapsed';
   const PREFERENCE_NAV_WIDTH            = 'nav-width';
   const PREFERENCE_APP_TILES            = 'app-tiles';
+
+  const PREFERENCE_DIFF_FILETREE        = 'diff-filetree';
 
   protected $userPHID;
   protected $preferences = array();

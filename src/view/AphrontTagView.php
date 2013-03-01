@@ -56,8 +56,8 @@ abstract class AphrontTagView extends AphrontView {
     return $this;
   }
 
-  final public function getSigil() {
-    return $this->sigil;
+  final public function getSigils() {
+    return $this->sigils;
   }
 
   public function addClass($class) {
@@ -150,7 +150,7 @@ abstract class AphrontTagView extends AphrontView {
       }
     }
 
-    return javelin_render_tag(
+    return javelin_tag(
       $this->getTagName(),
       $attributes,
       $this->getTagContent());

@@ -43,7 +43,7 @@ final class DifferentialSubscribeController extends DifferentialController {
       $dialog
         ->setUser($user)
         ->setTitle($title)
-        ->appendChild('<p>'.$prompt.'</p>')
+        ->appendChild(phutil_tag('p', array(), $prompt))
         ->setSubmitURI($request->getRequestURI())
         ->addSubmitButton($button)
         ->addCancelButton('/D'.$revision->getID());
@@ -59,13 +59,13 @@ final class DifferentialSubscribeController extends DifferentialController {
         DifferentialRevisionEditor::addCCAndUpdateRevision(
           $revision,
           $phid,
-          $phid);
+          $user);
         break;
       case 'rem':
         DifferentialRevisionEditor::removeCCAndUpdateRevision(
           $revision,
           $phid,
-          $phid);
+          $user);
         break;
       default:
         return new Aphront400Response();

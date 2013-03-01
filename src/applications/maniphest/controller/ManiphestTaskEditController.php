@@ -425,7 +425,7 @@ final class ManiphestTaskEditController extends ManiphestController {
           ->setValue($projects_value)
           ->setID($project_tokenizer_id)
           ->setCaption(
-            javelin_render_tag(
+            javelin_tag(
               'a',
               array(
                 'href'        => '/project/create/',
@@ -455,11 +455,8 @@ final class ManiphestTaskEditController extends ManiphestController {
     ));
 
     if ($files) {
-      $file_display = array();
-      foreach ($files as $file) {
-        $file_display[] = phutil_escape_html($file->getName());
-      }
-      $file_display = implode('<br />', $file_display);
+      $file_display = mpull($files, 'getName');
+      $file_display = phutil_implode_html(phutil_tag('br'), $file_display);
 
       $form->appendChild(
         id(new AphrontFormMarkupControl())
@@ -478,8 +475,9 @@ final class ManiphestTaskEditController extends ManiphestController {
     $email_create = PhabricatorEnv::getEnvConfig(
       'metamta.maniphest.public-create-email');
     if (!$task->getID() && $email_create) {
-      $email_hint = pht('You can also create tasks by sending an email to: ').
-                    '<tt>'.phutil_escape_html($email_create).'</tt>';
+      $email_hint = pht(
+        'You can also create tasks by sending an email to: %s',
+        phutil_tag('tt', array(), $email_create));
       $description_control->setCaption($email_hint);
     }
 
@@ -514,7 +512,7 @@ final class ManiphestTaskEditController extends ManiphestController {
     $panel->appendChild($form);
     $panel->setNoBackground();
 
-    $description_preview_panel =
+    $description_preview_panel = hsprintf(
       '<div class="aphront-panel-preview aphront-panel-preview-full">
         <div class="maniphest-description-preview-header">
           Description Preview
@@ -524,7 +522,7 @@ final class ManiphestTaskEditController extends ManiphestController {
             Loading preview...
           </div>
         </div>
-      </div>';
+      </div>');
 
     Javelin::initBehavior(
       'maniphest-description-preview',
@@ -544,7 +542,7 @@ final class ManiphestTaskEditController extends ManiphestController {
       array(
         $error_view,
         $panel,
-        $description_preview_panel
+        $description_preview_panel,
       ),
       array(
         'title' => $header_name,

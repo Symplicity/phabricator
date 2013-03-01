@@ -19,6 +19,7 @@ final class DiffusionRepositoryController extends DiffusionController {
     $history = $history_query->loadHistory();
 
     $browse_query = DiffusionBrowseQuery::newFromDiffusionRequest($drequest);
+    $browse_query->setViewer($this->getRequest()->getUser());
     $browse_results = $browse_query->loadPaths();
 
     $phids = array();
@@ -60,15 +61,18 @@ final class DiffusionRepositoryController extends DiffusionController {
     $history_table->setIsHead(true);
 
     $callsign = $drequest->getRepository()->getCallsign();
-    $all = phutil_render_tag(
+    $all = phutil_tag(
       'a',
       array(
-        'href' => "/diffusion/{$callsign}/history/",
+        'href' => $drequest->generateURI(
+          array(
+            'action' => 'history',
+          )),
       ),
       'View Full Commit History');
 
     $panel = new AphrontPanelView();
-    $panel->setHeader("Recent Commits &middot; {$all}");
+    $panel->setHeader(hsprintf("Recent Commits &middot; %s", $all));
     $panel->appendChild($history_table);
     $panel->setNoBackground();
 
@@ -82,7 +86,10 @@ final class DiffusionRepositoryController extends DiffusionController {
     $browse_table->setUser($this->getRequest()->getUser());
 
     $browse_panel = new AphrontPanelView();
-    $browse_panel->setHeader('Browse Repository');
+    $browse_panel->setHeader(phutil_tag(
+      'a',
+      array('href' => $drequest->generateURI(array('action' => 'browse'))),
+      'Browse Repository'));
     $browse_panel->appendChild($browse_table);
     $browse_panel->setNoBackground();
 
@@ -125,9 +132,7 @@ final class DiffusionRepositoryController extends DiffusionController {
 
     $rows = array();
     foreach ($properties as $key => $value) {
-      $rows[] = array(
-        phutil_escape_html($key),
-        phutil_escape_html($value));
+      $rows[] = array($key, $value);
     }
 
     $table = new AphrontTableView($rows);
@@ -182,7 +187,7 @@ final class DiffusionRepositoryController extends DiffusionController {
       }
 
       $panel->addButton(
-        phutil_render_tag(
+        phutil_tag(
           'a',
           array(
             'href' => $drequest->generateURI(
@@ -240,7 +245,7 @@ final class DiffusionRepositoryController extends DiffusionController {
     }
 
     $panel->addButton(
-      phutil_render_tag(
+      phutil_tag(
         'a',
         array(
           'href' => $drequest->generateURI(

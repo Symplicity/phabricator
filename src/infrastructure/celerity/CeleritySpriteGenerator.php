@@ -88,20 +88,20 @@ final class CeleritySpriteGenerator {
 
     $sources = array(
       'seen_read_all' => array(
-        'x' => 14,
-        'y' => 14,
+        'x' => 18,
+        'y' => 18,
         'css' =>
           '.alert-notifications .phabricator-main-menu-alert-icon',
       ),
       'seen_have_unread' => array(
-        'x' => 14,
-        'y' => 14,
+        'x' => 18,
+        'y' => 18,
         'css' =>
           '.alert-notifications:hover .phabricator-main-menu-alert-icon',
       ),
       'unseen_any' => array(
-        'x' => 14,
-        'y' => 14,
+        'x' => 18,
+        'y' => 18,
         'css' =>
           '.alert-notifications.alert-unread .phabricator-main-menu-alert-icon',
       ),
@@ -126,20 +126,20 @@ final class CeleritySpriteGenerator {
         'css' => '.phabricator-main-menu-logo-image',
       ),
       'conf-off' => array(
-        'x' => 14,
-        'y' => 14,
+        'x' => 18,
+        'y' => 18,
         'css' =>
           '.alert-notifications .phabricator-main-menu-message-icon',
       ),
       'conf-hover' => array(
-        'x' => 14,
-        'y' => 14,
+        'x' => 18,
+        'y' => 18,
         'css' =>
           '.alert-notifications:hover .phabricator-main-menu-message-icon',
       ),
       'conf-unseen' => array(
-        'x' => 14,
-        'y' => 14,
+        'x' => 18,
+        'y' => 18,
         'css' =>
           '.alert-notifications.message-unread '.
           '.phabricator-main-menu-message-icon',
@@ -176,6 +176,33 @@ final class CeleritySpriteGenerator {
     return $sheet;
   }
 
+  public function buildTokenSheet() {
+    $tokens = $this->getDirectoryList('tokens_1x');
+
+    $template = id(new PhutilSprite())
+      ->setSourceSize(16, 16);
+
+    $sprites = array();
+    foreach ($tokens as $token) {
+      $path = $this->getPath('tokens_1x/'.$token.'.png');
+
+      $sprite = id(clone $template)
+        ->setName('token-'.$token)
+        ->setTargetCSS('.token-'.$token)
+        ->setSourceFile($path, 1);
+
+      $sprites[] = $sprite;
+    }
+
+    $sheet = $this->buildSheet('tokens', false);
+    foreach ($sprites as $sprite) {
+      $sheet->addSprite($sprite);
+    }
+
+    return $sheet;
+  }
+
+
   public function buildConpherenceSheet() {
     $icons = $this->getDirectoryList('conpher_1x');
     $scales = array(
@@ -186,7 +213,7 @@ final class CeleritySpriteGenerator {
       ->setSourceSize(32, 32);
 
     $sprites = array();
-      foreach ($icons as $icon) {
+    foreach ($icons as $icon) {
       $color = preg_match('/_on/', $icon) ? 'on' : 'off';
 
       $prefix = 'conpher_';

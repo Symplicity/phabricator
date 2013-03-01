@@ -66,8 +66,7 @@ final class PhabricatorPasteListController extends PhabricatorPasteController {
       array(
         'title' => $title,
         'device' => true,
-      )
-    );
+      ));
   }
 
   private function buildPasteList(array $pastes) {
@@ -85,7 +84,8 @@ final class PhabricatorPasteListController extends PhabricatorPasteController {
       $created = phabricator_date($paste->getDateCreated(), $user);
       $author = $this->getHandle($paste->getAuthorPHID())->renderLink();
       $source_code = $this->buildSourceCodeView($paste, 5)->render();
-      $source_code = phutil_render_tag(
+
+      $source_code = phutil_tag(
         'div',
         array(
           'class' => 'phabricator-source-code-summary',
@@ -108,7 +108,7 @@ final class PhabricatorPasteListController extends PhabricatorPasteController {
       $lang_name = $paste->getLanguage();
       if ($lang_name) {
         $lang_name = idx($lang_map, $lang_name, $lang_name);
-        $item->addIcon('none', phutil_escape_html($lang_name));
+        $item->addIcon('none', $lang_name);
       }
 
       $list->addItem($item);

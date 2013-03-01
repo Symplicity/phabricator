@@ -29,7 +29,7 @@ final class DifferentialManiphestTasksFieldSpecification
       $links[] = $this->getHandle($task_phid)->renderLink();
     }
 
-    return implode('<br />', $links);
+    return phutil_implode_html(phutil_tag('br'), $links);
   }
 
   private function getManiphestTaskPHIDs() {
@@ -163,6 +163,7 @@ final class DifferentialManiphestTasksFieldSpecification
     }
 
     $handles = id(new PhabricatorObjectHandleData($this->maniphestTasks))
+      ->setViewer($this->getUser())
       ->loadHandles();
     $body = array();
     $body[] = 'MANIPHEST TASKS';

@@ -30,6 +30,8 @@ final class ConpherenceUpdateController extends
     $conpherence = id(new ConpherenceThreadQuery())
       ->setViewer($user)
       ->withIDs(array($conpherence_id))
+      ->needOrigPics(true)
+      ->needHeaderPics(true)
       ->executeOne();
     $supported_formats = PhabricatorFile::getTransformableImageFormats();
 
@@ -54,38 +56,66 @@ final class ConpherenceUpdateController extends
           $message = $request->getStr('text');
           $xactions = $editor->generateTransactionsFromText(
             $conpherence,
-            $message
-          );
+            $message);
           break;
         case 'metadata':
           $xactions = array();
-          $images = $request->getArr('image');
-          if ($images) {
-            // just take the first one
-            $file_phid = reset($images);
-            $file = id(new PhabricatorFileQuery())
+          $top = $request->getInt('image_y');
+          $left = $request->getInt('image_x');
+          $file_id = $request->getInt('file_id');
+          $title = $request->getStr('title');
+          if ($file_id) {
+            $orig_file = id(new PhabricatorFileQuery())
               ->setViewer($user)
-              ->withPHIDs(array($file_phid))
+              ->withIDs(array($file_id))
               ->executeOne();
-            $okay = $file->isTransformableImage();
+            $okay = $orig_file->isTransformableImage();
             if ($okay) {
-              $xformer = new PhabricatorImageTransformer();
-              $xformed = $xformer->executeThumbTransform(
-                $file,
-                $x = 50,
-                $y = 50);
-              $image_phid = $xformed->getPHID();
               $xactions[] = id(new ConpherenceTransaction())
                 ->setTransactionType(ConpherenceTransactionType::TYPE_PICTURE)
-                ->setNewValue($image_phid);
+                ->setNewValue($orig_file->getPHID());
+              // do 2 transformations "crudely"
+              $xformer = new PhabricatorImageTransformer();
+              $header_file = $xformer->executeConpherenceTransform(
+                $orig_file,
+                0,
+                0,
+                ConpherenceImageData::HEAD_WIDTH,
+                ConpherenceImageData::HEAD_HEIGHT);
+              // this is handled outside the editor for now. no particularly
+              // good reason to move it inside
+              $conpherence->setImagePHIDs(
+                array(
+                  ConpherenceImageData::SIZE_HEAD => $header_file->getPHID(),
+                ));
+              $conpherence->setImages(
+                array(
+                  ConpherenceImageData::SIZE_HEAD => $header_file,
+                ));
             } else {
-              $e_file[] = $file;
+              $e_file[] = $orig_file;
               $errors[] =
                 pht('This server only supports these image formats: %s.',
                   implode(', ', $supported_formats));
             }
+            // use the existing title in this image upload case
+            $title = $conpherence->getTitle();
+          } else if ($top !== null || $left !== null) {
+            $file = $conpherence->getImage(ConpherenceImageData::SIZE_ORIG);
+            $xformer = new PhabricatorImageTransformer();
+            $xformed = $xformer->executeConpherenceTransform(
+              $file,
+              $top,
+              $left,
+              ConpherenceImageData::HEAD_WIDTH,
+              ConpherenceImageData::HEAD_HEIGHT);
+            $image_phid = $xformed->getPHID();
+
+            $xactions[] = id(new ConpherenceTransaction())
+              ->setTransactionType(
+                ConpherenceTransactionType::TYPE_PICTURE_CROP)
+              ->setNewValue($image_phid);
           }
-          $title = $request->getStr('title');
           if ($title != $conpherence->getTitle()) {
             $xactions[] = id(new ConpherenceTransaction())
               ->setTransactionType(ConpherenceTransactionType::TYPE_TITLE)
@@ -107,15 +137,13 @@ final class ConpherenceUpdateController extends
         }
       } else if (empty($errors)) {
         $errors[] = pht(
-          'That was a non-update. Try cancel.'
-        );
+          'That was a non-update. Try cancel.');
       }
     }
 
     if ($updated) {
       return id(new AphrontRedirectResponse())->setURI(
-        $this->getApplicationURI($conpherence_id.'/')
-      );
+        $this->getApplicationURI($conpherence_id.'/'));
     }
 
     if ($errors) {
@@ -130,25 +158,37 @@ final class ConpherenceUpdateController extends
         id(new AphrontFormTextControl())
         ->setLabel(pht('Title'))
         ->setName('title')
-        ->setValue($conpherence->getTitle())
-      )
-      ->appendChild(
-        id(new AphrontFormMarkupControl())
-        ->setLabel(pht('Image'))
-        ->setValue(phutil_render_tag(
-          'img',
-          array(
-            'src' => $conpherence->loadImageURI(),
-          ))
-        )
-      )
-      ->appendChild(
-        id(new AphrontFormDragAndDropUploadControl())
-        ->setLabel(pht('Change Image'))
-        ->setName('image')
-        ->setValue($e_file)
-        ->setCaption('Supported formats: '.implode(', ', $supported_formats))
-        );
+        ->setValue($conpherence->getTitle()));
+
+    $image = $conpherence->getImage(ConpherenceImageData::SIZE_ORIG);
+    if ($image) {
+      $form
+        ->appendChild(
+          id(new AphrontFormMarkupControl())
+          ->setLabel(pht('Image'))
+          ->setValue(phutil_tag(
+            'img',
+            array(
+              'src' =>
+              $conpherence->loadImageURI(ConpherenceImageData::SIZE_HEAD),
+              ))))
+          ->appendChild(
+            id(new AphrontFormCropControl())
+            ->setLabel(pht('Crop Image'))
+            ->setValue($image)
+            ->setWidth(ConpherenceImageData::HEAD_WIDTH)
+            ->setHeight(ConpherenceImageData::HEAD_HEIGHT))
+          ->appendChild(
+            id(new ConpherenceFormDragAndDropUploadControl())
+            ->setLabel(pht('Change Image')));
+
+    } else {
+
+      $form
+        ->appendChild(
+          id(new ConpherenceFormDragAndDropUploadControl())
+          ->setLabel(pht('Image')));
+    }
 
     require_celerity_resource('conpherence-update-css');
     return id(new AphrontDialogResponse())
@@ -162,7 +202,6 @@ final class ConpherenceUpdateController extends
         ->appendChild($error_view)
         ->appendChild($form)
         ->addSubmitButton()
-        ->addCancelButton($this->getApplicationURI($conpherence->getID().'/'))
-      );
+        ->addCancelButton($this->getApplicationURI($conpherence->getID().'/')));
   }
 }

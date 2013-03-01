@@ -7,7 +7,8 @@ final class PhabricatorActionListExample extends PhabricatorUIExample {
   }
 
   public function getDescription() {
-    return 'Use <tt>PhabricatorActionListView</tt> to render object actions.';
+    return hsprintf(
+      'Use <tt>PhabricatorActionListView</tt> to render object actions.');
   }
 
   public function renderExample() {
@@ -103,7 +104,7 @@ final class PhabricatorActionListExample extends PhabricatorUIExample {
 
     return array(
       $view,
-      '<div style="clear: both;"></div>',
+      hsprintf('<div style="clear: both;"></div>'),
       $notices,
     );
   }

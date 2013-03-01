@@ -346,7 +346,7 @@ final class PhabricatorConduitAPIController
     if ($request) {
       foreach ($request->getAllParameters() as $key => $value) {
         $param_rows[] = array(
-          phutil_escape_html($key),
+          $key,
           $this->renderAPIValue($value),
         );
       }
@@ -362,7 +362,7 @@ final class PhabricatorConduitAPIController
     $result_rows = array();
     foreach ($result as $key => $value) {
       $result_rows[] = array(
-        phutil_escape_html($key),
+        $key,
         $this->renderAPIValue($value),
       );
     }
@@ -396,12 +396,9 @@ final class PhabricatorConduitAPIController
     $json = new PhutilJSON();
     if (is_array($value)) {
       $value = $json->encodeFormatted($value);
-      $value = phutil_escape_html($value);
-    } else {
-      $value = phutil_escape_html($value);
     }
 
-    $value = '<pre style="white-space: pre-wrap;">'.$value.'</pre>';
+    $value = hsprintf('<pre style="white-space: pre-wrap;">%s</pre>', $value);
 
     return $value;
   }

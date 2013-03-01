@@ -14,13 +14,9 @@ final class PhabricatorObjectHandleData {
     return $this;
   }
 
-  public static function loadOneHandle($phid, $viewer = null) {
+  public static function loadOneHandle($phid, PhabricatorUser $viewer) {
     $query = new PhabricatorObjectHandleData(array($phid));
-
-    if ($viewer) {
-      $query->setViewer($viewer);
-    }
-
+    $query->setViewer($viewer);
     $handles = $query->loadHandles();
     return $handles[$phid];
   }
@@ -37,6 +33,11 @@ final class PhabricatorObjectHandleData {
   }
 
   private function loadObjectsOfType($type, array $phids) {
+    if (!$this->viewer) {
+      throw new Exception(
+        "You must provide a viewer to load handles or objects.");
+    }
+
     switch ($type) {
 
       case PhabricatorPHIDConstants::PHID_TYPE_USER:
@@ -47,10 +48,10 @@ final class PhabricatorObjectHandleData {
         return mpull($users, null, 'getPHID');
 
       case PhabricatorPHIDConstants::PHID_TYPE_CMIT:
-        $commit_dao = new PhabricatorRepositoryCommit();
-        $commits = $commit_dao->putInSet(new LiskDAOSet())->loadAllWhere(
-          'phid IN (%Ls)',
-          $phids);
+        $commits = id(new DiffusionCommitQuery())
+          ->setViewer($this->viewer)
+          ->withPHIDs($phids)
+          ->execute();
         return mpull($commits, null, 'getPHID');
 
       case PhabricatorPHIDConstants::PHID_TYPE_TASK:
@@ -73,15 +74,10 @@ final class PhabricatorObjectHandleData {
         return mpull($files, null, 'getPHID');
 
       case PhabricatorPHIDConstants::PHID_TYPE_PROJ:
-        $object = new PhabricatorProject();
-        if ($this->viewer) {
-          $projects = id(new PhabricatorProjectQuery())
-            ->setViewer($this->viewer)
-            ->withPHIDs($phids)
-            ->execute();
-        } else {
-          $projects = $object->loadAllWhere('phid IN (%Ls)', $phids);
-        }
+        $projects = id(new PhabricatorProjectQuery())
+          ->setViewer($this->viewer)
+          ->withPHIDs($phids)
+          ->execute();
         return mpull($projects, null, 'getPHID');
 
       case PhabricatorPHIDConstants::PHID_TYPE_REPO:
@@ -265,10 +261,8 @@ final class PhabricatorObjectHandleData {
               $handle->setComplete(true);
               if (isset($statuses[$phid])) {
                 $handle->setStatus($statuses[$phid]->getTextStatus());
-                if ($this->viewer) {
-                  $handle->setTitle(
-                    $statuses[$phid]->getTerseSummary($this->viewer));
-                }
+                $handle->setTitle(
+                  $statuses[$phid]->getTerseSummary($this->viewer));
               }
               $handle->setDisabled($user->getIsDisabled());
 
@@ -333,34 +327,30 @@ final class PhabricatorObjectHandleData {
             $handle = new PhabricatorObjectHandle();
             $handle->setPHID($phid);
             $handle->setType($type);
-            $repository = null;
-            if (!empty($objects[$phid])) {
-              $repository = $objects[$phid]->loadOneRelative(
-                new PhabricatorRepository(),
-                'id',
-                'getRepositoryID');
-            }
-            if (!$repository) {
+
+            if (empty($objects[$phid])) {
               $handle->setName('Unknown Commit');
             } else {
+              $repository = $objects[$phid]->getRepository();
               $commit = $objects[$phid];
               $callsign = $repository->getCallsign();
               $commit_identifier = $commit->getCommitIdentifier();
 
-              // In case where the repository for the commit was deleted,
-              // we don't have info about the repository anymore.
-              if ($repository) {
-                $name = $repository->formatCommitName($commit_identifier);
-                $handle->setName($name);
+              $name = $repository->formatCommitName($commit_identifier);
+              $handle->setName($name);
+
+              $summary = $commit->getSummary();
+              if (strlen($summary)) {
+                $handle->setFullName($name.': '.$summary);
               } else {
-                $handle->setName('Commit '.'r'.$callsign.$commit_identifier);
+                $handle->setFullName($name);
               }
 
               $handle->setURI('/r'.$callsign.$commit_identifier);
-              $handle->setFullName('r'.$callsign.$commit_identifier);
               $handle->setTimestamp($commit->getEpoch());
               $handle->setComplete(true);
             }
+
             $handles[$phid] = $handle;
           }
           break;
@@ -418,9 +408,6 @@ final class PhabricatorObjectHandleData {
               $handle->setName($file->getName());
               $handle->setURI($file->getBestURI());
               $handle->setComplete(true);
-              if ($file->isViewableImage()) {
-                $handle->setImageURI($file->getBestURI());
-              }
             }
             $handles[$phid] = $handle;
           }
@@ -453,6 +440,8 @@ final class PhabricatorObjectHandleData {
             } else {
               $repository = $objects[$phid];
               $handle->setName($repository->getCallsign());
+              $handle->setFullName("r" . $repository->getCallsign() .
+                " (" . $repository->getName() . ")");
               $handle->setURI('/diffusion/'.$repository->getCallsign().'/');
               $handle->setComplete(true);
             }

@@ -78,14 +78,12 @@ abstract class ConpherenceController extends PhabricatorController {
       ->execute();
     $unread_conpherences = array_select_keys(
       $all_conpherences,
-      array_keys($unread)
-    );
+      array_keys($unread));
     $this->setUnreadConpherences($unread_conpherences);
 
     $read_conpherences = array_select_keys(
       $all_conpherences,
-      array_keys($read)
-    );
+      array_keys($read));
     $this->setReadConpherences($read_conpherences);
 
     if (!$this->getSelectedConpherencePHID()) {
@@ -101,7 +99,6 @@ abstract class ConpherenceController extends PhabricatorController {
     $read_conpherences = $this->getReadConpherences();
 
     $user = $this->getRequest()->getUser();
-
     $menu = new PhabricatorMenuView();
     $nav = AphrontSideNavFilterView::newFromMenu($menu);
     $nav->addClass('conpherence-menu');
@@ -110,16 +107,12 @@ abstract class ConpherenceController extends PhabricatorController {
     $nav->addButton(
       'new',
       pht('New Conversation'),
-      $this->getApplicationURI('new/')
-    );
+      $this->getApplicationURI('new/'));
     $nav->addLabel(pht('Unread'));
     $nav = $this->addConpherencesToNav($unread_conpherences, $nav);
-
     $nav->addLabel(pht('Read'));
     $nav = $this->addConpherencesToNav($read_conpherences, $nav, true);
-
     $nav->selectFilter($filter);
-
     return $nav;
   }
 
@@ -131,7 +124,9 @@ abstract class ConpherenceController extends PhabricatorController {
     $user = $this->getRequest()->getUser();
     foreach ($conpherences as $conpherence) {
       $uri = $this->getApplicationURI('view/'.$conpherence->getID().'/');
-      $data = $conpherence->getDisplayData($user);
+      $data = $conpherence->getDisplayData(
+        $user,
+        null);
       $title = $data['title'];
       $subtitle = $data['subtitle'];
       $unread_count = $data['unread_count'];
@@ -155,6 +150,7 @@ abstract class ConpherenceController extends PhabricatorController {
         $item->addClass('conpherence-selected');
         $item->addClass('hide-unread-count');
       }
+
       $nav->addCustomBlock($item->render());
     }
     if (empty($conpherences) || $read) {
@@ -165,14 +161,12 @@ abstract class ConpherenceController extends PhabricatorController {
   }
 
   private function getNoConpherencesBlock() {
-
-    return phutil_render_tag(
+    return phutil_tag(
       'div',
       array(
         'class' => 'no-conpherences-menu-item'
       ),
-      pht('No more conversations.')
-    );
+      pht('No more conpherences.'));
   }
 
   public function buildApplicationMenu() {
@@ -187,12 +181,10 @@ abstract class ConpherenceController extends PhabricatorController {
         id(new PhabricatorMenuItemView())
           ->setName(pht('New Conversation'))
           ->setHref($this->getApplicationURI('new/'))
-          ->setIcon('create')
-      )
+          ->setIcon('create'))
       ->addCrumb(
         id(new PhabricatorCrumbView())
-          ->setName(pht('Conpherence'))
-      );
+          ->setName(pht('Conpherence')));
 
     return $crumbs;
   }
@@ -206,9 +198,9 @@ abstract class ConpherenceController extends PhabricatorController {
         'messages' => 'conpherence-messages',
         'widgets_pane' => 'conpherence-widget-pane',
         'form_pane' => 'conpherence-form',
+        'menu_pane' => 'conpherence-menu',
         'fancy_ajax' => (bool) $this->getSelectedConpherencePHID()
-      )
-    );
+      ));
     Javelin::initBehavior('conpherence-init',
       array(
         'selected_conpherence_id' => $this->getSelectedConpherencePHID(),
@@ -217,8 +209,14 @@ abstract class ConpherenceController extends PhabricatorController {
         'messages' => 'conpherence-messages',
         'widgets_pane' => 'conpherence-widget-pane',
         'form_pane' => 'conpherence-form'
-      )
-    );
+      ));
+    Javelin::initBehavior('conpherence-drag-and-drop-photo',
+      array(
+        'target' => 'conpherence-header-pane',
+        'form_pane' => 'conpherence-form',
+        'upload_uri' => '/file/dropupload/',
+        'activated_class' => 'conpherence-header-upload-photo',
+      ));
   }
 
 }

@@ -31,28 +31,26 @@ final class PhabricatorSourceCodeView extends AphrontView {
 
       if ($hit_limit) {
         $content_number = '';
-        $content_line = phutil_render_tag(
+        $content_line = phutil_tag(
           'span',
           array(
             'class' => 'c',
           ),
           pht('...'));
       } else {
-        $content_number = phutil_escape_html($line_number);
-        $content_line = "\xE2\x80\x8B".$line;
+        $content_number = $line_number;
+        $content_line = hsprintf("\xE2\x80\x8B%s", $line);
       }
 
       // TODO: Provide nice links.
 
-      $rows[] =
+      $rows[] = hsprintf(
         '<tr>'.
-          '<th class="phabricator-source-line">'.
-            $content_number.
-          '</th>'.
-          '<td class="phabricator-source-code">'.
-            $content_line.
-          '</td>'.
-        '</tr>';
+          '<th class="phabricator-source-line">%s</th>'.
+          '<td class="phabricator-source-code">%s</td>'.
+        '</tr>',
+        $content_number,
+        $content_line);
 
       if ($hit_limit) {
         break;
@@ -66,17 +64,17 @@ final class PhabricatorSourceCodeView extends AphrontView {
     $classes[] = 'remarkup-code';
     $classes[] = 'PhabricatorMonospaced';
 
-    return phutil_render_tag(
+    return phutil_tag(
       'div',
       array(
         'class' => 'phabricator-source-code-container',
       ),
-      phutil_render_tag(
+      phutil_tag(
         'table',
         array(
           'class' => implode(' ', $classes),
         ),
-        implode('', $rows)));
+        phutil_implode_html('', $rows)));
   }
 
 }

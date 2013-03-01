@@ -72,7 +72,8 @@ final class PhabricatorSettingsPanelEmailPreferences
         $notice = new AphrontErrorView();
         $notice->setSeverity(AphrontErrorView::SEVERITY_NOTICE);
         $notice->setTitle('Changes Saved');
-        $notice->appendChild('<p>Your changes have been saved.</p>');
+        $notice->appendChild(
+          phutil_tag('p', array(), 'Your changes have been saved.'));
       }
     } else {
       $notice = new AphrontErrorView();
@@ -164,7 +165,7 @@ final class PhabricatorSettingsPanelEmailPreferences
             'break threading in some clients.'));
 
     $form
-      ->appendChild(
+      ->appendChild(hsprintf(
         '<br />'.
         '<p class="aphront-form-instructions">'.
           'You can customize what mail you receive from Phabricator here.'.
@@ -174,8 +175,7 @@ final class PhabricatorSettingsPanelEmailPreferences
           'adding CCs to a task, closing it, and adding a comment) you will '.
           'still receive an email as long as at least one of the changes '.
           'is set to notify you.'.
-        '</p>'
-        );
+        '</p>'));
 
     $mailtags = $preferences->getPreference('mailtags', array());
 

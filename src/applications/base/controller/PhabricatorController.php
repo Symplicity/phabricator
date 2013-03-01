@@ -170,6 +170,8 @@ abstract class PhabricatorController extends AphrontController {
       $page->setDeviceReady(true);
     }
 
+    $page->setShowChrome(idx($options, 'chrome', true));
+
     $application_menu = $this->buildApplicationMenu();
     if ($application_menu) {
       $page->setApplicationMenu($application_menu);
@@ -203,10 +205,9 @@ abstract class PhabricatorController extends AphrontController {
         $view = new PhabricatorStandardPageView();
         $view->setRequest($request);
         $view->setController($this);
-        $view->appendChild(
-          '<div style="padding: 2em 0;">'.
-            $response->buildResponseString().
-          '</div>');
+        $view->appendChild(hsprintf(
+          '<div style="padding: 2em 0;">%s</div>',
+          $response->buildResponseString()));
         $response = new AphrontWebpageResponse();
         $response->setContent($view->render());
         return $response;
@@ -264,7 +265,7 @@ abstract class PhabricatorController extends AphrontController {
    */
   protected function renderHandlesForPHIDs(array $phids, $style = "\n") {
     $style_map = array(
-      "\n"  => '<br />',
+      "\n"  => phutil_tag('br'),
       ','   => ', ',
     );
 
@@ -276,7 +277,8 @@ abstract class PhabricatorController extends AphrontController {
     foreach ($phids as $phid) {
       $items[] = $this->getHandle($phid)->renderLink();
     }
-    return implode($style_map[$style], $items);
+
+    return phutil_implode_html($style_map[$style], $items);
   }
 
   protected function buildApplicationMenu() {

@@ -14,7 +14,8 @@ final class PhabricatorConfigIssueViewController
     $user = $request->getUser();
 
     $issues = PhabricatorSetupCheck::runAllChecks();
-    PhabricatorSetupCheck::setOpenSetupIssueCount(count($issues));
+    PhabricatorSetupCheck::setOpenSetupIssueCount(
+      PhabricatorSetupCheck::countUnignoredIssues($issues));
 
     if (empty($issues[$this->issueKey])) {
       $content = id(new AphrontErrorView())
@@ -22,7 +23,7 @@ final class PhabricatorConfigIssueViewController
         ->setTitle(pht('Issue Resolved'))
         ->appendChild(pht('This setup issue has been resolved. '))
         ->appendChild(
-          phutil_render_tag(
+          phutil_tag(
             'a',
             array(
               'href' => $this->getApplicationURI('issue/'),
@@ -54,8 +55,7 @@ final class PhabricatorConfigIssueViewController
       array(
         'title' => $title,
         'device' => true,
-      )
-    );
+      ));
   }
 
   private function renderIssue(PhabricatorSetupIssue $issue) {
@@ -64,7 +64,7 @@ final class PhabricatorConfigIssueViewController
     $view = new PhabricatorSetupIssueView();
     $view->setIssue($issue);
 
-    $container = phutil_render_tag(
+    $container = phutil_tag(
       'div',
       array(
         'class' => 'setup-issue-background',

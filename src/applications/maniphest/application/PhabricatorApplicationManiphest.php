@@ -36,6 +36,18 @@ final class PhabricatorApplicationManiphest extends PhabricatorApplication {
     return $this->getBaseURI().'task/create/';
   }
 
+  public function getEventListeners() {
+    return array(
+      new ManiphestPeopleMenuEventListener(),
+    );
+  }
+
+  public function getRemarkupRules() {
+    return array(
+      new ManiphestRemarkupRule(),
+    );
+  }
+
   public function getRoutes() {
     return array(
       '/T(?P<id>[1-9]\d*)' => 'ManiphestTaskDetailController',
@@ -79,9 +91,7 @@ final class PhabricatorApplicationManiphest extends PhabricatorApplication {
     $query->execute();
 
     $count = $query->getRowCount();
-    $type = $count
-      ? PhabricatorApplicationStatusView::TYPE_NEEDS_ATTENTION
-      : PhabricatorApplicationStatusView::TYPE_EMPTY;
+    $type = PhabricatorApplicationStatusView::TYPE_NEEDS_ATTENTION;
     $status[] = id(new PhabricatorApplicationStatusView())
       ->setType($type)
       ->setText(pht('%d Unbreak Now Task(s)!', $count))
@@ -95,12 +105,11 @@ final class PhabricatorApplicationManiphest extends PhabricatorApplication {
     $query->execute();
 
     $count = $query->getRowCount();
-    $type = $count
-      ? PhabricatorApplicationStatusView::TYPE_INFO
-      : PhabricatorApplicationStatusView::TYPE_EMPTY;
+    $type = PhabricatorApplicationStatusView::TYPE_WARNING;
     $status[] = id(new PhabricatorApplicationStatusView())
       ->setType($type)
-      ->setText(pht('%d Assigned Task(s)', $count));
+      ->setText(pht('%d Assigned Task(s)', $count))
+      ->setCount($count);
 
     return $status;
   }

@@ -33,8 +33,7 @@ final class PonderSearchIndexer
     foreach ($comments as $curcomment) {
       $doc->addField(
         PhabricatorSearchField::FIELD_COMMENT,
-        $curcomment->getContent()
-      );
+        $curcomment->getContent());
     }
 
     $answers = $question->getAnswers();
@@ -49,14 +48,14 @@ final class PonderSearchIndexer
       foreach ($answer_comments as $curcomment) {
         $doc->addField(
           PhabricatorSearchField::FIELD_COMMENT,
-          $curcomment->getContent()
-        );
+          $curcomment->getContent());
       }
     }
 
     $subscribers = PhabricatorSubscribersQuery::loadSubscribersForPHID(
       $question->getPHID());
     $handles = id(new PhabricatorObjectHandleData($subscribers))
+      ->setViewer(PhabricatorUser::getOmnipotentUser())
       ->loadHandles();
 
     foreach ($handles as $phid => $handle) {

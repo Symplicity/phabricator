@@ -176,17 +176,17 @@ final class PhabricatorSettingsPanelSSHKeys
     $rows = array();
     foreach ($keys as $key) {
       $rows[] = array(
-        phutil_render_tag(
+        phutil_tag(
           'a',
           array(
             'href' => $this->getPanelURI('?edit='.$key->getID()),
           ),
-          phutil_escape_html($key->getName())),
-        phutil_escape_html($key->getKeyComment()),
-        phutil_escape_html($key->getKeyType()),
+          $key->getName()),
+        $key->getKeyComment(),
+        $key->getKeyType(),
         phabricator_date($key->getDateCreated(), $user),
         phabricator_time($key->getDateCreated(), $user),
-        javelin_render_tag(
+        javelin_tag(
           'a',
           array(
             'href' => $this->getPanelURI('?delete='.$key->getID()),
@@ -220,7 +220,7 @@ final class PhabricatorSettingsPanelSSHKeys
 
     $panel = new AphrontPanelView();
     $panel->addButton(
-      phutil_render_tag(
+      phutil_tag(
         'a',
         array(
           'href' => $this->getPanelURI('?edit=true'),
@@ -240,7 +240,7 @@ final class PhabricatorSettingsPanelSSHKeys
 
     $user = $request->getUser();
 
-    $name = phutil_escape_html($key->getName());
+    $name = phutil_tag('strong', array(), $key->getName());
 
     if ($request->isDialogFormPost()) {
       $key->delete();
@@ -252,10 +252,10 @@ final class PhabricatorSettingsPanelSSHKeys
       ->setUser($user)
       ->addHiddenInput('delete', $key->getID())
       ->setTitle('Really delete SSH Public Key?')
-      ->appendChild(
-        '<p>The key "<strong>'.$name.'</strong>" will be permanently deleted, '.
-        'and you will not longer be able to use the corresponding private key '.
-        'to authenticate.</p>')
+      ->appendChild(phutil_tag('p', array(), pht(
+        'The key "%s" will be permanently deleted, and you will not longer be '.
+          'able to use the corresponding private key to authenticate.',
+        $name)))
       ->addSubmitButton('Delete Public Key')
       ->addCancelButton($this->getPanelURI());
 

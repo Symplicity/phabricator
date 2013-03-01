@@ -2,6 +2,8 @@
 
 final class DivinerGenerateWorkflow extends DivinerWorkflow {
 
+  private $atomCache;
+
   public function didConstruct() {
     $this
       ->setName('generate')
@@ -12,13 +14,37 @@ final class DivinerGenerateWorkflow extends DivinerWorkflow {
             'name' => 'clean',
             'help' => 'Clear the caches before generating documentation.',
           ),
+          array(
+            'name' => 'book',
+            'param' => 'path',
+            'help' => 'Path to a Diviner book configuration.',
+          ),
         ));
   }
 
+  protected function getAtomCache() {
+    if (!$this->atomCache) {
+      $book_root = $this->getConfig('root');
+      $book_name = $this->getConfig('name');
+      $cache_directory = $book_root.'/.divinercache/'.$book_name;
+      $this->atomCache = new DivinerAtomCache($cache_directory);
+    }
+    return $this->atomCache;
+  }
+
+  protected function log($message) {
+    $console = PhutilConsole::getConsole();
+    $console->getServer()->setEnableLog(true);
+    $console->writeLog($message."\n");
+  }
+
   public function execute(PhutilArgumentParser $args) {
+    $this->readBookConfiguration($args);
+
     if ($args->getArg('clean')) {
       $this->log(pht('CLEARING CACHES'));
       $this->getAtomCache()->delete();
+      $this->log(pht('Done.')."\n");
     }
 
     // The major challenge of documentation generation is one of dependency
@@ -104,6 +130,8 @@ final class DivinerGenerateWorkflow extends DivinerWorkflow {
 
     $this->buildAtomCache();
     $this->buildGraphCache();
+
+    $this->publishDocumentation();
   }
 
 /* -(  Atom Cache  )--------------------------------------------------------- */
@@ -137,7 +165,7 @@ final class DivinerGenerateWorkflow extends DivinerWorkflow {
 
     $this->getAtomCache()->saveAtoms();
 
-    $this->log(pht("Done."));
+    $this->log(pht('Done.')."\n");
   }
 
   private function getAtomizersForFiles(array $files) {
@@ -170,7 +198,7 @@ final class DivinerGenerateWorkflow extends DivinerWorkflow {
 
 
   private function findFilesInProject() {
-    $file_hashes = id(new FileFinder($this->getRoot()))
+    $raw_hashes = id(new FileFinder($this->getConfig('root')))
       ->excludePath('*/.*')
       ->withType('f')
       ->setGenerateChecksums(true)
@@ -178,11 +206,13 @@ final class DivinerGenerateWorkflow extends DivinerWorkflow {
 
     $version = $this->getDivinerAtomWorldVersion();
 
-    foreach ($file_hashes as $file => $md5_hash) {
+    $file_hashes = array();
+    foreach ($raw_hashes as $file => $md5_hash) {
+      $rel_file = Filesystem::readablePath($file, $this->getConfig('root'));
       // We want the hash to change if the file moves or Diviner gets updated,
       // not just if the file content changes. Derive a hash from everything
       // we care about.
-      $file_hashes[$file] = md5("{$file}\0{$md5_hash}\0{$version}").'F';
+      $file_hashes[$rel_file] = md5("{$rel_file}\0{$md5_hash}\0{$version}").'F';
     }
 
     return $file_hashes;
@@ -222,11 +252,12 @@ final class DivinerGenerateWorkflow extends DivinerWorkflow {
     foreach ($atomizers as $class => $files) {
       foreach (array_chunk($files, 32) as $chunk) {
         $future = new ExecFuture(
-          '%s atomize --atomizer %s -- %Ls',
+          '%s atomize --ugly --book %s --atomizer %s -- %Ls',
           dirname(phutil_get_library_root('phabricator')).'/bin/diviner',
+          $this->getBookConfigPath(),
           $class,
           $chunk);
-        $future->setCWD($this->getRoot());
+        $future->setCWD($this->getConfig('root'));
 
         $futures[] = $future;
       }
@@ -322,9 +353,25 @@ final class DivinerGenerateWorkflow extends DivinerWorkflow {
 
     $this->log(pht('Propagating changes through the graph.'));
 
-    foreach ($dirty_symbols as $symbol => $ignored) {
-      foreach ($atom_cache->getEdgesWithDestination($symbol) as $edge) {
+    // Find all the nodes which point at a dirty node, and dirty them. Then
+    // find all the nodes which point at those nodes and dirty them, and so
+    // on. (This is slightly overkill since we probably don't need to propagate
+    // dirtiness across documentation "links" between symbols, but we do want
+    // to propagate it across "extends", and we suffer only a little bit of
+    // collateral damage by over-dirtying as long as the documentation isn't
+    // too well-connected.)
+
+    $symbol_stack = array_keys($dirty_symbols);
+    while ($symbol_stack) {
+      $symbol_hash = array_pop($symbol_stack);
+
+      foreach ($atom_cache->getEdgesWithDestination($symbol_hash) as $edge) {
         $dirty_nhashes[$edge] = true;
+        $src_hash = $this->computeSymbolHash($edge);
+        if (empty($dirty_symbols[$src_hash])) {
+          $dirty_symbols[$src_hash] = true;
+          $symbol_stack[] = $src_hash;
+        }
       }
     }
 
@@ -340,12 +387,16 @@ final class DivinerGenerateWorkflow extends DivinerWorkflow {
     $atom_cache->saveEdges();
     $atom_cache->saveSymbols();
 
-    $this->log(pht('Done.'));
+    $this->log(pht('Done.')."\n");
   }
 
   private function computeSymbolHash($node_hash) {
     $atom_cache = $this->getAtomCache();
     $atom = $atom_cache->getAtom($node_hash);
+
+    if (!$atom) {
+      throw new Exception("No such atom with node hash '{$node_hash}'!");
+    }
 
     $ref = DivinerAtomRef::newFromDictionary($atom['ref']);
     return $ref->toHash();
@@ -356,9 +407,15 @@ final class DivinerGenerateWorkflow extends DivinerWorkflow {
     $atom = $atom_cache->getAtom($node_hash);
 
     $refs = array();
+
+    // Make the atom depend on its own symbol, so that all atoms with the same
+    // symbol are dirtied (e.g., if a codebase defines the function "f()"
+    // several times, all of them should be dirtied when one is dirtied).
+    $refs[DivinerAtomRef::newFromDictionary($atom)->toHash()] = true;
+
     foreach (array_merge($atom['extends'], $atom['links']) as $ref_dict) {
       $ref = DivinerAtomRef::newFromDictionary($ref_dict);
-      if ($ref->getProject() == $atom['project']) {
+      if ($ref->getBook() == $atom['book']) {
         $refs[$ref->toHash()] = true;
       }
     }
@@ -380,5 +437,22 @@ final class DivinerGenerateWorkflow extends DivinerWorkflow {
 
     return md5(serialize($inputs)).'G';
   }
+
+
+  private function publishDocumentation() {
+    $atom_cache = $this->getAtomCache();
+    $graph_map = $atom_cache->getGraphMap();
+
+    $this->log(pht('PUBLISHING DOCUMENTATION'));
+
+    $publisher = new DivinerStaticPublisher();
+    $publisher->setConfig($this->getAllConfig());
+    $publisher->setAtomCache($atom_cache);
+    $publisher->setRenderer(new DivinerDefaultRenderer());
+    $publisher->publishAtoms(array_values($graph_map));
+
+    $this->log(pht('Done.'));
+  }
+
 
 }

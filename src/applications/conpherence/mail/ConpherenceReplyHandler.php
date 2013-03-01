@@ -5,6 +5,16 @@
  */
 final class ConpherenceReplyHandler extends PhabricatorMailReplyHandler {
 
+  private $mailAddedParticipantPHIDs;
+
+  public function setMailAddedParticipantPHIDs(array $phids) {
+    $this->mailAddedParticipantPHIDs = $phids;
+    return $this;
+  }
+  public function getMailAddedParticipantPHIDs() {
+    return $this->mailAddedParticipantPHIDs;
+  }
+
   public function validateMailReceiver($mail_receiver) {
     if (!($mail_receiver instanceof ConpherenceThread)) {
       throw new Exception("Mail receiver is not a ConpherenceThread!");
@@ -39,8 +49,7 @@ final class ConpherenceReplyHandler extends PhabricatorMailReplyHandler {
       $edge_type = PhabricatorEdgeConfig::TYPE_OBJECT_HAS_FILE;
       $file_phids = PhabricatorEdgeQuery::loadDestinationPHIDs(
         $conpherence->getPHID(),
-        $edge_type
-      );
+        $edge_type);
       $conpherence->attachFilePHIDs($file_phids);
       $participants = id(new ConpherenceParticipant())
         ->loadAllWhere('conpherencePHID = %s', $conpherence->getPHID());
@@ -65,16 +74,24 @@ final class ConpherenceReplyHandler extends PhabricatorMailReplyHandler {
     $body = $this->enhanceBodyWithAttachments(
       $body,
       $file_phids,
-      '{F%d}'
-    );
-    $xactions = $editor->generateTransactionsFromText(
-      $conpherence,
-      $body
-    );
+      '{F%d}');
+
+    $xactions = array();
+    if ($this->getMailAddedParticipantPHIDs()) {
+      $xactions[] = id(new ConpherenceTransaction())
+        ->setTransactionType(ConpherenceTransactionType::TYPE_PARTICIPANTS)
+        ->setNewValue(array('+' => $this->getMailAddedParticipantPHIDs()));
+    }
+
+    $xactions = array_merge(
+      $xactions,
+      $editor->generateTransactionsFromText(
+        $conpherence,
+        $body));
 
     $editor->applyTransactions($conpherence, $xactions);
 
-    return null;
+    return $conpherence;
   }
 
 }

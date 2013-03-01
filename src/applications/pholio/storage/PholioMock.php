@@ -7,7 +7,9 @@ final class PholioMock extends PholioDAO
   implements
     PhabricatorMarkupInterface,
     PhabricatorPolicyInterface,
-    PhabricatorSubscribableInterface {
+    PhabricatorSubscribableInterface,
+    PhabricatorTokenReceiverInterface,
+    PhabricatorApplicationTransactionInterface {
 
   const MARKUP_FIELD_DESCRIPTION  = 'markup:description';
 
@@ -111,15 +113,49 @@ final class PholioMock extends PholioDAO
   }
 
   public function getMarkupText($field) {
-    return $this->getDescription();
+    if ($this->getDescription()) {
+      $description = $this->getDescription();
+    } else {
+      $description = pht('No Description Given');
+    }
+
+    return $description;
   }
 
   public function didMarkupText($field, $output, PhutilMarkupEngine $engine) {
-    return $output;
+    require_celerity_resource('phabricator-remarkup-css');
+    return phutil_tag(
+      'div',
+      array(
+        'class' => 'phabricator-remarkup',
+      ),
+      $output);
   }
 
   public function shouldUseMarkupCache($field) {
     return (bool)$this->getID();
+  }
+
+
+/* -(  PhabricatorApplicationTransactionInterface  )------------------------- */
+
+
+  public function getApplicationTransactionEditor() {
+    return new PholioMockEditor();
+  }
+
+  public function getApplicationTransactionObject() {
+    return new PholioTransaction();
+  }
+
+
+/* -(  PhabricatorTokenReceiverInterface  )---------------------------------- */
+
+
+  public function getUsersToNotifyOfTokenGiven() {
+    return array(
+      $this->getAuthorPHID(),
+    );
   }
 
 }

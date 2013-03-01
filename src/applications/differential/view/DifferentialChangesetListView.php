@@ -138,7 +138,7 @@ final class DifferentialChangesetListView extends AphrontView {
         $load = 'Loading...';
         $mapping[$uniq_id] = $ref;
       } else {
-        $load = javelin_render_tag(
+        $load = javelin_tag(
           'a',
           array(
             'href' => '#'.$uniq_id,
@@ -150,15 +150,15 @@ final class DifferentialChangesetListView extends AphrontView {
             'sigil' => 'differential-load',
             'mustcapture' => true,
           ),
-          'Load');
+          pht('Load'));
       }
       $detail->appendChild(
-        phutil_render_tag(
+        phutil_tag(
           'div',
           array(
             'id' => $uniq_id,
           ),
-          '<div class="differential-loading">'.$load.'</div>'));
+          phutil_tag('div', array('class' => 'differential-loading'), $load)));
       $output[] = $detail->render();
     }
 
@@ -187,47 +187,54 @@ final class DifferentialChangesetListView extends AphrontView {
       ));
     }
 
-    return
-      id(new PhabricatorHeaderView())
-        ->setHeader($this->getTitle())
-        ->render().
-      phutil_render_tag(
-      'div',
+    return $this->renderSingleView(
       array(
-        'class' => 'differential-review-stage',
-        'id'    => 'differential-review-stage',
-      ),
-      implode("\n", $output));
+        id(new PhabricatorHeaderView())
+          ->setHeader($this->getTitle())
+          ->render(),
+        phutil_tag(
+          'div',
+          array(
+            'class' => 'differential-review-stage',
+            'id'    => 'differential-review-stage',
+          ),
+          $output),
+      ));
   }
 
   /**
    * Render the "Undo" markup for the inline comment undo feature.
    */
   private function renderUndoTemplates() {
-    $link = javelin_render_tag(
+    $link = javelin_tag(
       'a',
       array(
         'href'  => '#',
         'sigil' => 'differential-inline-comment-undo',
       ),
-      'Undo');
+      pht('Undo'));
 
-    $div = phutil_render_tag(
+    $div = phutil_tag(
       'div',
       array(
         'class' => 'differential-inline-undo',
       ),
-      'Changes discarded. '.$link);
-
-    $template =
-      '<table><tr>'.
-      '<th></th><td>%s</td>'.
-      '<th></th><td colspan="3">%s</td>'.
-      '</tr></table>';
+      array('Changes discarded. ', $link));
 
     return array(
-      'l' => sprintf($template, $div, ''),
-      'r' => sprintf($template, '', $div),
+      'l' => hsprintf(
+        '<table><tr>'.
+          '<th></th><td>%s</td>'.
+          '<th></th><td colspan="3"></td>'.
+        '</tr></table>',
+        $div),
+
+      'r' => hsprintf(
+        '<table><tr>'.
+          '<th></th><td></td>'.
+          '<th></th><td colspan="3">%s</td>'.
+        '</tr></table>',
+        $div),
     );
   }
 
@@ -251,10 +258,15 @@ final class DifferentialChangesetListView extends AphrontView {
 
     $repository = $this->repository;
     if ($repository) {
-      $meta['diffusionURI'] = (string)$repository->getDiffusionBrowseURIForPath(
-        $changeset->getAbsoluteRepositoryPath($repository, $this->diff),
-        idx($changeset->getMetadata(), 'line:first'),
-        $this->getBranch());
+      try {
+        $meta['diffusionURI'] =
+          (string)$repository->getDiffusionBrowseURIForPath(
+            $changeset->getAbsoluteRepositoryPath($repository, $this->diff),
+            idx($changeset->getMetadata(), 'line:first'),
+            $this->getBranch());
+      } catch (DiffusionSetupException $e) {
+        // Ignore
+      }
     }
 
     $change = $changeset->getChangeType();
@@ -297,7 +309,7 @@ final class DifferentialChangesetListView extends AphrontView {
       'differential-dropdown-menus',
       array());
 
-    return javelin_render_tag(
+    return javelin_tag(
       'a',
       array(
         'class'   => 'button small grey',
@@ -306,7 +318,7 @@ final class DifferentialChangesetListView extends AphrontView {
         'target'  => '_blank',
         'sigil'   => 'differential-view-options',
       ),
-      "View Options \xE2\x96\xBC");
+      pht("View Options \xE2\x96\xBC"));
   }
 
 }

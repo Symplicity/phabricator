@@ -104,8 +104,7 @@ final class PhameBlog extends PhameDAO
 
     $this->bloggerPHIDs = PhabricatorEdgeQuery::loadDestinationPHIDs(
       $this->getPHID(),
-      PhabricatorEdgeConfig::TYPE_BLOG_HAS_BLOGGER
-    );
+      PhabricatorEdgeConfig::TYPE_BLOG_HAS_BLOGGER);
 
     return $this;
   }
@@ -132,6 +131,8 @@ final class PhameBlog extends PhameDAO
     }
 
     $bloggers = id(new PhabricatorObjectHandleData($blogger_phids))
+      // TODO: This should be Query-based (T603).
+      ->setViewer(PhabricatorUser::getOmnipotentUser())
       ->loadHandles();
 
     $this->attachBloggers($bloggers);

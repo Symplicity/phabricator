@@ -18,12 +18,11 @@ final class DiffusionBrowseTableView extends DiffusionView {
   }
 
   public function renderLastModifiedColumns(
+    DiffusionRequest $drequest,
     array $handles,
     PhabricatorRepositoryCommit $commit = null,
     PhabricatorRepositoryCommitData $data = null) {
     assert_instances_of($handles, 'PhabricatorObjectHandle');
-
-    $drequest = $this->getDiffusionRequest();
 
     if ($commit) {
       $epoch = $commit->getEpoch();
@@ -55,12 +54,11 @@ final class DiffusionBrowseTableView extends DiffusionView {
           $committer = self::renderName($committer);
         }
         if ($author != $committer) {
-          $author .= '/'.$committer;
+          $author = hsprintf('%s/%s', $author, $committer);
         }
       }
 
-      $details = AphrontTableView::renderSingleDisplayLine(
-        phutil_escape_html($data->getSummary()));
+      $details = AphrontTableView::renderSingleDisplayLine($data->getSummary());
     } else {
       $author = '';
       $details = '';
@@ -133,24 +131,17 @@ final class DiffusionBrowseTableView extends DiffusionView {
         $browse_text = $path->getPath().'/';
         $dir_slash = '/';
 
-        $browse_link = '<strong>'.$this->linkBrowse(
+        $browse_link = phutil_tag('strong', array(), $this->linkBrowse(
           $base_path.$path->getPath().$dir_slash,
           array(
-            'html' => $this->renderPathIcon(
-              'dir',
-              $browse_text),
-          )).'</strong>';
+            'text' => $this->renderPathIcon('dir', $browse_text),
+          )));
       } else if ($file_type == DifferentialChangeType::FILE_SUBMODULE) {
         $browse_text = $path->getPath().'/';
-        $browse_link =
-          '<strong>'.
-            $this->linkExternal(
-              $path->getHash(),
-              $path->getExternalURI(),
-              $this->renderPathIcon(
-                'ext',
-                $browse_text)).
-          '</strong>';
+        $browse_link = phutil_tag('strong', array(), $this->linkExternal(
+          $path->getHash(),
+          $path->getExternalURI(),
+          $this->renderPathIcon('ext', $browse_text)));
       } else {
         if ($file_type == DifferentialChangeType::FILE_SYMLINK) {
           $type = 'link';
@@ -161,7 +152,7 @@ final class DiffusionBrowseTableView extends DiffusionView {
         $browse_link = $this->linkBrowse(
           $base_path.$path->getPath(),
           array(
-            'html' => $this->renderPathIcon($type, $browse_text),
+            'text' => $this->renderPathIcon($type, $browse_text),
           ));
       }
 
@@ -170,6 +161,7 @@ final class DiffusionBrowseTableView extends DiffusionView {
         $drequest = clone $request;
         $drequest->setPath($request->getPath().$path->getPath().$dir_slash);
         $dict = $this->renderLastModifiedColumns(
+          $drequest,
           $this->handles,
           $commit,
           $path->getLastCommitData());
@@ -191,7 +183,7 @@ final class DiffusionBrowseTableView extends DiffusionView {
 
         $need_pull[$uri] = $dict;
         foreach ($dict as $k => $uniq) {
-          $dict[$k] = '<span id="'.$uniq.'"></span>';
+          $dict[$k] = phutil_tag('span', array('id' => $uniq), '');
         }
       }
 
@@ -203,7 +195,7 @@ final class DiffusionBrowseTableView extends DiffusionView {
           $request->getRepository()->getCallsign());
         if ($editor_link) {
           $show_edit = true;
-          $editor_button = phutil_render_tag(
+          $editor_button = phutil_tag(
             'a',
             array(
               'href' => $editor_link,
@@ -239,7 +231,7 @@ final class DiffusionBrowseTableView extends DiffusionView {
         'History',
         'Edit',
         'Path',
-        ($lint ? phutil_escape_html($lint) : 'Lint'),
+        ($lint ? $lint : 'Lint'),
         'Modified',
         'Date',
         'Time',
@@ -277,12 +269,12 @@ final class DiffusionBrowseTableView extends DiffusionView {
 
     require_celerity_resource('diffusion-icons-css');
 
-    return phutil_render_tag(
+    return phutil_tag(
       'span',
       array(
         'class' => 'diffusion-path-icon diffusion-path-icon-'.$type,
       ),
-      phutil_escape_html($text));
+      $text);
   }
 
 }

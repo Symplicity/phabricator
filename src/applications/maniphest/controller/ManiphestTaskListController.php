@@ -89,7 +89,9 @@ final class ManiphestTaskListController extends ManiphestController {
 
     // Execute the query.
 
-    list($tasks, $handles, $total_count) = self::loadTasks($query);
+    list($tasks, $handles, $total_count) = self::loadTasks(
+      $query,
+      $user);
 
     // Extract information we need to render the filters from the query.
 
@@ -149,14 +151,12 @@ final class ManiphestTaskListController extends ManiphestController {
         id(new AphrontFormTextControl())
           ->setName('set_search')
           ->setLabel('Search')
-          ->setValue($search_text)
-      );
+          ->setValue($search_text));
       $form->appendChild(
         id(new AphrontFormTextControl())
           ->setName('set_tasks')
           ->setLabel('Task IDs')
-          ->setValue(join(',', $task_ids))
-      );
+          ->setValue(join(',', $task_ids)));
 
       $tokens = array();
       foreach ($owner_phids as $phid) {
@@ -298,13 +298,14 @@ final class ManiphestTaskListController extends ManiphestController {
     require_celerity_resource('maniphest-task-summary-css');
 
     $list_container = new AphrontNullView();
-    $list_container->appendChild('<div class="maniphest-list-container">');
+    $list_container->appendChild(hsprintf(
+      '<div class="maniphest-list-container">'));
 
     if (!$have_tasks) {
-      $list_container->appendChild(
+      $list_container->appendChild(hsprintf(
         '<h1 class="maniphest-task-group-header">'.
           'No matching tasks.'.
-        '</h1>');
+        '</h1>'));
     } else {
       $pager = new AphrontPagerView();
       $pager->setURI($request->getRequestURI(), 'offset');
@@ -316,25 +317,24 @@ final class ManiphestTaskListController extends ManiphestController {
       $max = min($pager->getOffset() + $page_size, $total_count);
       $tot = $total_count;
 
-      $cur = number_format($cur);
-      $max = number_format($max);
-      $tot = number_format($tot);
-
-      $list_container->appendChild(
+      $list_container->appendChild(hsprintf(
         '<div class="maniphest-total-result-count">'.
-          "Displaying tasks {$cur} - {$max} of {$tot}.".
-        '</div>');
+          "Displaying tasks %s - %s of %s.".
+        '</div>',
+        number_format($cur),
+        number_format($max),
+        number_format($tot)));
 
       $selector = new AphrontNullView();
 
       $group = $query->getParameter('group');
       $order = $query->getParameter('order');
       $is_draggable =
-        ($group == 'priority') ||
-        ($group == 'none' && $order == 'priority');
+        ($order == 'priority') &&
+        ($group == 'none' || $group == 'priority');
 
       $lists = new AphrontNullView();
-      $lists->appendChild('<div class="maniphest-group-container">');
+      $lists->appendChild(hsprintf('<div class="maniphest-group-container">'));
       foreach ($tasks as $group => $list) {
         $task_list = new ManiphestTaskListView();
         $task_list->setShowBatchControls(true);
@@ -348,7 +348,7 @@ final class ManiphestTaskListController extends ManiphestController {
         $count = number_format(count($list));
 
         $header =
-          javelin_render_tag(
+          javelin_tag(
             'h1',
             array(
               'class' => 'maniphest-task-group-header',
@@ -357,7 +357,7 @@ final class ManiphestTaskListController extends ManiphestController {
                 'priority' => head($list)->getPriority(),
               ),
             ),
-            phutil_escape_html($group).' ('.$count.')');
+            $group.' ('.$count.')');
 
 
         $panel = new AphrontPanelView();
@@ -367,14 +367,14 @@ final class ManiphestTaskListController extends ManiphestController {
 
         $lists->appendChild($panel);
       }
-      $lists->appendChild('</div>');
+      $lists->appendChild(hsprintf('</div>'));
       $selector->appendChild($lists);
 
 
       $selector->appendChild($this->renderBatchEditor($query));
 
       $form_id = celerity_generate_unique_node_id();
-      $selector = phabricator_render_form(
+      $selector = phabricator_form(
         $user,
         array(
           'method' => 'POST',
@@ -394,7 +394,7 @@ final class ManiphestTaskListController extends ManiphestController {
         ));
     }
 
-    $list_container->appendChild('</div>');
+    $list_container->appendChild(hsprintf('</div>'));
     $nav->appendChild($list_container);
 
     $title = pht('Task List');
@@ -418,7 +418,10 @@ final class ManiphestTaskListController extends ManiphestController {
       ));
   }
 
-  public static function loadTasks(PhabricatorSearchQuery $search_query) {
+  public static function loadTasks(
+    PhabricatorSearchQuery $search_query,
+    PhabricatorUser $viewer) {
+
     $any_project = false;
     $search_text = $search_query->getParameter('fullTextSearch');
     $user_phids = $search_query->getParameter('userPHIDs', array());
@@ -554,6 +557,7 @@ final class ManiphestTaskListController extends ManiphestController {
       $any_project_phids,
       array_mergev(mpull($data, 'getProjectPHIDs')));
     $handles = id(new PhabricatorObjectHandleData($handle_phids))
+      ->setViewer($viewer)
       ->loadHandles();
 
     switch ($search_query->getParameter('group')) {
@@ -641,7 +645,7 @@ final class ManiphestTaskListController extends ManiphestController {
         'status'      => 'batch-select-status-cell',
       ));
 
-    $select_all = javelin_render_tag(
+    $select_all = javelin_tag(
       'a',
       array(
         'href'        => '#',
@@ -651,7 +655,7 @@ final class ManiphestTaskListController extends ManiphestController {
       ),
       'Select All');
 
-    $select_none = javelin_render_tag(
+    $select_none = javelin_tag(
       'a',
       array(
         'href'        => '#',
@@ -661,16 +665,16 @@ final class ManiphestTaskListController extends ManiphestController {
       ),
       'Clear Selection');
 
-    $submit = phutil_render_tag(
+    $submit = phutil_tag(
       'button',
       array(
         'id'          => 'batch-select-submit',
         'disabled'    => 'disabled',
         'class'       => 'disabled',
       ),
-      'Batch Edit Selected Tasks &raquo;');
+      "Batch Edit Selected Tasks \xC2\xBB");
 
-    $export = javelin_render_tag(
+    $export = javelin_tag(
       'a',
       array(
         'href' => '/maniphest/export/'.$search_query->getQueryKey().'/',
@@ -678,25 +682,21 @@ final class ManiphestTaskListController extends ManiphestController {
       ),
       'Export Tasks to Excel...');
 
-    return
+    return hsprintf(
       '<div class="maniphest-batch-editor">'.
         '<div class="batch-editor-header">Batch Task Editor</div>'.
         '<table class="maniphest-batch-editor-layout">'.
           '<tr>'.
-            '<td>'.
-              $select_all.
-              $select_none.
-            '</td>'.
-            '<td>'.
-              $export.
-            '</td>'.
-            '<td id="batch-select-status-cell">'.
-              '0 Selected Tasks'.
-            '</td>'.
-            '<td class="batch-select-submit-cell">'.$submit.'</td>'.
+            '<td>%s%s</td>'.
+            '<td>%s</td>'.
+            '<td id="batch-select-status-cell">0 Selected Tasks</td>'.
+            '<td class="batch-select-submit-cell">%s</td>'.
           '</tr>'.
         '</table>'.
-      '</table>';
+      '</table>',
+      $select_all, $select_none,
+      $export,
+      $submit);
   }
 
   private function buildQueryFromRequest() {

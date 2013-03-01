@@ -36,7 +36,8 @@ final class PhabricatorActionListView extends AphrontView {
     }
 
     require_celerity_resource('phabricator-action-list-view-css');
-    return phutil_render_tag(
+
+    return phutil_tag(
       'ul',
       array(
         'class' => 'phabricator-action-list-view',

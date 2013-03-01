@@ -12,7 +12,7 @@ final class PhabricatorXHPASTViewTreeController
       $input,
       array(0, $stdout, ''));
 
-    $tree = '<ul>'.$this->buildTree($tree->getRootNode()).'</ul>';
+    $tree = phutil_tag('ul', array(), $this->buildTree($tree->getRootNode()));
     return $this->buildXHPASTViewPanelResponse($tree);
   }
 
@@ -27,19 +27,19 @@ final class PhabricatorXHPASTViewTreeController
     }
 
     $tree = array();
-    $tree[] =
-      '<li>'.
-        phutil_render_tag(
-          'span',
-          array(
-            'title' => $title,
-          ),
-          phutil_escape_html($name)).
-      '</li>';
+    $tree[] = phutil_tag(
+      'li',
+      array(),
+      phutil_tag(
+        'span',
+        array(
+          'title' => $title,
+        ),
+        $name));
     foreach ($root->getChildren() as $child) {
-      $tree[] = '<ul>'.$this->buildTree($child).'</ul>';
+      $tree[] = phutil_tag('ul', array(), $this->buildTree($child));
     }
-    return implode("\n", $tree);
+    return phutil_implode_html("\n", $tree);
   }
 
 }

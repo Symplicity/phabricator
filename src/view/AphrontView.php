@@ -33,7 +33,7 @@ abstract class AphrontView extends Phobject {
     foreach ($this->children as $child) {
       $out[] = $this->renderSingleView($child);
     }
-    return implode('', $out);
+    return $out;
   }
 
   final protected function renderSingleView($child) {
@@ -44,9 +44,22 @@ abstract class AphrontView extends Phobject {
       foreach ($child as $element) {
         $out[] = $this->renderSingleView($element);
       }
-      return implode('', $out);
+      return phutil_implode_html('', $out);
     } else {
       return $child;
+    }
+  }
+
+  final protected function isEmptyContent($content) {
+    if (is_array($content)) {
+      foreach ($content as $element) {
+        if (!$this->isEmptyContent($element)) {
+          return false;
+        }
+      }
+      return true;
+    } else {
+      return !strlen((string)$content);
     }
   }
 

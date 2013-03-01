@@ -26,6 +26,7 @@ final class PhabricatorFeedStoryManiphest
     $action = $data->getValue('action');
     switch ($action) {
       case ManiphestAction::ACTION_CREATE:
+      case ManiphestAction::ACTION_COMMENT:
         $full_size = true;
         break;
       default:
@@ -35,7 +36,20 @@ final class PhabricatorFeedStoryManiphest
 
     if ($full_size) {
       $view->setImage($this->getHandle($data->getAuthorPHID())->getImageURI());
-      $content = $this->renderSummary($data->getValue('description'));
+
+      switch ($action) {
+        case ManiphestAction::ACTION_COMMENT:
+          // I'm just fetching the comments here
+          // Don't repeat this at home!
+          $comments = $data->getValue('comments');
+          $content = $this->renderSummary($comments);
+          break;
+        default:
+          // I think this is just for create
+          $content = $this->renderSummary($data->getValue('description'));
+          break;
+      }
+
       $view->appendChild($content);
     } else {
       $view->setOneLineStory(true);
@@ -66,16 +80,23 @@ final class PhabricatorFeedStoryManiphest
       case ManiphestAction::ACTION_REASSIGN:
         if ($owner_phid) {
           if ($owner_phid == $actor_phid) {
-            $one_line = "{$actor_link} claimed {$task_link}";
+            $one_line = hsprintf('%s claimed %s', $actor_link, $task_link);
           } else {
-            $one_line = "{$actor_link} {$verb} {$task_link} to {$owner_link}";
+            $one_line = hsprintf('%s %s %s to %s',
+              $actor_link,
+              $verb,
+              $owner_link,
+              $task_link);
           }
         } else {
-          $one_line = "{$actor_link} placed {$task_link} up for grabs";
+          $one_line = hsprintf(
+            '%s placed %s up for grabs',
+            $actor_link,
+            $task_link);
         }
         break;
       default:
-        $one_line = "{$actor_link} {$verb} {$task_link}";
+        $one_line = hsprintf('%s %s %s', $actor_link, $verb, $task_link);
         break;
     }
 

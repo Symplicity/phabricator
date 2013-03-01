@@ -79,29 +79,23 @@ abstract class PhabricatorDirectoryController extends PhabricatorController {
       $is_hide = ($tile_display == PhabricatorApplication::TILE_HIDE);
       if ($is_hide) {
         $show_item_id = celerity_generate_unique_node_id();
-        $show_tiles_id = celerity_generate_unique_node_id();
+        $hide_item_id = celerity_generate_unique_node_id();
 
         $show_item = id(new PhabricatorMenuItemView())
           ->setName(pht('Show More Applications'))
           ->setHref('#')
-          ->addSigil('home-show-applications')
+          ->addSigil('reveal-content')
           ->setID($show_item_id);
 
         $hide_item = id(new PhabricatorMenuItemView())
           ->setName(pht('Show Fewer Applications'))
           ->setHref('#')
-          ->addSigil('home-hide-applications');
+          ->setStyle('display: none')
+          ->setID($hide_item_id)
+          ->addSigil('reveal-content');
 
         $nav->addMenuItem($show_item);
-        $nav->addCustomBlock(
-          '<div '.
-          'id="'.phutil_escape_html($show_tiles_id).'"'.
-          'style="display: none;">');
-
-        Javelin::initBehavior('phabricator-home-reveal-tiles', array(
-          'tilesID' => $show_tiles_id,
-          'showID'  => $show_item_id,
-        ));
+        $tile_ids = array($hide_item_id);
       }
 
       foreach ($tile_group as $group => $application_list) {
@@ -124,21 +118,47 @@ abstract class PhabricatorDirectoryController extends PhabricatorController {
           while (count($tiles) % 3) {
             $tiles[] = id(new PhabricatorApplicationLaunchView());
           }
-          $nav->addLabel($groups[$group]);
+          $label = id(new PhabricatorMenuItemView())
+            ->setType(PhabricatorMenuItemView::TYPE_LABEL)
+            ->setName($groups[$group]);
+
+          if ($is_hide) {
+            $label->setStyle('display: none');
+            $label_id = celerity_generate_unique_node_id();
+            $label->setID($label_id);
+            $tile_ids[] = $label_id;
+          }
+
+          $nav->addMenuItem($label);
         }
+
+        $group_id = celerity_generate_unique_node_id();
+        $tile_ids[] = $group_id;
         $nav->addCustomBlock(
-          phutil_render_tag(
+          phutil_tag(
             'div',
             array(
               'class' => 'application-tile-group',
+              'id' => $group_id,
+              'style' => ($is_hide ? 'display: none' : null),
             ),
-            id(new AphrontNullView())->appendChild($tiles)->render()));
+            mpull($tiles, 'render')));
       }
 
-      $is_hide = ($tile_display == PhabricatorApplication::TILE_HIDE);
       if ($is_hide) {
+        Javelin::initBehavior('phabricator-reveal-content');
+
+        $show_item->setMetadata(
+          array(
+            'showIDs' => $tile_ids,
+            'hideIDs' => array($show_item_id),
+          ));
+        $hide_item->setMetadata(
+          array(
+            'showIDs' => array($show_item_id),
+            'hideIDs' => $tile_ids,
+          ));
         $nav->addMenuItem($hide_item);
-        $nav->addCustomBlock('</div>');
       }
     }
 

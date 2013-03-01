@@ -153,20 +153,18 @@ final class DifferentialRevisionViewController extends DifferentialController {
         $reviewer_warning->setTitle(pht('No Active Reviewers'));
         if ($revision->getReviewers()) {
           $reviewer_warning->appendChild(
-            phutil_render_tag(
+            phutil_tag(
               'p',
               array(),
               pht('All specified reviewers are disabled and this revision '.
-                  'needs review. You may want to add some new reviewers.')
-            ));
+                  'needs review. You may want to add some new reviewers.')));
         } else {
           $reviewer_warning->appendChild(
-            phutil_render_tag(
+            phutil_tag(
               'p',
               array(),
               pht('This revision has no specified reviewers and needs '.
-                  'review. You may want to add some reviewers.')
-            ));
+                  'review. You may want to add some reviewers.')));
         }
       }
     }
@@ -180,21 +178,20 @@ final class DifferentialRevisionViewController extends DifferentialController {
       $warning = new AphrontErrorView();
       $warning->setTitle('Very Large Diff');
       $warning->setSeverity(AphrontErrorView::SEVERITY_WARNING);
-      $warning->appendChild(
+      $warning->appendChild(hsprintf(
+        '%s <strong>%s</strong>',
         pht(
           'This diff is very large and affects %s files. Load each file '.
             'individually.',
-          new PhutilNumber($count)).
-        " <strong>".
-          phutil_render_tag(
-            'a',
-            array(
-              'href' => $request_uri
-                ->alter('large', 'true')
-                ->setFragment('toc'),
-            ),
-            pht('Show All Files Inline')).
-        "</strong>");
+          new PhutilNumber($count)),
+        phutil_tag(
+          'a',
+          array(
+            'href' => $request_uri
+              ->alter('large', 'true')
+              ->setFragment('toc'),
+          ),
+          pht('Show All Files Inline'))));
       $warning = $warning->render();
 
       $my_inlines = id(new DifferentialInlineComment())->loadAllWhere(
@@ -229,7 +226,7 @@ final class DifferentialRevisionViewController extends DifferentialController {
 
     $revision_detail = new DifferentialRevisionDetailView();
     $revision_detail->setRevision($revision);
-    $revision_detail->setDiff(reset($diffs));
+    $revision_detail->setDiff(end($diffs));
     $revision_detail->setAuxiliaryFields($aux_fields);
 
     $actions = $this->getRevisionActions($revision);
@@ -387,14 +384,15 @@ final class DifferentialRevisionViewController extends DifferentialController {
 
     $page_pane = id(new DifferentialPrimaryPaneView())
       ->setID($pane_id)
-      ->appendChild(
-        $comment_view->render().
-        $diff_history->render().
-        $warning.
-        $local_view->render().
-        $toc_view->render().
-        $other_view.
-        $changeset_view->render());
+      ->appendChild(array(
+        $comment_view->render(),
+        $diff_history->render(),
+        $warning,
+        $local_view->render(),
+        $toc_view->render(),
+        $other_view,
+        $changeset_view->render(),
+      ));
     if ($comment_form) {
       $page_pane->appendChild($comment_form->render());
     }
@@ -408,29 +406,42 @@ final class DifferentialRevisionViewController extends DifferentialController {
       ->setAnchorName('top')
       ->setNavigationMarker(true);
 
-    $nav = id(new DifferentialChangesetFileTreeSideNavBuilder())
-      ->setAnchorName('top')
-      ->setTitle('D'.$revision->getID())
-      ->setBaseURI(new PhutilURI('/D'.$revision->getID()))
-      ->build($changesets);
-    $nav->appendChild(
-      array(
-        $reviewer_warning,
-        $top_anchor,
-        $revision_detail,
-        $page_pane,
-      ));
-
+    $content = array(
+      $reviewer_warning,
+      $top_anchor,
+      $revision_detail,
+      $page_pane,
+    );
 
     $crumbs = $this->buildApplicationCrumbs();
     $crumbs->addCrumb(
       id(new PhabricatorCrumbView())
         ->setName($object_id)
         ->setHref('/'.$object_id));
-    $nav->setCrumbs($crumbs);
+
+    $prefs = $user->loadPreferences();
+
+    $pref_filetree = PhabricatorUserPreferences::PREFERENCE_DIFF_FILETREE;
+    if ($prefs->getPreference($pref_filetree)) {
+      $collapsed = $prefs->getPreference(
+        PhabricatorUserPreferences::PREFERENCE_NAV_COLLAPSED,
+        false);
+
+      $nav = id(new DifferentialChangesetFileTreeSideNavBuilder())
+        ->setAnchorName('top')
+        ->setTitle('D'.$revision->getID())
+        ->setBaseURI(new PhutilURI('/D'.$revision->getID()))
+        ->setCollapsed((bool)$collapsed)
+        ->build($changesets);
+      $nav->appendChild($content);
+      $nav->setCrumbs($crumbs);
+      $content = $nav;
+    } else {
+      array_unshift($content, $crumbs);
+    }
 
     return $this->buildApplicationPage(
-      $nav,
+      $content,
       array(
         'title' => $object_id.' '.$revision->getTitle(),
       ));
@@ -835,23 +846,24 @@ final class DifferentialRevisionViewController extends DifferentialController {
   private function renderOtherRevisions(array $revisions) {
     assert_instances_of($revisions, 'DifferentialRevision');
 
+    $user = $this->getRequest()->getUser();
+
     $view = id(new DifferentialRevisionListView())
       ->setRevisions($revisions)
-      ->setFields(DifferentialRevisionListView::getDefaultFields())
-      ->setUser($this->getRequest()->getUser())
+      ->setFields(DifferentialRevisionListView::getDefaultFields($user))
+      ->setUser($user)
       ->loadAssets();
 
     $phids = $view->getRequiredHandlePHIDs();
     $handles = $this->loadViewerHandles($phids);
     $view->setHandles($handles);
 
-    return
+    return hsprintf(
+      '%s<div class="differential-panel">%s</div>',
       id(new PhabricatorHeaderView())
         ->setHeader(pht('Open Revisions Affecting These Files'))
-        ->render().
-      '<div class="differential-panel">'.
-        $view->render().
-      '</div>';
+        ->render(),
+      $view->render());
   }
 
   /**

@@ -55,6 +55,7 @@ final class DifferentialRevisionListView extends AphrontView {
     }
 
     $this->flags = id(new PhabricatorFlagQuery())
+      ->setViewer($user)
       ->withOwnerPHIDs(array($user->getPHID()))
       ->withObjectPHIDs(mpull($this->revisions, 'getPHID'))
       ->execute();
@@ -111,7 +112,7 @@ final class DifferentialRevisionListView extends AphrontView {
       if (isset($flagged[$phid])) {
         $class = PhabricatorFlagColor::getCSSClass($flagged[$phid]->getColor());
         $note = $flagged[$phid]->getNote();
-        $flag = javelin_render_tag(
+        $flag = javelin_tag(
           'div',
           $note ? array(
             'class' => 'phabricator-flag-icon '.$class,
@@ -128,18 +129,18 @@ final class DifferentialRevisionListView extends AphrontView {
 
       } else if (array_key_exists($revision->getID(), $this->drafts)) {
         $src = '/rsrc/image/icon/fatcow/page_white_edit.png';
-        $flag =
-          '<a href="/D'.$revision->getID().'#comment-preview">'.
-            phutil_render_tag(
-              'img',
-              array(
-                'src' => celerity_get_resource_uri($src),
-                'width' => 16,
-                'height' => 16,
-                'alt' => 'Draft',
-                'title' => pht('Draft Comment'),
-              )).
-            '</a>';
+        $flag = hsprintf(
+          '<a href="%s">%s</a>',
+          '/D'.$revision->getID().'#comment-preview',
+          phutil_tag(
+            'img',
+            array(
+              'src' => celerity_get_resource_uri($src),
+              'width' => 16,
+              'height' => 16,
+              'alt' => 'Draft',
+              'title' => pht('Draft Comment'),
+            )));
       }
 
       $row = array($flag);
@@ -184,10 +185,11 @@ final class DifferentialRevisionListView extends AphrontView {
     return $table->render();
   }
 
-  public static function getDefaultFields() {
+  public static function getDefaultFields(PhabricatorUser $user) {
     $selector = DifferentialFieldSelector::newSelector();
     $fields = $selector->getFieldSpecifications();
     foreach ($fields as $key => $field) {
+      $field->setUser($user);
       if (!$field->shouldAppearOnRevisionList()) {
         unset($fields[$key]);
       }

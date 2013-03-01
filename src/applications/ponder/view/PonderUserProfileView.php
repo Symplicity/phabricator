@@ -67,8 +67,7 @@ final class PonderUserProfileView extends AphrontView {
       $href = id(new PhutilURI('/Q' . $question->getID()))
         ->setFragment('A' . $answer->getID());
       $item->setHeader(
-        'A'.$answer->getID().' '.self::abbreviate($answer->getContent())
-      );
+        'A'.$answer->getID().' '.self::abbreviate($answer->getContent()));
       $item->setHref($href);
 
       $item->addAttribute(
@@ -79,12 +78,12 @@ final class PonderUserProfileView extends AphrontView {
       $item->addAttribute(
         pht(
           'Answer to %s',
-          phutil_render_tag(
+          phutil_tag(
             'a',
             array(
               'href' => '/Q'.$question->getID(),
             ),
-            phutil_escape_html(self::abbreviate($question->getTitle())))));
+            self::abbreviate($question->getTitle()))));
 
       $view->addItem($item);
     }

@@ -77,8 +77,10 @@ abstract class PhabricatorRepositoryCommitMessageParserWorker
 
     if ($author_phid != $commit->getAuthorPHID()) {
       $commit->setAuthorPHID($author_phid);
-      $commit->save();
     }
+
+    $commit->setSummary($data->getSummary());
+    $commit->save();
 
     $conn_w = id(new DifferentialRevision())->establishConnection('w');
 
@@ -166,11 +168,13 @@ abstract class PhabricatorRepositoryCommitMessageParserWorker
 
           $committer_name = $this->loadUserName(
             $committer_phid,
-            $data->getCommitDetail('committer'));
+            $data->getCommitDetail('committer'),
+            $actor);
 
           $author_name = $this->loadUserName(
             $author_phid,
-            $data->getAuthorName());
+            $data->getAuthorName(),
+            $actor);
 
           $info = array();
           $info[] = "authored by {$author_name}";
@@ -209,11 +213,13 @@ abstract class PhabricatorRepositoryCommitMessageParserWorker
     $data->save();
   }
 
-  private function loadUserName($user_phid, $default) {
+  private function loadUserName($user_phid, $default, PhabricatorUser $actor) {
     if (!$user_phid) {
       return $default;
     }
-    $handle = PhabricatorObjectHandleData::loadOneHandle($user_phid);
+    $handle = PhabricatorObjectHandleData::loadOneHandle(
+      $user_phid,
+      $actor);
     return '@'.$handle->getName();
   }
 
@@ -330,6 +336,7 @@ abstract class PhabricatorRepositoryCommitMessageParserWorker
           'path' => $path,
         ));
         $corpus = DiffusionFileContentQuery::newFromDiffusionRequest($drequest)
+          ->setViewer(PhabricatorUser::getOmnipotentUser())
           ->loadFileContent()
           ->getCorpus();
         if ($files[$file_phid]->loadFileData() != $corpus) {

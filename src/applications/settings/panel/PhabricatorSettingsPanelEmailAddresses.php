@@ -52,7 +52,7 @@ final class PhabricatorSettingsPanelEmailAddresses
     $rows = array();
     foreach ($emails as $email) {
 
-      $button_verify = javelin_render_tag(
+      $button_verify = javelin_tag(
         'a',
         array(
           'class' => 'button small grey',
@@ -61,7 +61,7 @@ final class PhabricatorSettingsPanelEmailAddresses
         ),
         'Verify');
 
-      $button_make_primary = javelin_render_tag(
+      $button_make_primary = javelin_tag(
         'a',
         array(
           'class' => 'button small grey',
@@ -70,7 +70,7 @@ final class PhabricatorSettingsPanelEmailAddresses
         ),
         'Make Primary');
 
-      $button_remove = javelin_render_tag(
+      $button_remove = javelin_tag(
         'a',
         array(
           'class'   => 'button small grey',
@@ -79,7 +79,7 @@ final class PhabricatorSettingsPanelEmailAddresses
         ),
         'Remove');
 
-      $button_primary = phutil_render_tag(
+      $button_primary = phutil_tag(
         'a',
         array(
           'class' => 'button small disabled',
@@ -103,7 +103,7 @@ final class PhabricatorSettingsPanelEmailAddresses
       }
 
       $rows[] = array(
-        phutil_escape_html($email->getAddress()),
+        $email->getAddress(),
         $action,
         $remove,
       );
@@ -133,7 +133,7 @@ final class PhabricatorSettingsPanelEmailAddresses
     $view = new AphrontPanelView();
     if ($editable) {
       $view->addButton(
-        javelin_render_tag(
+        javelin_tag(
           'a',
           array(
             'href'      => $uri->alter('new', 'true'),
@@ -191,9 +191,9 @@ final class PhabricatorSettingsPanelEmailAddresses
             ->setUser($user)
             ->addHiddenInput('new',  'verify')
             ->setTitle('Verification Email Sent')
-            ->appendChild(
-              '<p>A verification email has been sent. Click the link in the '.
-              'email to verify your address.</p>')
+            ->appendChild(phutil_tag('p', array(), pht(
+              'A verification email has been sent. Click the link in the '.
+              'email to verify your address.')))
             ->setSubmitURI($uri)
             ->addSubmitButton('Done');
 
@@ -264,9 +264,9 @@ final class PhabricatorSettingsPanelEmailAddresses
       ->setUser($user)
       ->addHiddenInput('delete', $email_id)
       ->setTitle("Really delete address '{$address}'?")
-      ->appendChild(
-        '<p>Are you sure you want to delete this address? You will no '.
-        'longer be able to use it to login.</p>')
+      ->appendChild(phutil_tag('p', array(), pht(
+        'Are you sure you want to delete this address? You will no '.
+        'longer be able to use it to login.')))
       ->addSubmitButton('Delete')
       ->addCancelButton($uri);
 
@@ -301,9 +301,9 @@ final class PhabricatorSettingsPanelEmailAddresses
       ->setUser($user)
       ->addHiddenInput('verify', $email_id)
       ->setTitle("Send Another Verification Email?")
-      ->appendChild(
-        '<p>Send another copy of the verification email to '.
-        phutil_escape_html($address).'?</p>')
+      ->appendChild(hsprintf(
+        '<p>Send another copy of the verification email to %s?</p>',
+        $address))
       ->addSubmitButton('Send Email')
       ->addCancelButton($uri);
 
@@ -342,9 +342,10 @@ final class PhabricatorSettingsPanelEmailAddresses
       ->setUser($user)
       ->addHiddenInput('primary', $email_id)
       ->setTitle("Change primary email address?")
-      ->appendChild(
+      ->appendChild(hsprintf(
         '<p>If you change your primary address, Phabricator will send all '.
-        'email to '.phutil_escape_html($address).'.</p>')
+          'email to %s.</p>',
+        $address))
       ->addSubmitButton('Change Primary Address')
       ->addCancelButton($uri);
 

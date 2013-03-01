@@ -33,9 +33,11 @@ final class ConduitAPI_phid_lookup_Method
         $phids[$name] = $phid;
       }
     }
-    
+
     $handles = id(new PhabricatorObjectHandleData($phids))
+      ->setViewer($request->getUser())
       ->loadHandles();
+
     $result = array();
     foreach ($phids as $name => $phid) {
       if (isset($handles[$phid]) && $handles[$phid]->isComplete()) {

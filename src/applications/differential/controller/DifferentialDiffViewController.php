@@ -19,30 +19,35 @@ final class DifferentialDiffViewController extends DifferentialController {
     if ($diff->getRevisionID()) {
       $top_panel = new AphrontPanelView();
       $top_panel->setWidth(AphrontPanelView::WIDTH_WIDE);
-      $link = phutil_render_tag(
+      $link = phutil_tag(
         'a',
         array(
           'href' => PhabricatorEnv::getURI('/D'.$diff->getRevisionID()),
         ),
-        phutil_escape_html('D'.$diff->getRevisionID()));
-      $top_panel->appendChild(
-        "<h1>".pht('This diff belongs to revision %s', $link)."</h1>");
+        'D'.$diff->getRevisionID());
+      $top_panel->appendChild(phutil_tag(
+        'h1',
+        array(),
+        pht('This diff belongs to revision %s', $link)));
     } else {
       $action_panel = new AphrontPanelView();
       $action_panel->setHeader('Preview Diff');
       $action_panel->setWidth(AphrontPanelView::WIDTH_WIDE);
-      $action_panel->appendChild(
-        '<p class="aphront-panel-instructions">'.pht('Review the diff for '.
-        'correctness. When you are satisfied, either <strong>create a new '.
-        'revision</strong> or <strong>update an existing revision</strong>.'));
+      $action_panel->appendChild(hsprintf(
+        '<p class="aphront-panel-instructions">%s</p>',
+        pht(
+          'Review the diff for correctness. When you are satisfied, either '.
+          '<strong>create a new revision</strong> or <strong>update '.
+          'an existing revision</strong>.',
+          hsprintf(''))));
 
       // TODO: implmenent optgroup support in AphrontFormSelectControl?
       $select = array();
-      $select[] = '<optgroup label="Create New Revision">';
-      $select[] = '<option value="">'.
-                    pht('Create a new Revision...').
-                  '</option>';
-      $select[] = '</optgroup>';
+      $select[] = hsprintf('<optgroup label="%s">', pht('Create New Revision'));
+      $select[] = hsprintf(
+        '<option value="">%s</option>',
+        pht('Create a new Revision...'));
+      $select[] = hsprintf('</optgroup>');
 
       $revision_data = new DifferentialRevisionListData(
         DifferentialRevisionListData::QUERY_OPEN_OWNED,
@@ -50,22 +55,24 @@ final class DifferentialDiffViewController extends DifferentialController {
       $revisions = $revision_data->loadRevisions();
 
       if ($revisions) {
-        $select[] = '<optgroup label="'.pht('Update Existing Revision').'">';
+        $select[] = hsprintf(
+          '<optgroup label="%s">',
+          pht('Update Existing Revision'));
         foreach ($revisions as $revision) {
-          $select[] = phutil_render_tag(
+          $select[] = phutil_tag(
             'option',
             array(
               'value' => $revision->getID(),
             ),
-            phutil_escape_html($revision->getTitle()));
+            $revision->getTitle());
         }
-        $select[] = '</optgroup>';
+        $select[] = hsprintf('</optgroup>');
       }
 
-      $select =
-        '<select name="revisionID">'.
-        implode("\n", $select).
-        '</select>';
+      $select = phutil_tag(
+        'select',
+        array('name' => 'revisionID'),
+        $select);
 
       $action_form = new AphrontFormView();
       $action_form
@@ -113,9 +120,10 @@ final class DifferentialDiffViewController extends DifferentialController {
       }
     }
 
-    $action_panel = new AphrontHeadsupView();
-    $action_panel->setProperties($dict);
-    $action_panel->setHeader(pht('Diff Properties'));
+    $property_view = new PhabricatorPropertyListView();
+    foreach ($dict as $key => $value) {
+      $property_view->addProperty($key, $value);
+    }
 
     $changesets = $diff->loadChangesets();
     $changesets = msort($changesets, 'getSortKey');
@@ -144,7 +152,7 @@ final class DifferentialDiffViewController extends DifferentialController {
         ->appendChild(
           array(
             $top_panel->render(),
-            $action_panel->render(),
+            $property_view,
             $table_of_contents->render(),
             $details->render(),
           )),

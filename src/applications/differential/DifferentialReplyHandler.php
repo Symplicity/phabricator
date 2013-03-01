@@ -157,6 +157,7 @@ class DifferentialReplyHandler extends PhabricatorMailReplyHandler {
         $ex,
         $error_body);
 
+      $exception_mail->setActor($this->getActor());
       $exception_mail->setToPHIDs(array($this->getActor()->getPHID()));
       $exception_mail->send();
 
@@ -172,7 +173,7 @@ class DifferentialReplyHandler extends PhabricatorMailReplyHandler {
     DifferentialRevisionEditor::removeCCAndUpdateRevision(
       $revision,
       $user->getPHID(),
-      $user->getPHID());
+      $user);
   }
 
 

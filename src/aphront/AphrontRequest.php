@@ -9,7 +9,7 @@
 final class AphrontRequest {
 
   // NOTE: These magic request-type parameters are automatically included in
-  // certain requests (e.g., by phabricator_render_form(), JX.Request,
+  // certain requests (e.g., by phabricator_form(), JX.Request,
   // JX.Workflow, and ConduitClient) and help us figure out what sort of
   // response the client expects.
 
@@ -199,15 +199,7 @@ final class AphrontRequest {
     // No token in the request, check the HTTP header which is added for Ajax
     // requests.
     if (empty($token)) {
-
-      // PHP mangles HTTP headers by uppercasing them and replacing hyphens with
-      // underscores, then prepending 'HTTP_'.
-      $php_index = self::getCSRFHeaderName();
-      $php_index = strtoupper($php_index);
-      $php_index = str_replace('-', '_', $php_index);
-      $php_index = 'HTTP_'.$php_index;
-
-      $token = idx($_SERVER, $php_index);
+      $token = self::getHTTPHeader(self::getCSRFHeaderName());
     }
 
     $valid = $this->getUser()->validateCSRFToken($token);
@@ -429,5 +421,15 @@ final class AphrontRequest {
     return $result;
   }
 
+
+  public static function getHTTPHeader($name, $default = null) {
+    // PHP mangles HTTP headers by uppercasing them and replacing hyphens with
+    // underscores, then prepending 'HTTP_'.
+    $php_index = strtoupper($name);
+    $php_index = str_replace('-', '_', $php_index);
+    $php_index = 'HTTP_'.$php_index;
+
+    return idx($_SERVER, $php_index, $default);
+  }
 
 }

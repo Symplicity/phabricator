@@ -10,7 +10,7 @@ final class PhabricatorApplicationPholio extends PhabricatorApplication {
   }
 
   public function getShortDescription() {
-    return 'Design Review';
+    return pht('Design Review');
   }
 
   public function getIconName() {
@@ -34,6 +34,12 @@ final class PhabricatorApplicationPholio extends PhabricatorApplication {
     return true;
   }
 
+  public function getRemarkupRules() {
+    return array(
+      new PholioRemarkupRule(),
+    );
+  }
+
   public function getRoutes() {
     return array(
       '/M(?P<id>[1-9]\d*)' => 'PholioMockViewController',
@@ -43,6 +49,13 @@ final class PhabricatorApplicationPholio extends PhabricatorApplication {
         'new/'                  => 'PholioMockEditController',
         'edit/(?P<id>\d+)/'     => 'PholioMockEditController',
         'comment/(?P<id>\d+)/'  => 'PholioMockCommentController',
+        'inline/' => array(
+          '(?P<id>\d+)/' => 'PholioInlineController',
+          'save/' => 'PholioInlineSaveController',
+          'delete/(?P<id>\d+)/' => 'PholioInlineDeleteController',
+          'view/(?P<id>\d+)/' => 'PholioInlineViewController',
+          'edit/(?P<id>\d+)/' => 'PholioInlineEditController'
+        ),
       ),
     );
   }

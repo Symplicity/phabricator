@@ -31,15 +31,15 @@ final class PhabricatorApplicationLaunchView extends AphrontView {
     $icon = null;
     $create_button = null;
     if ($application) {
-      $content[] = phutil_render_tag(
+      $content[] = phutil_tag(
         'span',
         array(
           'class' => 'phabricator-application-launch-name',
         ),
-        phutil_escape_html($application->getName()));
+        $application->getName());
 
       if ($application->isBeta()) {
-        $content[] = phutil_render_tag(
+        $content[] = phutil_tag(
           'span',
           array(
             'class' => 'phabricator-application-beta',
@@ -48,28 +48,62 @@ final class PhabricatorApplicationLaunchView extends AphrontView {
       }
 
       if ($this->fullWidth) {
-        $content[] = phutil_render_tag(
+        $content[] = phutil_tag(
           'span',
           array(
             'class' => 'phabricator-application-launch-description',
           ),
-          phutil_escape_html($application->getShortDescription()));
+          $application->getShortDescription());
       }
 
-      $count = 0;
+      $counts = array();
+      $text = array();
       if ($this->status) {
         foreach ($this->status as $status) {
-          $count += $status->getCount();
+          $type = $status->getType();
+          $counts[$type] = idx($counts, $type, 0) + $status->getCount();
+          if ($status->getCount()) {
+            $text[] = $status->getText();
+          }
         }
       }
 
-      if ($count) {
-        $content[] = phutil_render_tag(
+      $attention = PhabricatorApplicationStatusView::TYPE_NEEDS_ATTENTION;
+      $warning = PhabricatorApplicationStatusView::TYPE_WARNING;
+      if (!empty($counts[$attention]) || !empty($counts[$warning])) {
+        $count = idx($counts, $attention, 0);
+        $count1 = $count2 = '';
+        if ($count > 0) {
+          $count1 = phutil_tag(
           'span',
           array(
+            'class' => 'phabricator-application-attention-count',
+          ),
+          $count);
+        }
+
+
+        if (!empty($counts[$warning])) {
+          $count2 = phutil_tag(
+          'span',
+          array(
+            'class' => 'phabricator-application-warning-count',
+          ),
+          $counts[$warning]);
+        }
+
+        Javelin::initBehavior('phabricator-tooltips');
+        $content[] = javelin_tag(
+          'span',
+          array(
+            'sigil' => 'has-tooltip',
+            'meta' => array(
+              'tip' => implode("\n", $text),
+              'size' => 240,
+            ),
             'class' => 'phabricator-application-launch-attention',
           ),
-          phutil_escape_html($count));
+          array($count1, $count2));
       }
 
       $classes = array();
@@ -84,7 +118,7 @@ final class PhabricatorApplicationLaunchView extends AphrontView {
         $classes[] = 'app-'.$icon.'-light-large';
       }
 
-      $icon = phutil_render_tag(
+      $icon = phutil_tag(
         'span',
         array(
           'class' => implode(' ', $classes),
@@ -97,13 +131,14 @@ final class PhabricatorApplicationLaunchView extends AphrontView {
         $classes[] = 'phabricator-application-create-icon';
         $classes[] = 'sprite-icon';
         $classes[] = 'action-new-grey';
-        $plus_icon = phutil_render_tag(
+        $plus_icon = phutil_tag(
           'span',
           array(
             'class' => implode(' ', $classes),
-          ));
+          ),
+          '');
 
-        $create_button = phutil_render_tag(
+        $create_button = phutil_tag(
           'a',
           array(
             'href' => $application->getQuickCreateURI(),
@@ -120,16 +155,28 @@ final class PhabricatorApplicationLaunchView extends AphrontView {
       $classes[] = 'application-tile-full';
     }
 
-    $app_button = phutil_render_tag(
+    $title = null;
+    if ($application && !$this->fullWidth) {
+      $title = $application->getShortDescription();
+    }
+
+    $app_button = phutil_tag(
       $application ? 'a' : 'div',
       array(
         'class' => implode(' ', $classes),
         'href'  => $application ? $application->getBaseURI() : null,
-        'title' => $application ? $application->getShortDescription() : null,
+        'title' => $title,
       ),
-      $icon.
-      $this->renderSingleView($content));
+      $this->renderSingleView(
+        array(
+          $icon,
+          $content,
+        )));
 
-    return $app_button.$create_button;
+    return $this->renderSingleView(
+      array(
+        $app_button,
+        $create_button,
+      ));
   }
 }

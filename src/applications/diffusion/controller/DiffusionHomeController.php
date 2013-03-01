@@ -13,13 +13,13 @@ final class DiffusionHomeController extends DiffusionController {
       $rows = array();
       foreach ($shortcuts as $shortcut) {
         $rows[] = array(
-          phutil_render_tag(
+          phutil_tag(
             'a',
             array(
               'href' => $shortcut->getHref(),
             ),
-            phutil_escape_html($shortcut->getName())),
-          phutil_escape_html($shortcut->getDescription()),
+            $shortcut->getName()),
+          $shortcut->getDescription(),
         );
       }
 
@@ -105,7 +105,7 @@ final class DiffusionHomeController extends DiffusionController {
       $branch = $repository->getDefaultArcanistBranch();
       if (isset($lint_branches[$branch])) {
         $show_lint = true;
-        $lint_count = phutil_render_tag(
+        $lint_count = phutil_tag(
           'a',
           array(
             'href' => DiffusionRequest::generateDiffusionURI(array(
@@ -124,13 +124,12 @@ final class DiffusionHomeController extends DiffusionController {
       }
 
       $rows[] = array(
-        phutil_render_tag(
+        phutil_tag(
           'a',
           array(
             'href' => '/diffusion/'.$repository->getCallsign().'/',
           ),
-          phutil_escape_html($repository->getName())),
-        phutil_escape_html($repository->getDetail('description')),
+          $repository->getName()),
         PhabricatorRepositoryType::getNameForRepositoryType(
           $repository->getVersionControlSystem()),
         $size,
@@ -138,7 +137,8 @@ final class DiffusionHomeController extends DiffusionController {
         $commit
           ? DiffusionView::linkCommit(
               $repository,
-              $commit->getCommitIdentifier())
+              $commit->getCommitIdentifier(),
+              $commit->getSummary())
           : '-',
         $date,
         $time,
@@ -146,19 +146,28 @@ final class DiffusionHomeController extends DiffusionController {
     }
 
     $repository_tool_uri = PhabricatorEnv::getProductionURI('/repository/');
-    $repository_tool     = phutil_render_tag('a',
-                                             array(
-                                               'href' => $repository_tool_uri,
-                                             ),
-                                             'repository tool');
-    $no_repositories_txt = 'This instance of Phabricator does not have any '.
-                           'configured repositories. ';
+    $repository_tool     = phutil_tag('a',
+      array(
+       'href' => $repository_tool_uri,
+      ),
+      'repository tool');
+    $preface = pht('This instance of Phabricator does not have any '.
+                   'configured repositories.');
     if ($user->getIsAdmin()) {
-      $no_repositories_txt .= 'To setup one or more repositories, visit the '.
-                              $repository_tool.'.';
+      $no_repositories_txt = hsprintf(
+        '%s %s',
+        $preface,
+        pht(
+          'To setup one or more repositories, visit the %s.',
+          $repository_tool));
     } else {
-      $no_repositories_txt .= 'Ask an administrator to setup one or more '.
-                              'repositories via the '.$repository_tool.'.';
+      $no_repositories_txt = hsprintf(
+        '%s %s',
+        $preface,
+        pht(
+          'Ask an administrator to setup one or more repositories '.
+          'via the %s.',
+          $repository_tool));
     }
 
     $table = new AphrontTableView($rows);
@@ -166,7 +175,6 @@ final class DiffusionHomeController extends DiffusionController {
     $table->setHeaders(
       array(
         'Repository',
-        'Description',
         'VCS',
         'Commits',
         'Lint',
@@ -177,17 +185,15 @@ final class DiffusionHomeController extends DiffusionController {
     $table->setColumnClasses(
       array(
         'pri',
-        'wide',
         '',
         'n',
         'n',
-        'n',
+        'wide',
         '',
         'right',
       ));
     $table->setColumnVisibility(
       array(
-        true,
         true,
         true,
         true,

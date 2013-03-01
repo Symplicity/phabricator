@@ -23,6 +23,7 @@ final class DifferentialSearchIndexer
     $aux_fields = DifferentialFieldSelector::newSelector()
       ->getFieldSpecifications();
     foreach ($aux_fields as $key => $aux_field) {
+      $aux_field->setUser(PhabricatorUser::getOmnipotentUser());
       if (!$aux_field->shouldAddToSearchIndex()) {
         unset($aux_fields[$key]);
       }
@@ -34,8 +35,7 @@ final class DifferentialSearchIndexer
     foreach ($aux_fields as $aux_field) {
       $doc->addField(
         $aux_field->getKeyForSearchIndex(),
-        $aux_field->getValueForSearchIndex()
-      );
+        $aux_field->getValueForSearchIndex());
     }
 
     $doc->addRelationship(
@@ -104,6 +104,7 @@ final class DifferentialSearchIndexer
 
     $ccphids = $rev->getCCPHIDs();
     $handles = id(new PhabricatorObjectHandleData($ccphids))
+      ->setViewer(PhabricatorUser::getOmnipotentUser())
       ->loadHandles();
 
     foreach ($handles as $phid => $handle) {

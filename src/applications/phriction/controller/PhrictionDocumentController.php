@@ -45,31 +45,15 @@ final class PhrictionDocumentController
         }
       }
       $create_uri = '/phriction/edit/?slug='.$slug;
-      $create_sentence =
-        'You can <strong>'.
-        phutil_render_tag(
-          'a',
-          array(
-            'href' => $create_uri,
-          ),
-          'create a new document').
-          '</strong>.';
-      $button = phutil_render_tag(
-        'a',
-        array(
-          'href' => $create_uri,
-          'class' => 'green button',
-        ),
-        'Create Page');
-
-      $page_content =
+      $page_content = hsprintf(
         '<div class="phriction-content">'.
           '<em>No content here!</em><br />'.
-          'No document found at <tt>'.phutil_escape_html($slug).'</tt>. '.
-          $create_sentence.
-        '</div>';
-      $page_title = 'Page Not Found';
-      $buttons = $button;
+          'No document found at <tt>%s</tt>. '.
+          'You can <strong><a href="%s">create a new document</a></strong>.'.
+        '</div>',
+        $slug,
+        $create_uri);
+      $page_title = pht('Page Not Found');
     } else {
       $version = $request->getInt('v');
       if ($version) {
@@ -82,13 +66,13 @@ final class PhrictionDocumentController
         }
 
         if ($content->getID() != $document->getContentID()) {
+          $vdate = phabricator_datetime($content->getDateCreated(), $user);
           $version_note = new AphrontErrorView();
           $version_note->setSeverity(AphrontErrorView::SEVERITY_NOTICE);
           $version_note->setTitle('Older Version');
           $version_note->appendChild(
-            'You are viewing an older version of this document, as it '.
-            'appeared on '.
-            phabricator_datetime($content->getDateCreated(), $user).'.');
+            pht('You are viewing an older version of this document, as it '.
+            'appeared on %s.', $vdate));
         }
       } else {
         $content = id(new PhrictionContent())->load($document->getContentID());
@@ -126,24 +110,23 @@ final class PhrictionDocumentController
 
       $project_info = null;
       if ($project_phid) {
-        $project_info =
-          '<br />This document is about the project '.
-          $handles[$project_phid]->renderLink().'.';
+        $project_info = hsprintf(
+          '<br />This document is about the project %s.',
+          $handles[$project_phid]->renderLink());
       }
 
-      $index_link = phutil_render_tag(
+      $index_link = phutil_tag(
         'a',
         array(
           'href' => '/phriction/',
         ),
         pht('Document Index'));
 
-      $byline =
-        '<div class="phriction-byline">'.
-          "Last updated {$when} by ".
-          $handles[$content->getAuthorPHID()]->renderLink().'.'.
-          $project_info.
-        '</div>';
+      $byline = hsprintf(
+        '<div class="phriction-byline">Last updated %s by %s.%s</div>',
+        $when,
+        $handles[$content->getAuthorPHID()]->renderLink(),
+        $project_info);
 
 
       $doc_status = $document->getStatus();
@@ -154,26 +137,25 @@ final class PhrictionDocumentController
         $notice->setSeverity(AphrontErrorView::SEVERITY_NOTICE);
         $notice->setTitle('Document Deleted');
         $notice->appendChild(
-          'This document has been deleted. You can edit it to put new content '.
-          'here, or use history to revert to an earlier version.');
+          pht('This document has been deleted. You can edit it to put new '.
+          'content here, or use history to revert to an earlier version.'));
         $core_content = $notice->render();
       } else {
         throw new Exception("Unknown document status '{$doc_status}'!");
       }
 
-      $page_content =
-        '<div class="phriction-content">'.
-          $index_link.
-          $byline.
-          $core_content.
-          '</div>';
+      $page_content = hsprintf(
+        '<div class="phriction-content">%s%s%s</div>',
+        $index_link,
+        $byline,
+        $core_content);
     }
 
     if ($version_note) {
       $version_note = $version_note->render();
     }
 
-    $children = $this->renderChildren($slug);
+    $children = $this->renderDocumentChildren($slug);
 
     $crumbs = $this->buildApplicationCrumbs();
     $crumb_views = $this->renderBreadcrumbs($slug);
@@ -186,17 +168,14 @@ final class PhrictionDocumentController
     $header = id(new PhabricatorHeaderView())
       ->setHeader($page_title);
 
-    $page =
-      $crumbs->render().
-      $header->render().
-      $actions->render().
-      $version_note.
-      $page_content.
-      $children;
-
     return $this->buildApplicationPage(
       array(
-        $page,
+        $crumbs->render(),
+        $header->render(),
+        $actions->render(),
+        $version_note,
+        $page_content,
+        $children,
       ),
       array(
         'title'   => $page_title,
@@ -241,7 +220,7 @@ final class PhrictionDocumentController
         ->setHref(PhrictionDocument::getSlugURI($slug, 'history')));
   }
 
-  private function renderChildren($slug) {
+  private function renderDocumentChildren($slug) {
     $document_dao = new PhrictionDocument();
     $content_dao = new PhrictionContent();
     $conn = $document_dao->establishConnection('r');
@@ -325,45 +304,48 @@ final class PhrictionDocumentController
     $children = isort($children, 'title');
 
     $list = array();
-    $list[] = '<ul>';
     foreach ($children as $child) {
+      $list[] = hsprintf('<li>');
       $list[] = $this->renderChildDocumentLink($child);
       $grand = idx($grandchildren, $child['slug'], array());
       if ($grand) {
-        $list[] = '<ul>';
+        $list[] = hsprintf('<ul>');
         foreach ($grand as $grandchild) {
+          $list[] = hsprintf('<li>');
           $list[] = $this->renderChildDocumentLink($grandchild);
+          $list[] = hsprintf('</li>');
         }
-        $list[] = '</ul>';
+        $list[] = hsprintf('</ul>');
       }
+      $list[] = hsprintf('</li>');
     }
     if ($more_children) {
-      $list[] = '<li>More...</li>';
+      $list[] = phutil_tag('li', array(), pht('More...'));
     }
-    $list[] = '</ul>';
-    $list = implode("\n", $list);
 
-    return
+    return hsprintf(
       '<div class="phriction-children">'.
-        '<div class="phriction-children-header">Document Hierarchy</div>'.
-        $list.
-      '</div>';
+        '<div class="phriction-children-header">%s</div>'.
+        '%s'.
+      '</div>',
+      pht('Document Hierarchy'),
+      phutil_tag('ul', array(), $list));
   }
 
   private function renderChildDocumentLink(array $info) {
-    $title = nonempty($info['title'], '(Untitled Document)');
-    $item = phutil_render_tag(
+    $title = nonempty($info['title'], pht('(Untitled Document)'));
+    $item = phutil_tag(
       'a',
       array(
         'href' => PhrictionDocument::getSlugURI($info['slug']),
       ),
-      phutil_escape_html($title));
+      $title);
 
     if (isset($info['empty'])) {
-      $item = '<em>'.$item.'</em>';
+      $item = phutil_tag('em', array(), $item);
     }
 
-    return '<li>'.$item.'</li>';
+    return $item;
   }
 
 }

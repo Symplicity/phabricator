@@ -21,27 +21,34 @@ abstract class DifferentialChangesetHTMLRenderer
         return null;
       }
     } else {
+      $none = hsprintf('');
       switch ($change) {
 
         case DifferentialChangeType::TYPE_ADD:
           switch ($file) {
             case DifferentialChangeType::FILE_TEXT:
-              $message = pht('This file was <strong>added</strong>.');
+              $message = pht('This file was <strong>added</strong>.', $none);
               break;
             case DifferentialChangeType::FILE_IMAGE:
-              $message = pht('This image was <strong>added</strong>.');
+              $message = pht('This image was <strong>added</strong>.', $none);
               break;
             case DifferentialChangeType::FILE_DIRECTORY:
-              $message = pht('This directory was <strong>added</strong>.');
+              $message = pht(
+                'This directory was <strong>added</strong>.',
+                $none);
               break;
             case DifferentialChangeType::FILE_BINARY:
-              $message = pht('This binary file was <strong>added</strong>.');
+              $message = pht(
+                'This binary file was <strong>added</strong>.',
+                $none);
               break;
             case DifferentialChangeType::FILE_SYMLINK:
-              $message = pht('This symlink was <strong>added</strong>.');
+              $message = pht('This symlink was <strong>added</strong>.', $none);
               break;
             case DifferentialChangeType::FILE_SUBMODULE:
-              $message = pht('This submodule was <strong>added</strong>.');
+              $message = pht(
+                'This submodule was <strong>added</strong>.',
+                $none);
               break;
           }
           break;
@@ -49,31 +56,36 @@ abstract class DifferentialChangesetHTMLRenderer
         case DifferentialChangeType::TYPE_DELETE:
           switch ($file) {
             case DifferentialChangeType::FILE_TEXT:
-              $message = pht('This file was <strong>deleted</strong>.');
+              $message = pht('This file was <strong>deleted</strong>.', $none);
               break;
             case DifferentialChangeType::FILE_IMAGE:
-              $message = pht('This image was <strong>deleted</strong>.');
+              $message = pht('This image was <strong>deleted</strong>.', $none);
               break;
             case DifferentialChangeType::FILE_DIRECTORY:
-              $message = pht('This directory was <strong>deleted</strong>.');
+              $message = pht(
+                'This directory was <strong>deleted</strong>.',
+                $none);
               break;
             case DifferentialChangeType::FILE_BINARY:
-              $message = pht('This binary file was <strong>deleted</strong>.');
+              $message = pht(
+                'This binary file was <strong>deleted</strong>.',
+                $none);
               break;
             case DifferentialChangeType::FILE_SYMLINK:
-              $message = pht('This symlink was <strong>deleted</strong>.');
+              $message = pht(
+                'This symlink was <strong>deleted</strong>.',
+                $none);
               break;
             case DifferentialChangeType::FILE_SUBMODULE:
-              $message = pht('This submodule was <strong>deleted</strong>.');
+              $message = pht(
+                'This submodule was <strong>deleted</strong>.',
+                $none);
               break;
           }
           break;
 
         case DifferentialChangeType::TYPE_MOVE_HERE:
-          $from =
-            "<strong>".
-              phutil_escape_html($changeset->getOldFile()).
-            "</strong>";
+          $from = phutil_tag('strong', array(), $changeset->getOldFile());
           switch ($file) {
             case DifferentialChangeType::FILE_TEXT:
               $message = pht('This file was moved from %s.', $from);
@@ -97,10 +109,7 @@ abstract class DifferentialChangesetHTMLRenderer
           break;
 
         case DifferentialChangeType::TYPE_COPY_HERE:
-          $from =
-            "<strong>".
-              phutil_escape_html($changeset->getOldFile()).
-            "</strong>";
+          $from = phutil_tag('strong', array(), $changeset->getOldFile());
           switch ($file) {
             case DifferentialChangeType::FILE_TEXT:
               $message = pht('This file was copied from %s.', $from);
@@ -124,10 +133,10 @@ abstract class DifferentialChangesetHTMLRenderer
           break;
 
         case DifferentialChangeType::TYPE_MOVE_AWAY:
-          $paths =
-            "<strong>".
-              phutil_escape_html(implode(', ', $changeset->getAwayPaths())).
-            "</strong>";
+          $paths = phutil_tag(
+            'strong',
+            array(),
+            implode(', ', $changeset->getAwayPaths()));
           switch ($file) {
             case DifferentialChangeType::FILE_TEXT:
               $message = pht('This file was moved to %s.', $paths);
@@ -151,10 +160,10 @@ abstract class DifferentialChangesetHTMLRenderer
           break;
 
         case DifferentialChangeType::TYPE_COPY_AWAY:
-          $paths =
-            "<strong>".
-              phutil_escape_html(implode(', ', $changeset->getAwayPaths())).
-            "</strong>";
+          $paths = phutil_tag(
+            'strong',
+            array(),
+            implode(', ', $changeset->getAwayPaths()));
           switch ($file) {
             case DifferentialChangeType::FILE_TEXT:
               $message = pht('This file was copied to %s.', $paths);
@@ -178,10 +187,10 @@ abstract class DifferentialChangesetHTMLRenderer
           break;
 
         case DifferentialChangeType::TYPE_MULTICOPY:
-          $paths =
-            "<strong>".
-              phutil_escape_html(implode(', ', $changeset->getAwayPaths())).
-            "</strong>";
+          $paths = phutil_tag(
+            'strong',
+            array(),
+            implode(', ', $changeset->getAwayPaths()));
           switch ($file) {
             case DifferentialChangeType::FILE_TEXT:
               $message = pht(
@@ -241,10 +250,9 @@ abstract class DifferentialChangesetHTMLRenderer
       }
     }
 
-    return
-      '<div class="differential-meta-notice">'.
-        $message.
-      '</div>';
+    return hsprintf(
+      '<div class="differential-meta-notice">%s</div>',
+      $message);
   }
 
   protected function renderPropertyChangeHeader() {
@@ -262,35 +270,43 @@ abstract class DifferentialChangesetHTMLRenderer
       $nval = idx($new, $key);
       if ($oval !== $nval) {
         if ($oval === null) {
-          $oval = '<em>null</em>';
+          $oval = phutil_tag('em', array(), 'null');
         } else {
-          $oval = nl2br(phutil_escape_html($oval));
+          $oval = phutil_escape_html_newlines($oval);
         }
 
         if ($nval === null) {
-          $nval = '<em>null</em>';
+          $nval = phutil_tag('em', array(), 'null');
         } else {
-          $nval = nl2br(phutil_escape_html($nval));
+          $nval = phutil_escape_html_newlines($nval);
         }
 
-        $rows[] =
+        $rows[] = hsprintf(
           '<tr>'.
-            '<th>'.phutil_escape_html($key).'</th>'.
-            '<td class="oval">'.$oval.'</td>'.
-            '<td class="nval">'.$nval.'</td>'.
-          '</tr>';
+            '<th>%s</th>'.
+            '<td class="oval">%s</td>'.
+            '<td class="nval">%s</td>'.
+          '</tr>',
+          $key,
+          $oval,
+          $nval);
       }
     }
 
-    return
-      '<table class="differential-property-table">'.
-        '<tr class="property-table-header">'.
-          '<th>'.pht('Property Changes').'</th>'.
-          '<td class="oval">'.pht('Old Value').'</td>'.
-          '<td class="nval">'.pht('New Value').'</td>'.
-        '</tr>'.
-        implode('', $rows).
-      '</table>';
+    array_unshift($rows, hsprintf(
+      '<tr class="property-table-header">'.
+        '<th>%s</th>'.
+        '<td class="oval">%s</td>'.
+        '<td class="nval">%s</td>'.
+      '</tr>',
+      pht('Property Changes'),
+      pht('Old Value'),
+      pht('New Value')));
+
+    return phutil_tag(
+      'table',
+      array('class' => 'differential-property-table'),
+      $rows);
   }
 
   public function renderShield($message, $force = 'default') {
@@ -319,9 +335,11 @@ abstract class DifferentialChangesetHTMLRenderer
       $meta['whitespace'] = DifferentialChangesetParser::WHITESPACE_SHOW_ALL;
     }
 
-    $more = null;
+    $content = array();
+    $content[] = $message;
     if ($force !== 'none') {
-      $more = ' '.javelin_render_tag(
+      $content[] = ' ';
+      $content[] = javelin_tag(
         'a',
         array(
           'mustcapture' => true,
@@ -334,15 +352,18 @@ abstract class DifferentialChangesetHTMLRenderer
     }
 
     return $this->wrapChangeInTable(
-      javelin_render_tag(
+      javelin_tag(
         'tr',
         array(
           'sigil' => 'context-target',
         ),
-        '<td class="differential-shield" colspan="6">'.
-          phutil_escape_html($message).
-          $more.
-        '</td>'));
+        phutil_tag(
+          'td',
+          array(
+            'class' => 'differential-shield',
+            'colspan' => 6,
+          ),
+          $content)));
   }
 
   protected function wrapChangeInTable($content) {
@@ -350,7 +371,7 @@ abstract class DifferentialChangesetHTMLRenderer
       return null;
     }
 
-    return javelin_render_tag(
+    return javelin_tag(
       'table',
       array(
         'class' => 'differential-diff remarkup-code PhabricatorMonospaced',
