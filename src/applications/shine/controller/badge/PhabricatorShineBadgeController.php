@@ -170,7 +170,7 @@ class PhabricatorShineBadgeController
       array(
            'class' => 'phabricator-shine-facepile',
       ),
-      '&nbsp;'));
+      ' '));
 
     return $result_markup;
   }
