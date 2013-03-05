@@ -155,18 +155,17 @@ class PhabricatorShineBadgeController
             $user_markup[] = $avatars[$phid];
           }
         }
-        $user_markup = implode('', $user_markup);
       } else {
         $user_markup = 'This badge still evades conquest.';
       }
-      $result_markup->appendChild(phutil_render_tag(
+      $result_markup->appendChild(phutil_tag(
         'div',
         array(
              'class' => 'phabricator-shine-facepile',
         ),
         $user_markup));
     }
-    $result_markup->appendChild(phutil_render_tag(
+    $result_markup->appendChild(phutil_tag(
       'div',
       array(
            'class' => 'phabricator-shine-facepile',
@@ -201,13 +200,13 @@ class PhabricatorShineBadgeController
   }
 
   private function renderTopScoreList($result_markup, $data, $title) {
-    $result_markup->appendChild('<div style="width:33%; float:left; margin:20px 0">' . phutil_render_tag(
+    $content = array(phutil_tag(
       'div',
       array(
         'class' => 'phabricator-shine-badge',
       ),
-      $title));
-
+      $title)
+    );
     $this->max_score = 0;
     foreach ($data as $pos => $row) {
       if (!$this->max_score) {
@@ -215,20 +214,32 @@ class PhabricatorShineBadgeController
       }
       $object = id(new PhabricatorUser())->loadOneWhere('phid = %s', $row['user']);
       if ($object) {
-        $result_markup->appendChild(phutil_render_tag(
+        $content[] = phutil_tag(
           'div',
           array(
             'class' => 'phabricator-shine-facepile',
           ),
-          $this->renderPosition($pos) . $this->renderUserAvatar($object) . $this->renderScore($row['score'], $row['details'])));
+          array(
+            $this->renderPosition($pos),
+            $this->renderUserAvatar($object),
+            $this->renderScore($row['score'], $row['details']))
+        );
       }
     }
-    $result_markup->appendChild(phutil_render_tag(
+    $content[] = phutil_tag(
       'div',
       array(
         'class' => 'phabricator-shine-facepile'
       ),
-      '&nbsp;') . '</div>');
+      ' '
+    );
+    $result_markup->appendChild(phutil_tag(
+        'div',
+        array(
+          'style' => 'width:33%; float:left; margin:20px 0',
+        ),
+        $content
+    ));
   }
 
   private function getBadgeData($date_range) {
@@ -274,7 +285,7 @@ class PhabricatorShineBadgeController
 
   private function renderBadge($title)
   {
-    return phutil_render_tag(
+    return phutil_tag(
       'div',
       array(
            'class' => 'phabricator-shine-badge',
@@ -284,7 +295,7 @@ class PhabricatorShineBadgeController
 
   private function renderBadgeDescription($title)
   {
-    return phutil_render_tag(
+    return phutil_tag(
       'div',
       array(
            'class' => 'phabricator-shine-desc',
@@ -303,13 +314,13 @@ class PhabricatorShineBadgeController
       $profile_image = '/res/1c5f2550/rsrc/image/avatar.png';
     }
 
-    return phutil_render_tag(
+    return phutil_tag(
       'a',
       array(
         'href' => '/p/' . $object->getUserName() . '/',
         'title' => $object->getRealName()
       ),
-      phutil_render_tag(
+		phutil_tag(
         'img',
         array(
           'src' => $profile_image,
@@ -319,7 +330,7 @@ class PhabricatorShineBadgeController
 
   private function renderPosition($pos)
   {
-    return phutil_render_tag(
+    return phutil_tag(
       'div',
       array(
         'class' => 'phabricator-shine-position',
@@ -330,7 +341,7 @@ class PhabricatorShineBadgeController
   private function renderScore($score, $details)
   {
     $size = 100 + ceil(3 * ceil(100 * $score / $this->max_score));
-    return phutil_render_tag(
+    return phutil_tag(
       'div',
       array(
         'class' => 'phabricator-shine-score',

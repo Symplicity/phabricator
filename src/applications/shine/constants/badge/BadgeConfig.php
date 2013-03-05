@@ -110,12 +110,12 @@ final class BadgeConfig {
 
   public static function getDescription($title)
   {
-    return phutil_render_tag(
+    return phutil_tag(
       'a',
       array(
         'href' => self::$data[$title]['href'],
       ),
-      phutil_escape_html(self::$data[$title]['desc'])
+      self::$data[$title]['desc']
     );
    }
 
