@@ -24,14 +24,7 @@ abstract class PhabricatorRemarkupRuleObject
     $query = new PhabricatorObjectHandleData($phids);
 
     $viewer = $this->getEngine()->getConfig('viewer');
-    if ($viewer) {
-      $query->setViewer($viewer);
-    } else {
-      // TODO: This needs to be fixed; all markup engines need to set viewers --
-      // but there are a lot of them (T603).
-      $query->setViewer(PhabricatorUser::getOmnipotentUser());
-      phlog("Warning: Loading handles without a viewing user.");
-    }
+    $query->setViewer($viewer);
     $handles = $query->loadHandles();
 
     $result = array();
@@ -57,6 +50,10 @@ abstract class PhabricatorRemarkupRuleObject
       }
     }
 
+    if ($this->getEngine()->isTextMode()) {
+      return PhabricatorEnv::getProductionURI($href);
+    }
+
     $status_closed = PhabricatorObjectHandleStatus::STATUS_CLOSED;
 
     $attr = array(
@@ -70,6 +67,11 @@ abstract class PhabricatorRemarkupRuleObject
   protected function renderObjectEmbed($object, $handle, $options) {
     $name = $handle->getFullName();
     $href = $handle->getURI();
+
+    if ($this->getEngine()->isTextMode()) {
+      return $name.' <'.PhabricatorEnv::getProductionURI($href).'>';
+    }
+
     $attr = array(
       'phid' => $handle->getPHID(),
     );

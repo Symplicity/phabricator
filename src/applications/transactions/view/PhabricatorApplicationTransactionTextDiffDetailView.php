@@ -23,20 +23,34 @@ final class PhabricatorApplicationTransactionTextDiffDetailView
     // TODO: On mobile, or perhaps by default, we should switch to 1-up once
     // that is built.
 
-    $old = phutil_utf8_hard_wrap($old, 80);
-    $new = phutil_utf8_hard_wrap($new, 80);
+    if (strlen($old)) {
+      $old = phutil_utf8_hard_wrap($old, 80);
+      $old = implode("\n", $old)."\n";
+    }
 
-    $engine = new PhabricatorDifferenceEngine();
-    $changeset = $engine->generateChangesetFromFileContent($old, $new);
+    if (strlen($new)) {
+      $new = phutil_utf8_hard_wrap($new, 80);
+      $new = implode("\n", $new)."\n";
+    }
 
-    $whitespace_mode = DifferentialChangesetParser::WHITESPACE_SHOW_ALL;
+    try {
+      $engine = new PhabricatorDifferenceEngine();
+      $changeset = $engine->generateChangesetFromFileContent($old, $new);
 
-    $parser = new DifferentialChangesetParser();
-    $parser->setChangeset($changeset);
-    $parser->setMarkupEngine(new PhabricatorMarkupEngine());
-    $parser->setWhitespaceMode($whitespace_mode);
+      $whitespace_mode = DifferentialChangesetParser::WHITESPACE_SHOW_ALL;
 
-    return $parser->render(0, PHP_INT_MAX, array());
+      $markup_engine = new PhabricatorMarkupEngine();
+      $markup_engine->setViewer($this->getUser());
+
+      $parser = new DifferentialChangesetParser();
+      $parser->setChangeset($changeset);
+      $parser->setMarkupEngine($markup_engine);
+      $parser->setWhitespaceMode($whitespace_mode);
+
+      return $parser->render(0, PHP_INT_MAX, array());
+    } catch (Exception $ex) {
+      return $ex->getMessage();
+    }
   }
 
 }

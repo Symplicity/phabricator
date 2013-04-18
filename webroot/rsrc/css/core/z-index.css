@@ -30,6 +30,10 @@
   z-index: 4;
 }
 
+.conpherence-menu-pane {
+  z-index: 4;
+}
+
 .phabricator-nav-drag {
   z-index: 4;
 }
@@ -94,6 +98,10 @@ div.jx-typeahead-results {
 
 .jx-client-dialog {
   z-index: 14;
+}
+
+.jx-hovercard-container {
+  z-index: 16;
 }
 
 .jx-tooltip-container {

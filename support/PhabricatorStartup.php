@@ -34,6 +34,14 @@ final class PhabricatorStartup {
   /**
    * @task info
    */
+  public static function getMicrosecondsSinceStart() {
+    return (int)(1000000 * (microtime(true) - self::getStartTime()));
+  }
+
+
+  /**
+   * @task info
+   */
   public static function setGlobal($key, $value) {
     self::validateGlobal($key);
 
@@ -184,6 +192,9 @@ final class PhabricatorStartup {
     $access_log = self::getGlobal('log.access');
 
     if ($access_log) {
+      // We may end up here before the access log is initialized, e.g. from
+      // verifyPHP().
+
       try {
         $access_log->setData(
           array(

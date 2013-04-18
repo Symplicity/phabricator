@@ -9,8 +9,8 @@
 # NetBeans project files
 /nbproject/
 
-# phpStorm project files
-.idea
+# PhpStorm project files
+.idea/
 
 # Arcanist scratch directory
 /.arc
@@ -30,3 +30,9 @@
 
 # Impact Font
 /resources/font/impact.ttf
+
+# User-accessible hook for adhoc debugging scripts
+/support/debug.php
+
+# Users can link binaries here
+/support/bin/*

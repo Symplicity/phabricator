@@ -22,7 +22,7 @@ final class DiffusionCommitQuery
     return $this;
   }
 
-  public function loadPage() {
+  protected function loadPage() {
     $table = new PhabricatorRepositoryCommit();
     $conn_r = $table->establishConnection('r');
 
@@ -112,6 +112,9 @@ final class DiffusionCommitQuery
           }
 
           if ($repo->isSVN()) {
+            if (!ctype_digit($ref['identifier'])) {
+              continue;
+            }
             $sql[] = qsprintf(
               $conn_r,
               '(repositoryID = %d AND commitIdentifier = %d)',
@@ -130,14 +133,14 @@ final class DiffusionCommitQuery
         }
       }
 
-      if ($sql) {
-        $where[] = '('.implode(' OR ', $sql).')';
-      } else {
+      if (!$sql) {
         // If we discarded all possible identifiers (e.g., they all referenced
         // bogus repositories or were all too short), make sure the query finds
         // nothing.
-        $where[] = qsprintf($conn_r, '1 = 0');
+        throw new PhabricatorEmptyQueryException('No commit identifiers.');
       }
+
+      $where[] = '('.implode(' OR ', $sql).')';
     }
 
     if ($this->phids) {

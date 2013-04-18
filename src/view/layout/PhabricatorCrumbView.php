@@ -47,7 +47,7 @@ final class PhabricatorCrumbView extends AphrontView {
         'span',
         array(
           'class' => 'phabricator-crumb-icon '.
-                     'sprite-apps-large app-'.$this->icon.'-dark-large',
+                     'sprite-apps-large apps-'.$this->icon.'-dark-large',
         ),
         '');
     }
@@ -67,6 +67,8 @@ final class PhabricatorCrumbView extends AphrontView {
           'class' => 'sprite-menu phabricator-crumb-divider',
         ),
         '');
+    } else {
+      $classes[] = 'phabricator-last-crumb';
     }
 
     return phutil_tag(

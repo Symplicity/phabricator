@@ -4,6 +4,7 @@ final class PhabricatorActionListView extends AphrontView {
 
   private $actions = array();
   private $object;
+  private $id = null;
 
   public function setObject(PhabricatorLiskDAO $object) {
     $this->object = $object;
@@ -15,9 +16,14 @@ final class PhabricatorActionListView extends AphrontView {
     return $this;
   }
 
+  public function setID($id) {
+    $this->id = $id;
+    return $this;
+  }
+
   public function render() {
     if (!$this->user) {
-      throw new Exception("Call setUser() before render()!");
+      throw new Exception(pht("Call setUser() before render()!"));
     }
 
     $event = new PhabricatorEvent(
@@ -41,8 +47,9 @@ final class PhabricatorActionListView extends AphrontView {
       'ul',
       array(
         'class' => 'phabricator-action-list-view',
+        'id' => $this->id
       ),
-      $this->renderSingleView($actions));
+      $actions);
   }
 
 

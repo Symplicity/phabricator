@@ -29,7 +29,7 @@ abstract class PhrictionController extends PhabricatorController {
 
     if ($for_app) {
       $nav->addFilter('', pht('Root Document'), '/w/');
-      $nav->addFilter('', pht('Create Document'), '/phriction/new');
+      $nav->addFilter('', pht('New Document'), '/phriction/new');
     }
 
     $nav->addLabel(pht('Filters'));
@@ -49,10 +49,18 @@ abstract class PhrictionController extends PhabricatorController {
   public function buildApplicationCrumbs() {
     $crumbs = parent::buildApplicationCrumbs();
 
+    if (get_class($this) != 'PhrictionListController') {
+      $crumbs->addAction(
+        id(new PhabricatorMenuItemView())
+          ->setName(pht('Index'))
+          ->setHref('/phriction/')
+          ->setIcon('transcript'));
+    }
+
     $crumbs->addAction(
       id(new PhabricatorMenuItemView())
-        ->setName(pht('Create Document'))
-        ->setHref('/phriction/new/')
+        ->setName(pht('New Document'))
+        ->setHref('/phriction/new/?slug='.$this->getDocumentSlug())
         ->setWorkflow(true)
         ->setIcon('create'));
 
@@ -96,6 +104,10 @@ abstract class PhrictionController extends PhabricatorController {
         ->setHref($ancestor_handle->getUri());
     }
     return $breadcrumbs;
+  }
+
+  protected function getDocumentSlug() {
+    return '';
   }
 
 }

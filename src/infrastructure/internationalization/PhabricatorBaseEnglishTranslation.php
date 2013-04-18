@@ -9,12 +9,17 @@ abstract class PhabricatorBaseEnglishTranslation
 
   public function getTranslations() {
     return array(
+      'These %d configuration value(s) are related:' => array(
+        'This configuration value is related:',
+        'These configuration values are related:',
+      ),
       'Differential Revision(s)' => array(
         'Differential Revision',
         'Differential Revisions',
       ),
       'file(s)' => array('file', 'files'),
       'Maniphest Task(s)' => array('Maniphest Task', 'Maniphest Tasks'),
+      'Task(s)' => array('Task', 'Tasks'),
 
       'Please fix these errors and try again.' => array(
         'Please fix this error and try again.',
@@ -32,6 +37,8 @@ abstract class PhabricatorBaseEnglishTranslation
       'COMMIT(S)' => array('COMMIT', 'COMMITS'),
 
       '%d line(s)' => array('%d line', '%d lines'),
+      '%d path(s)' => array('%d path', '%d paths'),
+      '%d diff(s)' => array('%d diff', '%d diffs'),
 
       'added %d commit(s): %s' => array(
         'added commit: %2$s',
@@ -215,6 +222,13 @@ abstract class PhabricatorBaseEnglishTranslation
         ),
       ),
 
+      '%d people(s)' => array(
+        array(
+          '%d person',
+          '%d people',
+        ),
+      ),
+
       '%s Line(s)' => array(
         '%s Line',
         '%s Lines',
@@ -278,6 +292,17 @@ abstract class PhabricatorBaseEnglishTranslation
         'You have an unresolved setup issue...',
         'You have %d unresolved setup issues...',
       ),
+
+      '%s added %d inline comment(s).' => array(
+        array(
+          '%s added an inline comment.',
+          '%s added inline comments.',
+        ),
+      ),
+
+      '%d comment(s)' => array('%d comment', '%d comments'),
+      '%d rejection(s)' => array('%d rejection', '%d rejections'),
+      '%d update(s)' => array('%d update', '%d updates'),
 
     );
   }

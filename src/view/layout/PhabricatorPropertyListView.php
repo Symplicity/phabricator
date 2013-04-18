@@ -103,7 +103,7 @@ final class PhabricatorPropertyListView extends AphrontView {
           $items[] = $this->renderTextPart($part);
           break;
         default:
-          throw new Exception("Unknown part type '{$type}'!");
+          throw new Exception(pht("Unknown part type '%s'!", $type));
       }
     }
 
@@ -112,7 +112,7 @@ final class PhabricatorPropertyListView extends AphrontView {
       array(
         'class' => 'phabricator-property-list-view',
       ),
-      $this->renderSingleView($items));
+      $items);
   }
 
   private function renderPropertyPart(array $part) {
@@ -133,7 +133,7 @@ final class PhabricatorPropertyListView extends AphrontView {
         array(
           'class' => 'phabricator-property-list-value',
         ),
-        $this->renderSingleView($value));
+        $value);
     }
 
     $list = phutil_tag(
@@ -141,12 +141,11 @@ final class PhabricatorPropertyListView extends AphrontView {
       array(
         'class' => 'phabricator-property-list-properties',
       ),
-      $this->renderSingleView($items));
+      $items);
 
     $shortcuts = null;
     if ($this->hasKeyboardShortcuts) {
-      $shortcuts =
-        id(new AphrontKeyboardShortcutsAvailableView())->render();
+      $shortcuts = new AphrontKeyboardShortcutsAvailableView();
     }
 
     return array(
@@ -179,6 +178,7 @@ final class PhabricatorPropertyListView extends AphrontView {
     $classes[] = 'phabricator-property-list-text-content';
     if ($part['type'] == 'image') {
       $classes[] = 'phabricator-property-list-image-content';
+      $classes[] = 'phabricator-remarkup-dark';
     }
     return phutil_tag(
       'div',

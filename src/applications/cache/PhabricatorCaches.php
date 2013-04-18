@@ -5,6 +5,9 @@
  */
 final class PhabricatorCaches {
 
+  public static function getNamespace() {
+    return PhabricatorEnv::getEnvConfig('phabricator.cache-namespace');
+  }
 
 /* -(  Setup Cache  )-------------------------------------------------------- */
 
@@ -27,6 +30,7 @@ final class PhabricatorCaches {
     static $cache;
     if (!$cache) {
       $caches = self::buildSetupCaches();
+      $caches = self::addNamespaceToCaches($caches);
       $caches = self::addProfilerToCaches($caches);
       $cache = id(new PhutilKeyValueCacheStack())
         ->setCaches($caches);
@@ -52,6 +56,7 @@ final class PhabricatorCaches {
     if ($disk_path) {
       $disk = new PhutilKeyValueCacheOnDisk();
       $disk->setCacheFile($disk_path);
+      $disk->setWait(0.1);
       if ($disk->isAvailable()) {
         return array($disk);
       }
@@ -165,6 +170,21 @@ final class PhabricatorCaches {
       $pcache->setProfiler(PhutilServiceProfiler::getInstance());
       $caches[$key] = $pcache;
     }
+    return $caches;
+  }
+
+  private static function addNamespaceToCaches(array $caches) {
+    $namespace = PhabricatorCaches::getNamespace();
+    if (!$namespace) {
+      return $caches;
+    }
+
+    foreach ($caches as $key => $cache) {
+      $ncache = new PhutilKeyValueCacheNamespace($cache);
+      $ncache->setNamespace($namespace);
+      $caches[$key] = $ncache;
+    }
+
     return $caches;
   }
 

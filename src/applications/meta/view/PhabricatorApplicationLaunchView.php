@@ -115,7 +115,7 @@ final class PhabricatorApplicationLaunchView extends AphrontView {
       } else {
         $icon = $application->getIconName();
         $classes[] = 'sprite-apps-large';
-        $classes[] = 'app-'.$icon.'-light-large';
+        $classes[] = 'apps-'.$icon.'-light-large';
       }
 
       $icon = phutil_tag(
@@ -167,16 +167,11 @@ final class PhabricatorApplicationLaunchView extends AphrontView {
         'href'  => $application ? $application->getBaseURI() : null,
         'title' => $title,
       ),
-      $this->renderSingleView(
-        array(
-          $icon,
-          $content,
-        )));
-
-    return $this->renderSingleView(
       array(
-        $app_button,
-        $create_button,
+        $icon,
+        $content,
       ));
+
+    return array($app_button, $create_button);
   }
 }

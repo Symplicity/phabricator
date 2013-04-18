@@ -6,13 +6,11 @@ final class PhabricatorObjectHandle {
   private $phid;
   private $type;
   private $name;
-  private $email;
   private $fullName;
+  private $title;
   private $imageURI;
   private $timestamp;
-  private $alternateID;
   private $status = PhabricatorObjectHandleStatus::STATUS_OPEN;
-  private $title;
   private $complete;
   private $disabled;
 
@@ -52,11 +50,6 @@ final class PhabricatorObjectHandle {
     return $this->status;
   }
 
-  public function setTitle($title) {
-    $this->title = $title;
-    return $this;
-  }
-
   public function setFullName($full_name) {
     $this->fullName = $full_name;
     return $this;
@@ -67,6 +60,15 @@ final class PhabricatorObjectHandle {
       return $this->fullName;
     }
     return $this->getName();
+  }
+  
+  public function setTitle($title) {
+    $this->title = $title;
+    return $this;
+  }
+  
+  public function getTitle() {
+    return $this->title;
   }
 
   public function setType($type) {
@@ -96,25 +98,24 @@ final class PhabricatorObjectHandle {
     return $this->timestamp;
   }
 
-  public function setAlternateID($alternate_id) {
-    $this->alternateID = $alternate_id;
-    return $this;
-  }
-
-  public function getAlternateID() {
-    return $this->alternateID;
-  }
-
   public function getTypeName() {
     static $map = array(
       PhabricatorPHIDConstants::PHID_TYPE_USER => 'User',
       PhabricatorPHIDConstants::PHID_TYPE_TASK => 'Task',
       PhabricatorPHIDConstants::PHID_TYPE_DREV => 'Revision',
       PhabricatorPHIDConstants::PHID_TYPE_CMIT => 'Commit',
-      PhabricatorPHIDConstants::PHID_TYPE_WIKI => 'Phriction',
+      PhabricatorPHIDConstants::PHID_TYPE_WIKI => 'Phriction Document',
+      PhabricatorPHIDConstants::PHID_TYPE_MCRO => 'Image Macro',
+      PhabricatorPHIDConstants::PHID_TYPE_MOCK => 'Pholio Mock',
+      PhabricatorPHIDConstants::PHID_TYPE_FILE => 'File',
+      PhabricatorPHIDConstants::PHID_TYPE_BLOG => 'Blog',
+      PhabricatorPHIDConstants::PHID_TYPE_POST => 'Post',
+      PhabricatorPHIDConstants::PHID_TYPE_QUES => 'Question',
+      PhabricatorPHIDConstants::PHID_TYPE_PVAR => 'Variable',
+      PhabricatorPHIDConstants::PHID_TYPE_PSTE => 'Paste',
     );
 
-    return idx($map, $this->getType());
+    return idx($map, $this->getType(), $this->getType());
   }
 
 
@@ -175,14 +176,16 @@ final class PhabricatorObjectHandle {
   }
 
 
-  public function renderLink() {
-    $name = $this->getLinkName();
+  public function renderLink($name = null) {
+    if ($name === null) {
+      $name = $this->getLinkName();
+    }
     $class = null;
-    $title = null;
+    $title = $this->title;
 
     if ($this->status != PhabricatorObjectHandleStatus::STATUS_OPEN) {
       $class .= ' handle-status-'.$this->status;
-      $title = (isset($this->title) ? $this->title : $this->status);
+      $title = $title ? $title : $this->status;
     }
 
     if ($this->disabled) {

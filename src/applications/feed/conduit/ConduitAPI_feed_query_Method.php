@@ -3,7 +3,8 @@
 /**
  * @group conduit
  */
-final class ConduitAPI_feed_query_Method extends ConduitAPIMethod {
+final class ConduitAPI_feed_query_Method
+  extends ConduitAPI_feed_Method {
 
   public function getMethodStatus() {
     return self::METHOD_STATUS_UNSTABLE;
@@ -93,7 +94,6 @@ final class ConduitAPI_feed_query_Method extends ConduitAPIMethod {
             $data = $view->render();
           break;
           case 'html-summary':
-            $view->setOneLineStory(true);
             $data = $view->render();
           break;
           case 'data':

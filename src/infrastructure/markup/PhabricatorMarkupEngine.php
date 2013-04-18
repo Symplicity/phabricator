@@ -41,7 +41,7 @@ final class PhabricatorMarkupEngine {
 
   private $objects = array();
   private $viewer;
-  private $version = 6;
+  private $version = 7;
 
 
 /* -(  Markup Pipeline  )---------------------------------------------------- */
@@ -337,6 +337,27 @@ final class PhabricatorMarkupEngine {
     return self::newMarkupEngine($options);
   }
 
+  /**
+   * @task engine
+   */
+  public static function getEngine($ruleset = 'default') {
+    static $engines = array();
+    if (isset($engines[$ruleset])) {
+      return $engines[$ruleset];
+    }
+
+    $engine = null;
+    switch ($ruleset) {
+      case 'default':
+        $engine = self::newMarkupEngine(array());
+        break;
+      default:
+        throw new Exception("Unknown engine ruleset: {$ruleset}!");
+    }
+
+    $engines[$ruleset] = $engine;
+    return $engine;
+  }
 
   /**
    * @task engine
@@ -427,6 +448,7 @@ final class PhabricatorMarkupEngine {
     $blocks[] = new PhutilRemarkupEngineRemarkupQuotesBlockRule();
     $blocks[] = new PhutilRemarkupEngineRemarkupLiteralBlockRule();
     $blocks[] = new PhutilRemarkupEngineRemarkupHeaderBlockRule();
+    $blocks[] = new PhutilRemarkupEngineRemarkupHorizontalRuleBlockRule();
     $blocks[] = new PhutilRemarkupEngineRemarkupListBlockRule();
     $blocks[] = new PhutilRemarkupEngineRemarkupCodeBlockRule();
     $blocks[] = new PhutilRemarkupEngineRemarkupNoteBlockRule();
@@ -461,6 +483,7 @@ final class PhabricatorMarkupEngine {
     $mentions = array();
 
     $engine = self::newDifferentialMarkupEngine();
+    $engine->setConfig('viewer', PhabricatorUser::getOmnipotentUser());
 
     foreach ($content_blocks as $content_block) {
       $engine->markupText($content_block);
@@ -478,6 +501,7 @@ final class PhabricatorMarkupEngine {
     $files = array();
 
     $engine = self::newDifferentialMarkupEngine();
+    $engine->setConfig('viewer', PhabricatorUser::getOmnipotentUser());
 
     foreach ($content_blocks as $content_block) {
       $engine->markupText($content_block);

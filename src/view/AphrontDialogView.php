@@ -11,6 +11,7 @@ final class AphrontDialogView extends AphrontView {
   private $class;
   private $renderAsForm = true;
   private $formID;
+  private $headerColor = PhabricatorActionHeaderView::HEADER_DARK_GREY;
 
   private $width      = 'default';
   const WIDTH_DEFAULT = 'default';
@@ -31,12 +32,20 @@ final class AphrontDialogView extends AphrontView {
     return $this->title;
   }
 
-  public function addSubmitButton($text = 'Okay') {
+  public function addSubmitButton($text = null) {
+    if (!$text) {
+      $text = pht('Okay');
+    }
+
     $this->submitButton = $text;
     return $this;
   }
 
-  public function addCancelButton($uri, $text = 'Cancel') {
+  public function addCancelButton($uri, $text = null) {
+    if (!$text) {
+      $text = pht('Cancel');
+    }
+
     $this->cancelURI = $uri;
     $this->cancelText = $text;
     return $this;
@@ -74,6 +83,11 @@ final class AphrontDialogView extends AphrontView {
     return $this;
   }
 
+  public function setHeaderColor($color) {
+    $this->headerColor = $color;
+    return $this;
+  }
+
   final public function render() {
     require_celerity_resource('aphront-dialog-view-css');
 
@@ -102,7 +116,7 @@ final class AphrontDialogView extends AphrontView {
 
     if (!$this->user) {
       throw new Exception(
-        "You must call setUser() when rendering an AphrontDialogView.");
+        pht("You must call setUser() when rendering an AphrontDialogView."));
     }
 
     $more = $this->class;
@@ -160,9 +174,13 @@ final class AphrontDialogView extends AphrontView {
     $buttons[] = phutil_tag('div', array('style' => 'clear: both;'), '');
     $children = $this->renderChildren();
 
+    $header = new PhabricatorActionHeaderView();
+    $header->setHeaderTitle($this->title);
+    $header->setHeaderColor($this->headerColor);
+
     $content = hsprintf(
       '%s%s%s',
-      phutil_tag('div', array('class' => 'aphront-dialog-head'), $this->title),
+      phutil_tag('div', array('class' => 'aphront-dialog-head'), $header),
       phutil_tag('div', array('class' => 'aphront-dialog-body'), $children),
       phutil_tag('div', array('class' => 'aphront-dialog-tail'), $buttons));
 
