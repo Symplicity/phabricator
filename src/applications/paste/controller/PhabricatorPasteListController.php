@@ -1,74 +1,29 @@
 <?php
 
-final class PhabricatorPasteListController extends PhabricatorPasteController {
+final class PhabricatorPasteListController extends PhabricatorPasteController
+  implements PhabricatorApplicationSearchResultsControllerInterface {
 
-  public function shouldRequireLogin() {
-    return false;
+  private $queryKey;
+
+  public function shouldAllowPublic() {
+    return true;
   }
 
-  private $filter;
-
   public function willProcessRequest(array $data) {
-    $this->filter = idx($data, 'filter');
+    $this->queryKey = idx($data, 'queryKey', 'all');
   }
 
   public function processRequest() {
     $request = $this->getRequest();
-    $user = $request->getUser();
+    $controller = id(new PhabricatorApplicationSearchController($request))
+      ->setQueryKey($this->queryKey)
+      ->setSearchEngine(new PhabricatorPasteSearchEngine())
+      ->setNavigation($this->buildSideNavView());
 
-    $saved_query = new PhabricatorSavedQuery();
-
-    $nav = $this->buildSideNavView($this->filter);
-    $filter = $nav->getSelectedFilter();
-
-    switch ($filter) {
-      case 'my':
-        $saved_query->setParameter('authorPHIDs', array($user->getPHID()));
-        $title = pht('My Pastes');
-        $nodata = pht("You haven't created any Pastes yet.");
-        break;
-      case 'all':
-        $title = pht('All Pastes');
-        $nodata = pht("There are no Pastes yet.");
-        break;
-    }
-
-    $pager = new AphrontCursorPagerView();
-    $pager->readFromRequest($request);
-    $engine = new PhabricatorPasteSearchEngine();
-    $query = $engine->buildQueryFromSavedQuery($saved_query);
-    $pastes = $query->setViewer($request->getUser())
-      ->needContent(true)
-      ->executeWithCursorPager($pager);
-
-    $list = $this->buildPasteList($pastes);
-    $list->setPager($pager);
-    $list->setNoDataString($nodata);
-
-    $nav->appendChild(
-      array(
-        $list,
-      ));
-
-    $crumbs = $this
-      ->buildApplicationCrumbs($nav)
-      ->addCrumb(
-        id(new PhabricatorCrumbView())
-          ->setName($title)
-          ->setHref($this->getApplicationURI('filter/'.$filter.'/')));
-
-    $nav->setCrumbs($crumbs);
-
-    return $this->buildApplicationPage(
-      $nav,
-      array(
-        'title' => $title,
-        'device' => true,
-        'dust' => true,
-      ));
+    return $this->delegateToController($controller);
   }
 
-  private function buildPasteList(array $pastes) {
+  public function renderResultsList(array $pastes) {
     assert_instances_of($pastes, 'PhabricatorPaste');
 
     $user = $this->getRequest()->getUser();

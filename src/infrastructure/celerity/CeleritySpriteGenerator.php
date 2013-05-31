@@ -33,17 +33,17 @@ final class CeleritySpriteGenerator {
         }
 
         $sprite = id(clone $template)
-          ->setName('action-'.$icon.$suffix);
+          ->setName('icons-'.$icon.$suffix);
 
         $tcss = array();
-        $tcss[] = '.action-'.$icon.$suffix;
+        $tcss[] = '.icons-'.$icon.$suffix;
         if ($color == 'white') {
           $tcss[] = '.device-desktop .phabricator-action-view:hover '.
-            '.action-'.$icon;
+            '.icons-'.$icon;
           if ($icon == 'new') {
             // Hover state for the "+" icons on homepage tiles.
             $tcss[] = '.phabricator-application-launch-create:hover '.
-                      '.phabricator-application-create-icon.action-new-grey';
+                      '.phabricator-application-create-icon.icons-new-grey';
           }
         }
 
@@ -64,9 +64,18 @@ final class CeleritySpriteGenerator {
       // Strip 'text_' from these file names.
       $class_name = substr($icon, 5);
 
+      if ($class_name == 'order_off') {
+        $tcss = '.remarkup-control-order-mode .remarkup-assist-order';
+      } else if ($class_name == 'chaos_off') {
+        $tcss = '.remarkup-control-chaos-mode .remarkup-assist-chaos';
+      } else {
+        $tcss = '.remarkup-assist-'.$class_name;
+      }
+
       $sprite = id(clone $template)
         ->setName('remarkup-assist-'.$icon)
-        ->setTargetCSS('.remarkup-assist-'.$class_name);
+        ->setTargetCSS($tcss);
+
       foreach ($scales as $scale_key => $scale) {
         $path = $this->getPath($prefix.$scale_key.'/'.$icon.'.png');
         $sprite->setSourceFile($path, $scale);
@@ -74,7 +83,7 @@ final class CeleritySpriteGenerator {
       $sprites[] = $sprite;
     }
 
-    $sheet = $this->buildSheet('icon', true);
+    $sheet = $this->buildSheet('icons', true);
     $sheet->setScales($scales);
     foreach ($sprites as $sprite) {
       $sheet->addSprite($sprite);
@@ -120,7 +129,7 @@ final class CeleritySpriteGenerator {
         $tcss[] = '.actions-'.$icon.$suffix;
         if ($color == 'dark') {
           $tcss[] = '.device-desktop '.
-            '.actions-'.$icon.'-grey.phabricator-action-icon-item-link:hover';
+            '.actions-'.$icon.'-grey.phui-icon-view:hover';
         }
 
         $sprite->setTargetCSS(implode(', ', $tcss));
@@ -308,14 +317,45 @@ final class CeleritySpriteGenerator {
       $path = $this->getPath('tokens_1x/'.$token.'.png');
 
       $sprite = id(clone $template)
-        ->setName('token-'.$token)
-        ->setTargetCSS('.token-'.$token)
+        ->setName('tokens-'.$token)
+        ->setTargetCSS('.tokens-'.$token)
         ->setSourceFile($path, 1);
 
       $sprites[] = $sprite;
     }
 
     $sheet = $this->buildSheet('tokens', false);
+    foreach ($sprites as $sprite) {
+      $sheet->addSprite($sprite);
+    }
+
+    return $sheet;
+  }
+
+  public function buildPaymentsSheet() {
+    $icons = $this->getDirectoryList('payments_2x');
+    $scales = array(
+      '2x' => 1,
+    );
+    $template = id(new PhutilSprite())
+      ->setSourceSize(60, 32);
+
+    $sprites = array();
+    $prefix = 'payments_';
+    foreach ($icons as $icon) {
+      $sprite = id(clone $template)
+        ->setName('payments-'.$icon)
+        ->setTargetCSS('.payments-'.$icon);
+
+      foreach ($scales as $scale_key => $scale) {
+        $path = $this->getPath($prefix.$scale_key.'/'.$icon.'.png');
+        $sprite->setSourceFile($path, $scale);
+      }
+      $sprites[] = $sprite;
+    }
+
+    $sheet = $this->buildSheet('payments', true);
+    $sheet->setScales($scales);
     foreach ($sprites as $sprite) {
       $sheet->addSprite($sprite);
     }
@@ -408,9 +448,7 @@ final class CeleritySpriteGenerator {
     $unusual_heights = array(
       'dark-menu-label' => 25,
       'breadcrumbs'     => 31,
-      'menu-hover'      => 28,
       'menu-label'      => 24,
-      'menu-selected'   => 28,
       'red-header'      => 70,
       'blue-header'     => 70,
       'green-header'    => 70,
@@ -424,15 +462,6 @@ final class CeleritySpriteGenerator {
         ', .phabricator-dark-menu .phabricator-menu-item-type-label',
       'menu-label' =>
         ', .phabricator-side-menu .phabricator-menu-item-type-label',
-      'menu-hover' =>
-        ', .device-desktop .phabricator-side-menu '.
-        'a.phabricator-menu-item-type-link:hover, '.
-        '.phabricator-filetree a.phabricator-filetree-item:hover',
-      'menu-selected' =>
-        ', .phabricator-side-menu .phabricator-menu-item-selected, '.
-        '.device-desktop .phabricator-side-menu '.
-        'a.phabricator-menu-item-selected:hover, '.
-        '.phabricator-nav-local a.phabricator-active-nav-focus',
     );
 
     $sprites = array();
@@ -453,14 +482,7 @@ final class CeleritySpriteGenerator {
       false,
       PhutilSpriteSheet::TYPE_REPEAT_X,
       ', .phabricator-dark-menu .phabricator-menu-item-type-label, '.
-      '.phabricator-side-menu .phabricator-menu-item-type-label, '.
-      '.device-desktop .phabricator-side-menu '.
-        'a.phabricator-menu-item-type-link:hover, '.
-      '.phabricator-side-menu .phabricator-menu-item-selected, '.
-      '.device-desktop .phabricator-side-menu '.
-        'a.phabricator-menu-item-selected:hover, '.
-      '.phabricator-filetree a.phabricator-filetree-item:hover, '.
-      '.phabricator-filetree a.phabricator-active-nav-focus');
+      '.phabricator-side-menu .phabricator-menu-item-type-label');
     foreach ($sprites as $sprite) {
       $sheet->addSprite($sprite);
     }

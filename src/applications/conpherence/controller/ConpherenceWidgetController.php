@@ -61,90 +61,28 @@ final class ConpherenceWidgetController extends
   }
 
   private function renderWidgetPaneContent() {
-    require_celerity_resource('conpherence-widget-pane-css');
     require_celerity_resource('sprite-conpherence-css');
     $conpherence = $this->getConpherence();
 
     $widgets = array();
+    $new_icon = id(new PHUIIconView())
+      ->setSpriteSheet(PHUIIconView::SPRITE_ACTIONS)
+      ->setSpriteIcon('new-grey')
+      ->setHref($this->getWidgetURI())
+      ->setMetadata(array('widget' => null))
+      ->addSigil('conpherence-widget-adder');
     $widgets[] = phutil_tag(
       'div',
       array(
-        'class' => 'widgets-header'
+        'class' => 'widgets-header',
       ),
-      phutil_tag(
-        'div',
-        array(
-          'class' => 'widgets-header-icon-holder'
-        ),
-        array(
-          javelin_tag(
-            'a',
-            array(
-              'sigil' => 'conpherence-change-widget',
-              'meta'  => array(
-                'widget' => 'conpherence-menu-pane',
-              ),
-              'id' => 'conpherence-menu-pane-toggle',
-              'class' => 'sprite-conpherence conpherence_list_off',
-            ),
-            ''),
-          javelin_tag(
-            'a',
-            array(
-              'sigil' => 'conpherence-change-widget',
-              'meta'  => array(
-                'widget' => 'conpherence-message-pane',
-              ),
-              'id' => 'conpherence-message-pane-toggle',
-              'class' => 'sprite-conpherence conpherence_conversation_off',
-            ),
-            ''),
-          javelin_tag(
-            'a',
-            array(
-              'sigil' => 'conpherence-change-widget',
-              'meta'  => array(
-                'widget' => 'widgets-people',
-              ),
-              'id' => 'widgets-people-toggle',
-              'class' => 'sprite-conpherence conpherence_people_off'
-            ),
-            ''),
-          javelin_tag(
-            'a',
-            array(
-              'sigil' => 'conpherence-change-widget',
-              'meta'  => array(
-                'widget' => 'widgets-files',
-              ),
-              'id' => 'widgets-files-toggle',
-              'class' =>
-              'sprite-conpherence conpherence_files_on conpherence_files_off'
-            ),
-            ''),
-          javelin_tag(
-            'a',
-            array(
-              'sigil' => 'conpherence-change-widget',
-              'meta'  => array(
-                'widget' => 'widgets-calendar',
-              ),
-              'id' => 'widgets-calendar-toggle',
-              'class' => 'sprite-conpherence conpherence_calendar_off',
-            ),
-            ''),
-          javelin_tag(
-            'a',
-            array(
-              'sigil' => 'conpherence-change-widget',
-              'meta'  => array(
-                'widget' => 'widgets-settings',
-              ),
-              'id' => 'widgets-settings-toggle',
-              'class' => 'sprite-conpherence conpherence_settings_off',
-            ),
-            '')
-          )));
+      id(new PhabricatorActionHeaderView())
+      ->setHeaderColor(PhabricatorActionHeaderView::HEADER_GREY)
+      ->setHeaderTitle(pht('Participants'))
+      ->setHeaderHref('#')
+      ->setDropdown(true)
+      ->addAction($new_icon)
+      ->addHeaderSigil('widgets-selector'));
     $user = $this->getRequest()->getUser();
     // now the widget bodies
     $widgets[] = javelin_tag(
@@ -153,7 +91,6 @@ final class ConpherenceWidgetController extends
         'class' => 'widgets-body',
         'id' => 'widgets-people',
         'sigil' => 'widgets-people',
-        'style' => 'display: none;'
       ),
       id(new ConpherencePeopleWidgetView())
       ->setUser($user)
@@ -165,6 +102,7 @@ final class ConpherenceWidgetController extends
         'class' => 'widgets-body',
         'id' => 'widgets-files',
         'sigil' => 'widgets-files',
+        'style' => 'display: none;'
       ),
       id(new ConpherenceFileWidgetView())
       ->setUser($user)
@@ -236,9 +174,9 @@ final class ConpherenceWidgetController extends
         'button',
         array(
           'type' => 'submit',
-          'class' => 'notifications-update grey',
+          'class' => 'notifications-update',
         ),
-        pht('Update Notifications'))
+        pht('Save'))
     );
 
     return phabricator_form(
@@ -262,16 +200,22 @@ final class ConpherenceWidgetController extends
     $content = array();
     $layout = id(new AphrontMultiColumnView())
       ->setFluidLayout(true);
-    $timestamps = $this->getCalendarWidgetWeekTimestamps();
+    $timestamps = $this->getCalendarWidgetTimestamps();
     $today = $timestamps['today'];
-    $weekstamps = $timestamps['weekstamps'];
+    $epoch_stamps = $timestamps['epoch_stamps'];
     $one_day = 24 * 60 * 60;
-    foreach ($weekstamps as $time => $day) {
+    foreach ($epoch_stamps as $time => $day) {
       // build a header for the new day
+      if ($day->format('w') == $today->format('w')) {
+          $active_class = 'today';
+      } else {
+          $active_class = '';
+      }
+
       $content[] = phutil_tag(
         'div',
         array(
-          'class' => 'day-header'
+          'class' => 'day-header '.$active_class
         ),
         array(
           phutil_tag(
@@ -289,7 +233,6 @@ final class ConpherenceWidgetController extends
           ));
 
       $week_day_number = $day->format('w');
-
 
       $day->setTime(0, 0, 0);
       $epoch_start = $day->format('U');
@@ -331,18 +274,15 @@ final class ConpherenceWidgetController extends
               $user,
               $time_str);
 
+          $secondary_info = pht('%s, %s',
+            $handles[$status->getUserPHID()]->getName(), $epoch_range);
+
           $content[] = phutil_tag(
             'div',
             array(
-              'class' => 'user-status '.$status->getTextStatus(),
+              'class' => 'pm user-status '.$status->getTextStatus(),
             ),
             array(
-              phutil_tag(
-                'div',
-                array(
-                  'class' => 'epoch-range'
-                ),
-                $epoch_range),
               phutil_tag(
                 'div',
                 array(
@@ -354,17 +294,24 @@ final class ConpherenceWidgetController extends
                 array(
                   'class' => 'description'
                 ),
-                $status->getTerseSummary($user)),
-              phutil_tag(
-                'div',
                 array(
-                  'class' => 'participant'
-                ),
-                $handles[$status->getUserPHID()]->getName())
+                  $status->getTerseSummary($user),
+                  phutil_tag(
+                    'div',
+                    array(
+                      'class' => 'participant'
+                    ),
+                    $secondary_info)))
               ));
           $first_status_of_the_day = false;
+        } else {
+          $content[] = phutil_tag(
+            'div',
+            array('class' => 'no-events pmt pml'),
+            pht('No Events Scheduled.'));
         }
       }
+
       // we didn't get a status on this day so add a spacer
       if ($first_status_of_the_day) {
         $content[] = phutil_tag(
@@ -430,24 +377,20 @@ final class ConpherenceWidgetController extends
       );
   }
 
-  private function getCalendarWidgetWeekTimestamps() {
+  private function getCalendarWidgetTimestamps() {
     $user = $this->getRequest()->getUser();
     $timezone = new DateTimeZone($user->getTimezoneIdentifier());
 
-    $today = id(new DateTime('now', $timezone));
-    $monday = clone $today;
-    $monday
-      ->modify('+1 day')
-      ->modify('last monday');
+    $today = id(new DateTime('today', $timezone));
     $timestamps = array();
-    for ($day = 0; $day < 7; $day++) {
-      $timestamp = clone $monday;
+    for ($day = 0; $day < 3; $day++) {
+      $timestamp = clone $today;
       $timestamps[] = $timestamp->modify(sprintf('+%d days', $day));
     }
 
     return array(
       'today' => $today,
-      'weekstamps' => $timestamps
+      'epoch_stamps' => $timestamps
     );
   }
 

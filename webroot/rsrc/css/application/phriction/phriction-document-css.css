@@ -62,17 +62,6 @@
   padding: 20px;
 }
 
-.phriction-byline {
-  padding: 10px 20px;
-  color: #777;
-  font-size: 11px;
-  background: #f7f7f7;
-}
-
-.device-phone .phriction-byline {
-  padding: 10px;
-}
-
 .device-phone .phriction-content .phabricator-remarkup {
   padding: 10px;
 }
@@ -160,4 +149,9 @@
 
 .device-phone .phriction-content .phabricator-remarkup-toc {
   width: 120px;
+}
+
+.phriction-content .phabricator-remarkup .remarkup-code-block {
+  clear: both;
+  margin: 20px 0;
 }
