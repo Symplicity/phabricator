@@ -30,7 +30,7 @@ final class PhabricatorBotObjectNameHandler extends PhabricatorBotHandler {
       $pattern =
         '@'.
         '(?<!/)(?:^|\b)'.
-        '(R2D2)'.
+        '(R2D2|C3PO|Chewbacca)'.
         '(?:\b|$)'.
         '@';
 
@@ -39,6 +39,12 @@ final class PhabricatorBotObjectNameHandler extends PhabricatorBotHandler {
           switch ($match[1]) {
             case 'R2D2':
               $output[$match[1]] = pht('beep hoop bop');
+              break;
+            case 'Chewbacca':
+              $output[$match[1]] = pht('Uuuuuur Ahhhhhrrr Uhrrr Ahhhrrr Aaargh');
+              break;
+            case 'C3PO':
+              $output[$match[1]] = pht('Excuse me sir, but might I inquire as to what\'s going on?');
               break;
           }
         }
