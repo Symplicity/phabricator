@@ -15,6 +15,25 @@ final class PhabricatorBotObjectNameHandler extends PhabricatorBotHandler {
 
   public function receiveMessage(PhabricatorBotMessage $original_message) {
 
+    static $jokes = array(
+      'When Chuck Norris throws exceptions, it\'s across the room.',
+      'Chuck Norris burst the dot com bubble.',
+      'All browsers support the hex definitions #chuck and #norris for the colors black and blue.',
+      'Chuck Norris can solve the Towers of Hanoi in one move.',
+      'Project managers never ask Chuck Norris for estimations...ever.',
+      '"It works on my machine" always holds true for Chuck Norris.',
+      'When Chuck Norris is web surfing, websites get the message "Warning: Internet Explorer has deemed this user to be malicious or dangerous. Proceed?".',
+      'Chuck Norris can divide by zero.',
+      'Chuck Norris can access private methods.',
+      'Chuck Norris can instantiate an abstract class.',
+      'Chuck Norris has faster upstream than downstream because even data runs from him.',
+      'No statement can catch the ChuckNorrisException.',
+      'Chuck Norris can binary search unsorted data.',
+      'Chuck Norris’s keyboard has the Any key.',
+      'Chuck Norris can retrieve anything from /dev/null.',
+      'Every programming language accepts "Chuck Norris" as the line terminator.',
+    );
+
     switch ($original_message->getCommand()) {
     case 'MESSAGE':
       $message = $original_message->getBody();
@@ -30,9 +49,9 @@ final class PhabricatorBotObjectNameHandler extends PhabricatorBotHandler {
       $pattern =
         '@'.
         '(?<!/)(?:^|\b)'.
-        '(R2D2|C3PO|Chewbacca)'.
+        '(R2D2|C3PO|Chewbacca|Chuck Norris)'.
         '(?:\b|$)'.
-        '@';
+        '@i';
 
       if (preg_match_all($pattern, $message, $matches, PREG_SET_ORDER)) {
         foreach ($matches as $match) {
@@ -45,6 +64,9 @@ final class PhabricatorBotObjectNameHandler extends PhabricatorBotHandler {
               break;
             case 'C3PO':
               $output[$match[1]] = pht('Excuse me sir, but might I inquire as to what\'s going on?');
+              break;
+            case 'Chuck Norris':
+              $output[$match[1]] = pht($jokes[array_rand($jokes)]);
               break;
           }
         }
