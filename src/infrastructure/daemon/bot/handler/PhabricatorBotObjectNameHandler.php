@@ -66,7 +66,8 @@ final class PhabricatorBotObjectNameHandler extends PhabricatorBotHandler {
               $output[$match[1]] = pht('Excuse me sir, but might I inquire as to what\'s going on?');
               break;
             case 'Chuck Norris':
-              $output[$match[1]] = pht($jokes[array_rand($jokes)]);
+              $joke = array_rand($jokes);
+              $output[$match[1] . $joke] = pht($jokes[$joke]);
               break;
           }
         }
