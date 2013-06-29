@@ -76,12 +76,13 @@ final class PhabricatorBotObjectNameHandler extends PhabricatorBotHandler {
             case 'Chuck Norris':
               $quiet_mins = 60;
               $joke = $jokes[array_rand($jokes)];
-              $target_name = md5($joke);
-              if (isset($this->recentlyMentioned[$target_name])) {
+              $joke_id = md5($joke);
+              $target_name = $original_message->getTarget()->getName();
+              if (isset($this->recentlyMentioned[$target_name][$joke_id])) {
                 $joke = "I am tired of Chuck Norris jokes. How about a game if Tic-Tac-Toe?";
-                $target_name = "TTT";
+                $joke_id = "TTT";
               }
-              $output[$target_name] = pht($joke);
+              $output[$joke_id] = pht($joke);
               break;
           }
         }
