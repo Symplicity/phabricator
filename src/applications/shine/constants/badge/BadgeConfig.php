@@ -143,12 +143,12 @@ final class BadgeConfig {
         . " WHERE commitMessage rlike '[1-9][0-9]{5,}' AND epoch>%d",
         strtotime('2012-05-31')
       );
-    } elseif ($title == 'Tester') {
+    } elseif ($title == 'Testhor') {
       $where = sprintf("rc INNER JOIN repository_filesystem rfs"
         . " ON commitIdentifier=svnCommit AND rc.repositoryID=rfs.repositoryID"
         . " INNER JOIN repository_path rp ON rfs.pathID=rp.id "
         . " WHERE fileType=7 AND path like '%s' AND epoch>%d",
-        '%%/tests/%%', strtotime('2013-06-01')
+        '%%/tests/%%.php', strtotime('2013-06-01')
       );
     }
     return $where;
