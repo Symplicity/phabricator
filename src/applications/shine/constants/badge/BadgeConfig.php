@@ -139,17 +139,13 @@ final class BadgeConfig {
     } elseif ($title == 'Photogenic') {
       $where = "WHERE profileImagePHID IS NOT NULL";
     } elseif ($title == 'Izerizer') {
-      $where = sprintf("rc INNER JOIN repository_commitdata rcd ON rc.id=rcd.commitID"
-        . " WHERE commitMessage rlike '[1-9][0-9]{5,}' AND epoch>%d",
-        strtotime('2012-05-31')
-      );
+      $where = "rc INNER JOIN repository_commitdata rcd ON rc.id=rcd.commitID"
+        . " WHERE commitMessage rlike '[1-9][0-9]{5,}'";
     } elseif ($title == 'Testhor') {
-      $where = sprintf("rc INNER JOIN repository_filesystem rfs"
+      $where = "rc INNER JOIN repository_filesystem rfs"
         . " ON commitIdentifier=svnCommit AND rc.repositoryID=rfs.repositoryID"
-        . " INNER JOIN repository_path rp ON rfs.pathID=rp.id "
-        . " WHERE fileType=7 AND path like '%s' AND epoch>%d",
-        '%%/tests/%%.php', strtotime('2013-06-01')
-      );
+        . " INNER JOIN repository_path rp ON rfs.pathID=rp.id AND fileType=7"
+        . " WHERE rp.path like '%%/tests/%%.php'";
     }
     return $where;
   }
