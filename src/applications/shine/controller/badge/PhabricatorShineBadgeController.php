@@ -27,6 +27,7 @@ class PhabricatorShineBadgeController
     'top' => 'Top Scores',
   );
   private $max_score = 0;
+  private $user_exceptions = array();
 
   public function willProcessRequest(array $data)
   {
@@ -181,6 +182,10 @@ class PhabricatorShineBadgeController
 
     $result_markup = id(new AphrontFormLayoutView());
 
+    if (PhabricatorEnv::envConfigExists('shine.user_exceptions')) {
+      $this->user_exceptions = PhabricatorEnv::getEnvConfig('shine.user_exceptions');
+    }
+
     $this->renderTopScoreList(
       $result_markup,
       $this->getBadgeData(array(strtotime('7 days ago'), time())),
@@ -265,12 +270,14 @@ class PhabricatorShineBadgeController
         $weight,
         $object->getTableName());
       foreach ($data as $row) {
-        if (isset($badge_data[$row['user']])) {
-          $badge_data[$row['user']]['score'] += $row['score'];
-          $badge_data[$row['user']]['details'] .= ',' . $title . ': ' . $row['score'];
-        } else {
-          $row['details'] = $title . ': ' . $row['score'];
-          $badge_data[$row['user']] = $row;
+        if (!isset($this->user_exceptions[$title]) || !in_array($row['user'], $this->user_exceptions[$title])) {
+          if (isset($badge_data[$row['user']])) {
+            $badge_data[$row['user']]['score'] += $row['score'];
+            $badge_data[$row['user']]['details'] .= ',' . $title . ': ' . $row['score'];
+          } else {
+            $row['details'] = $title . ': ' . $row['score'];
+            $badge_data[$row['user']] = $row;
+          }
         }
       }
     }
