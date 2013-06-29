@@ -32,6 +32,13 @@ final class PhabricatorBotObjectNameHandler extends PhabricatorBotHandler {
       'Chuck Norris’s keyboard has the Any key.',
       'Chuck Norris can retrieve anything from /dev/null.',
       'Every programming language accepts "Chuck Norris" as the line terminator.',
+      'Chuck Norris doesn\'t need an account. He just logs in.',
+      'All user interfaces are friendly to Chuck Norris',
+      'Chuck Norris finished World of Warcraft.',
+      'Chuck Norris can delete the Recycling Bin.',
+      'It was Chuck Norris that bit the apple in the Apple logo.',
+      'Chuck Norris browser doesn\'t store cookies. It only stores raw meat.',
+      'Chuck Norris can use goto in Java.',
     );
 
     switch ($original_message->getCommand()) {
@@ -45,6 +52,7 @@ final class PhabricatorBotObjectNameHandler extends PhabricatorBotHandler {
       $file_ids = array();
       $object_names = array();
       $output = array();
+      $quiet_mins = 5;
 
       $pattern =
         '@'.
@@ -66,8 +74,14 @@ final class PhabricatorBotObjectNameHandler extends PhabricatorBotHandler {
               $output[$match[1]] = pht('Excuse me sir, but might I inquire as to what\'s going on?');
               break;
             case 'Chuck Norris':
-              $joke = array_rand($jokes);
-              $output[$match[1] . $joke] = pht($jokes[$joke]);
+              $quiet_mins = 60;
+              $joke = $jokes[array_rand($jokes)];
+              $target_name = md5($joke);
+              if (isset($this->recentlyMentioned[$target_name])) {
+                $joke = "I am tired of Chuck Norris jokes. How about a game if Tic-Tac-Toe?";
+                $target_name = "TTT";
+              }
+              $output[$target_name] = pht($joke);
               break;
           }
         }
@@ -205,7 +219,7 @@ final class PhabricatorBotObjectNameHandler extends PhabricatorBotHandler {
         $quiet_until = idx(
           $this->recentlyMentioned[$target_name],
           $phid,
-          0) + (60 * 10);
+          0) + (60 * $quiet_mins);
 
         if (time() < $quiet_until) {
           // Remain quiet on this channel.
