@@ -106,6 +106,13 @@ final class BadgeConfig {
       'desc' => 'Mentioned manager issue number in a commit',
       'href' => '/diffusion/',
     ),
+    'Testhor' => array(
+      'class' => 'PhabricatorRepositoryCommit',
+      'date_field' => 'epoch',
+      'desc' => 'Contributed to unit tests',
+      'href' => '/diffusion/',
+      'weight' => 2,
+    ),
   );
 
   public static function getDescription($title)
@@ -135,6 +142,13 @@ final class BadgeConfig {
       $where = sprintf("rc INNER JOIN repository_commitdata rcd ON rc.id=rcd.commitID"
         . " WHERE commitMessage rlike '[1-9][0-9]{5,}' AND epoch>%d",
         strtotime('2012-05-31')
+      );
+    } elseif ($title == 'Tester') {
+      $where = sprintf("rc INNER JOIN repository_filesystem rfs"
+        . " ON commitIdentifier=svnCommit AND rc.repositoryID=rfs.repositoryID"
+        . " INNER JOIN repository_path rp ON rfs.pathID=rp.id "
+        . " WHERE fileType=7 AND path like '%s' AND epoch>%d",
+        '%%/tests/%%', strtotime('2013-06-01')
       );
     }
     return $where;
