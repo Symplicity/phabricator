@@ -20,17 +20,17 @@
 $root = dirname(dirname(dirname(__FILE__)));
 require_once $root.'/scripts/__init_script__.php';
 
-phutil_require_module('phutil', 'console');
-
 $args = array_slice($argv, 1);
 if (!$args) {
-  return help();
+  help();
 }
 
 $action = 'replace';
 $all_actions = array('insert', 'replace', 'delete');
 $title = '';
 $category = '';
+$category_map = array();
+$wiki_url = '';
 $limit = 500;
 $len = count($args);
 for ($ii = 0; $ii < $len; $ii++) {
@@ -57,22 +57,23 @@ for ($ii = 0; $ii < $len; $ii++) {
     case '--action':
       $action = $args[++$ii];
       if (!in_array($action, $all_actions)) {
-        return usage("Supported actions are: " . join(', ', $all_actions));
+        usage("Supported actions are: " . join(', ', $all_actions));
       }
       break;
     case '--help':
-      return help();
+      help();
+      break;
     default:
-      return usage("Unrecognized argument '{$args[$ii]}'.");
+      usage("Unrecognized argument '{$args[$ii]}'.");
   }
 }
 
 if (!isset($config)) {
-  return usage("Please specify --config file.");
+  usage("Please specify --config file.");
 }
 
 if (!$category && !$title) {
-  return usage("Please use --cat or --title options to specify what to import.");
+  usage("Please use --cat or --title options to specify what to import.");
 }
 
 $conduit = new ConduitClient(PhabricatorEnv::getURI('/api/'));
@@ -95,6 +96,7 @@ if ($category) {
 } else {
   $loop_categories = array(''); // single loop in title case
 }
+$data = null;
 foreach ($loop_categories as $category) {
   $category_page = '';
   if ($category) {
