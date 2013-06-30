@@ -110,7 +110,7 @@ foreach ($loop_categories as $category) {
   if ($title) {
     if ($wiki_file) {
       $data = array(array(
-        'title' => basename($wiki_file),
+        'title' => $title,
         'content' => file_get_contents($wiki_file)
       ));
     } else {
@@ -130,7 +130,9 @@ foreach ($loop_categories as $category) {
       if ($page_data) {
         $safe_title = str_replace(' ', '_', $page['title']);
         $text = convertMWToPhriction($wiki_url, $page_data['content']);
-        $text .= "\n\nImported from [[$wiki_url/index.php/$safe_title|{$page['title']}]]";
+        if (!$wiki_file) {
+          $text .= "\n\nImported from [[$wiki_url/index.php/$safe_title|{$page['title']}]]";
+        }
         $cat_prefix = getPhrictionPrefix($text, $category_map);
         if ($cat_prefix) {
           removeUncategorizedArticle($conduit, $safe_title, $text);
@@ -153,7 +155,7 @@ foreach ($loop_categories as $category) {
             "slug" => $safe_title,
             "title" => $page['title'],
             "content" => $text,
-            "description" => "Imported from $wiki_url ($category)"));
+            "description" => "Imported from " . ($wiki_file ?: "$wiki_url ($category))")));
 
           if ($response['status'] == 'exists') {
             echo ($existing ? 'updated' : 'imported') . " as {$response['slug']}";
