@@ -237,7 +237,48 @@ function convertMWToPhriction($wiki_url, $text) {
   $text = preg_replace(array_keys($regexps), $regexps, $text);
   // italics
   $text = str_replace("''", '//', $text);
+
+  $text = preg_replace_callback(
+    '#^\{\|(.*?)(?:^\|\+(.*?))?(^(?:((?R))|.)*?)^\|}#msi',
+    'processTables',
+    $text
+  );
+
   return $text;
+}
+
+/**
+ * Ideas for table processing stolen from
+ * https://github.com/pear/Text_Wiki2/blob/master/Text/Wiki2/Parse/Mediawiki/Table.php
+ */
+function processTables(&$matches)
+{
+  return preg_replace_callback(
+    '#(?:^([|!])-|\G)(.*?)^(.+?)(?=^[|!]-|\z)#msi',
+    'processRows',
+    $matches[3]
+  );
+}
+
+function processRows(&$matches)
+{
+  if (trim($matches[3]) == '|-') {
+    return '';
+  }
+  $sub = preg_replace_callback(
+    '#((?:^\||^!|\|\||!!|\G))(?:([^|\n]*?)\|(?!\|))?(?:\n*)(.+?)(?:\n*)(?=^\||^!|\|\||!!|\z)#msi',
+    'processCells',
+    $matches[3]
+  );
+  if ($matches[3][0] == '!') {
+    $sub .= "\n" . preg_replace('/[^|]/', '-', $sub);
+  }
+  return "$sub\n";
+}
+
+function processCells(&$matches)
+{
+  return '| ' . trim($matches[3]) . ' ';
 }
 
 function getPhrictionPrefix($text, $category_map) {
