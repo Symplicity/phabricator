@@ -268,11 +268,11 @@ function convertMWToPhriction($wiki_url, $text) {
  */
 function processTables(&$matches)
 {
-  return "\n" . preg_replace_callback(
+  return "\n<table>\n" . preg_replace_callback(
     '#(?:^([|!])-|\G)(.*?)^(.+?)(?=^[|!]-|\z)#msi',
     'processRows',
     $matches[3]
-  );
+  ) . "</table>\n";
 }
 
 function processRows(&$matches)
@@ -286,14 +286,14 @@ function processRows(&$matches)
     $matches[3]
   );
   if ($matches[3][0] == '!') {
-    $sub .= "\n" . preg_replace('/[^|]/', '-', $sub);
+    $sub = str_replace('td>', 'th>', $sub);
   }
-  return "$sub\n";
+  return "<tr>$sub</tr>\n";
 }
 
 function processCells(&$matches)
 {
-  return '| ' . trim($matches[3]) . ' ';
+  return '<td>' . trim($matches[3]) . '</td>';
 }
 
 function getPhrictionPrefix($text, $category_map) {
