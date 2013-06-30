@@ -268,7 +268,7 @@ function convertMWToPhriction($wiki_url, $text) {
  */
 function processTables(&$matches)
 {
-  return preg_replace_callback(
+  return "\n" . preg_replace_callback(
     '#(?:^([|!])-|\G)(.*?)^(.+?)(?=^[|!]-|\z)#msi',
     'processRows',
     $matches[3]
