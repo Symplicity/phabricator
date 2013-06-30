@@ -31,6 +31,7 @@ $title = '';
 $category = '';
 $category_map = array();
 $wiki_url = '';
+$wiki_file = '';
 $limit = 500;
 $len = count($args);
 for ($ii = 0; $ii < $len; $ii++) {
@@ -54,6 +55,9 @@ for ($ii = 0; $ii < $len; $ii++) {
     case '--limit':
       $limit = intval($args[++$ii]);
       break;
+    case '--file':
+      $wiki_file = $args[++$ii];
+      break;
     case '--action':
       $action = $args[++$ii];
       if (!in_array($action, $all_actions)) {
@@ -69,7 +73,7 @@ for ($ii = 0; $ii < $len; $ii++) {
 }
 
 if (!isset($config)) {
-  usage("Please specify --config file.");
+  usage("Please specify --config for the wiki of --file with wiki markup.");
 }
 
 if (!$category && !$title) {
@@ -104,13 +108,22 @@ foreach ($loop_categories as $category) {
     $data = getMWCategoryData($wiki_url, $category, $limit);
   }
   if ($title) {
-    $data = getMWTitleData($wiki_url, $title);
+    if ($wiki_file) {
+      $data = array(array(
+        'title' => basename($wiki_file),
+        'content' => file_get_contents($wiki_file)
+      ));
+    } else {
+      $data = getMWTitleData($wiki_url, $title);
+    }
   }
   if ($data) {
     foreach ($data as $page) {
       echo $page['title'] . ': ';
       if (isset($page['pageid'])) {
         $page_data = getMWPageData($wiki_url, $page['pageid']);
+      } elseif (!empty($page['content'])) {
+        $page_data = $page;
       } else {
         continue;
       }
@@ -336,6 +349,9 @@ function help() {
 
     __--cat__
         MW category to import from (use "all" for all configured categories)
+
+    __--file__
+        Path to file with wiki code to import
 
     __--limit__
         Number of articles to import (defaults to 500)
