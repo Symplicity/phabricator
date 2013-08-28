@@ -149,7 +149,14 @@ foreach ($repos as $repo) {
             }
           }
         }
-        $engine->reindexAbstractDocument($doc);
+        try {
+          $engine->reindexAbstractDocument($doc);
+        } catch (Exception $ex) {
+          $phid = $doc->getPHID();
+          $class = get_class($engine);
+          echo("Unable to index document {$phid} by engine {$class}.");
+          echo($ex);
+        }
       }
     }
   }
