@@ -136,7 +136,7 @@ class PhabricatorShineBadgeController
       'SELECT title, GROUP_CONCAT(UserPHID) AS users FROM %T GROUP BY title ORDER BY COUNT(*)',
       $badge->getTableName());
 
-    $result_markup = id(new AphrontFormLayoutView());
+    $result_markup = id(new PHUIFormLayoutView());
 
     foreach ($data as $row) {
       $result_markup->appendChild($this->renderBadge($row['title']));
@@ -180,7 +180,7 @@ class PhabricatorShineBadgeController
   {
     static $avatars;
 
-    $result_markup = id(new AphrontFormLayoutView());
+    $result_markup = id(new PHUIFormLayoutView());
 
     if (PhabricatorEnv::envConfigExists('shine.user_exceptions')) {
       $this->user_exceptions = PhabricatorEnv::getEnvConfig('shine.user_exceptions');
