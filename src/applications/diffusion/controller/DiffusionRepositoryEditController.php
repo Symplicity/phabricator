@@ -51,6 +51,7 @@ final class DiffusionRepositoryEditController extends DiffusionController {
 
     $xaction_view = id(new PhabricatorApplicationTransactionView())
       ->setUser($user)
+      ->setObjectPHID($repository->getPHID())
       ->setTransactions($xactions)
       ->setMarkupEngine($engine);
 
@@ -62,7 +63,6 @@ final class DiffusionRepositoryEditController extends DiffusionController {
       array(
         'title' => $title,
         'device' => true,
-        'dust' => true,
       ));
   }
 
@@ -70,6 +70,7 @@ final class DiffusionRepositoryEditController extends DiffusionController {
     $user = $this->getRequest()->getUser();
 
     $view = id(new PhabricatorActionListView())
+      ->setObjectURI($this->getRequest()->getRequestURI())
       ->setUser($user);
 
     $can_edit = PhabricatorPolicyFilter::hasCapability(
@@ -122,6 +123,7 @@ final class DiffusionRepositoryEditController extends DiffusionController {
     $user = $this->getRequest()->getUser();
 
     $view = id(new PhabricatorActionListView())
+      ->setObjectURI($this->getRequest()->getRequestURI())
       ->setUser($user);
 
     $can_edit = PhabricatorPolicyFilter::hasCapability(

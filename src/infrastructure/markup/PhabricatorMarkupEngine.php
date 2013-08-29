@@ -120,15 +120,17 @@ final class PhabricatorMarkupEngine {
 
     // Load or build the preprocessor caches.
     $blocks = $this->loadPreprocessorCaches($engines, $objects);
+    $blocks = mpull($blocks, 'getCacheData');
+
+    $this->engineCaches = $blocks;
 
     // Finalize the output.
     foreach ($objects as $key => $info) {
-      $data = $blocks[$key]->getCacheData();
       $engine = $engines[$key];
       $field = $info['field'];
       $object = $info['object'];
 
-      $output = $engine->postprocessText($data);
+      $output = $engine->postprocessText($blocks[$key]);
       $output = $object->didMarkupText($field, $output, $engine);
       $this->objects[$key]['output'] = $output;
     }
@@ -149,18 +151,47 @@ final class PhabricatorMarkupEngine {
    */
   public function getOutput(PhabricatorMarkupInterface $object, $field) {
     $key = $this->getMarkupFieldKey($object, $field);
+    $this->requireKeyProcessed($key);
 
+    return $this->objects[$key]['output'];
+  }
+
+
+  /**
+   * Retrieve engine metadata for a given field.
+   *
+   * @param PhabricatorMarkupInterface  The object to retrieve.
+   * @param string                      The field to retrieve.
+   * @param string                      The engine metadata field to retrieve.
+   * @param wild                        Optional default value.
+   * @task markup
+   */
+  public function getEngineMetadata(
+    PhabricatorMarkupInterface $object,
+    $field,
+    $metadata_key,
+    $default = null) {
+
+    $key = $this->getMarkupFieldKey($object, $field);
+    $this->requireKeyProcessed($key);
+
+    return idx($this->engineCaches[$key]['metadata'], $metadata_key, $default);
+  }
+
+
+  /**
+   * @task markup
+   */
+  private function requireKeyProcessed($key) {
     if (empty($this->objects[$key])) {
       throw new Exception(
-        "Call addObject() before getOutput() (key = '{$key}').");
+        "Call addObject() before using results (key = '{$key}').");
     }
 
     if (!isset($this->objects[$key]['output'])) {
       throw new Exception(
-        "Call process() before getOutput().");
+        "Call process() before using results.");
     }
-
-    return $this->objects[$key]['output'];
   }
 
 
@@ -314,29 +345,6 @@ final class PhabricatorMarkupEngine {
     ));
   }
 
-
-  /**
-   * @task engine
-   */
-  public static function newProfileMarkupEngine() {
-    return self::newMarkupEngine(array(
-    ));
-  }
-
-
-  /**
-   * @task engine
-   */
-  public static function newSlowvoteMarkupEngine() {
-    return self::newMarkupEngine(array(
-    ));
-  }
-
-
-  public static function newPonderMarkupEngine(array $options = array()) {
-    return self::newMarkupEngine($options);
-  }
-
   /**
    * @task engine
    */
@@ -418,12 +426,6 @@ final class PhabricatorMarkupEngine {
       $rules[] = new PhabricatorRemarkupRuleYoutube();
     }
 
-    $rules[] = new PhutilRemarkupRuleHyperlink();
-    $rules[] = new PhrictionRemarkupRule();
-
-    $rules[] = new PhabricatorRemarkupRuleEmbedFile();
-    $rules[] = new PhabricatorCountdownRemarkupRule();
-
     $applications = PhabricatorApplication::getAllInstalledApplications();
     foreach ($applications as $application) {
       foreach ($application->getRemarkupRules() as $rule) {
@@ -431,14 +433,12 @@ final class PhabricatorMarkupEngine {
       }
     }
 
+    $rules[] = new PhutilRemarkupRuleHyperlink();
+
     if ($options['macros']) {
       $rules[] = new PhabricatorRemarkupRuleImageMacro();
       $rules[] = new PhabricatorRemarkupRuleMeme();
     }
-
-    $rules[] = new DivinerRemarkupRuleSymbol();
-
-    $rules[] = new PhabricatorRemarkupRuleMention();
 
     $rules[] = new PhutilRemarkupRuleBold();
     $rules[] = new PhutilRemarkupRuleItalic();
@@ -454,7 +454,6 @@ final class PhabricatorMarkupEngine {
     $blocks[] = new PhutilRemarkupEngineRemarkupNoteBlockRule();
     $blocks[] = new PhutilRemarkupEngineRemarkupTableBlockRule();
     $blocks[] = new PhutilRemarkupEngineRemarkupSimpleTableBlockRule();
-    $blocks[] = new PhutilRemarkupEngineRemarkupDefaultBlockRule();
 
     $custom_block_rule_classes = $options['custom-block'];
     if ($custom_block_rule_classes) {
@@ -463,15 +462,10 @@ final class PhabricatorMarkupEngine {
       }
     }
 
+    $blocks[] = new PhutilRemarkupEngineRemarkupDefaultBlockRule();
+
     foreach ($blocks as $block) {
-      if ($block instanceof PhutilRemarkupEngineRemarkupLiteralBlockRule) {
-        $literal_rules = array();
-        $literal_rules[] = new PhutilRemarkupRuleLinebreaks();
-        $block->setMarkupRules($literal_rules);
-      } else if (
-          !($block instanceof PhutilRemarkupEngineRemarkupCodeBlockRule)) {
-        $block->setMarkupRules($rules);
-      }
+      $block->setMarkupRules($rules);
     }
 
     $engine->setBlockRules($blocks);

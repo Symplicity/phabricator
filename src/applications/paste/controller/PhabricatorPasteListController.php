@@ -1,5 +1,8 @@
 <?php
 
+/**
+ * @group paste
+ */
 final class PhabricatorPasteListController extends PhabricatorPasteController
   implements PhabricatorApplicationSearchResultsControllerInterface {
 
@@ -10,7 +13,7 @@ final class PhabricatorPasteListController extends PhabricatorPasteController
   }
 
   public function willProcessRequest(array $data) {
-    $this->queryKey = idx($data, 'queryKey', 'all');
+    $this->queryKey = idx($data, 'queryKey');
   }
 
   public function processRequest() {
@@ -23,7 +26,9 @@ final class PhabricatorPasteListController extends PhabricatorPasteController
     return $this->delegateToController($controller);
   }
 
-  public function renderResultsList(array $pastes) {
+  public function renderResultsList(
+    array $pastes,
+    PhabricatorSavedQuery $query) {
     assert_instances_of($pastes, 'PhabricatorPaste');
 
     $user = $this->getRequest()->getUser();

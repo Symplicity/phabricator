@@ -26,7 +26,6 @@ final class PonderAddAnswerView extends AphrontView {
 
     $form = new AphrontFormView();
     $form
-      ->setFlexible(true)
       ->setUser($this->user)
       ->setAction($this->actionURI)
       ->setWorkflow(true)
@@ -41,35 +40,14 @@ final class PonderAddAnswerView extends AphrontView {
       ->appendChild(
         id(new AphrontFormSubmitControl())
           ->setValue($is_serious ?
-            pht('Submit') :
-            pht('Make it so')));
-
-    $loading = pht('Loading answer preview...');
-    $preview = hsprintf(
-      '<div class="aphront-panel-flush">'.
-        '<div id="answer-preview">'.
-          '<span class="aphront-panel-preview-loading-text">'.
-            '%s'.
-          '</span>'.
-        '</div>'.
-      '</div>',
-      $loading);
-
-    Javelin::initBehavior(
-      'ponder-feedback-preview',
-      array(
-        'uri'         => '/ponder/answer/preview/',
-        'content'     => 'answer-content',
-        'preview'     => 'answer-preview',
-        'question_id' => $question->getID()
-      ));
+            pht('Add Answer') :
+            pht('Bequeath Wisdom')));
 
     return id(new AphrontNullView())
       ->appendChild(
         array(
           $header,
           $form,
-          $preview,
         ))
       ->render();
   }

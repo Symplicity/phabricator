@@ -117,8 +117,9 @@ final class PhabricatorRepositoryPullLocalDaemon
           continue;
         }
 
+        $callsign = $repository->getCallsign();
+
         try {
-          $callsign = $repository->getCallsign();
           $this->log("Updating repository '{$callsign}'.");
 
           id(new PhabricatorRepositoryPullEngine())
@@ -150,7 +151,11 @@ final class PhabricatorRepositoryPullLocalDaemon
           $this->log("Failed to acquire lock.");
         } catch (Exception $ex) {
           $retry_after[$id] = time() + $min_sleep;
-          phlog($ex);
+
+          $proxy = new PhutilProxyException(
+            "Error while fetching changes to the '{$callsign}' repository.",
+            $ex);
+          phlog($proxy);
         }
 
         $this->stillWorking();
@@ -233,7 +238,7 @@ final class PhabricatorRepositoryPullLocalDaemon
     }
 
     $commit = id(new PhabricatorRepositoryCommit())->loadOneWhere(
-      'repositoryID = %s AND commitIdentifier = %s',
+      'repositoryID = %d AND commitIdentifier = %s',
       $repository->getID(),
       $target);
 
@@ -254,7 +259,7 @@ final class PhabricatorRepositoryPullLocalDaemon
     $target) {
 
     $commit = id(new PhabricatorRepositoryCommit())->loadOneWhere(
-      'repositoryID = %s AND commitIdentifier = %s',
+      'repositoryID = %d AND commitIdentifier = %s',
       $repository->getID(),
       $target);
 
@@ -307,13 +312,6 @@ final class PhabricatorRepositoryPullLocalDaemon
         $data->save();
       $commit->saveTransaction();
 
-      $event = new PhabricatorTimelineEvent(
-        'cmit',
-        array(
-          'id' => $commit->getID(),
-        ));
-      $event->recordEvent();
-
       $this->insertTask($repository, $commit);
 
       queryfx(
@@ -362,7 +360,7 @@ final class PhabricatorRepositoryPullLocalDaemon
     $branch) {
 
     $commit = id(new PhabricatorRepositoryCommit())->loadOneWhere(
-      'repositoryID = %s AND commitIdentifier = %s',
+      'repositoryID = %d AND commitIdentifier = %s',
       $repository->getID(),
       $commit_identifier);
 

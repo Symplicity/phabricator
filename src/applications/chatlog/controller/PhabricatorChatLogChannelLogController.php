@@ -150,7 +150,6 @@ final class PhabricatorChatLogChannelLogController
       ->setUser($user)
       ->setMethod('GET')
       ->setAction($uri)
-      ->setNoShading(true)
       ->appendChild(
         id(new AphrontFormTextControl())
           ->setLabel(pht('Date'))
@@ -194,7 +193,6 @@ final class PhabricatorChatLogChannelLogController
       array(
         'title' => pht('Channel Log'),
         'device' => true,
-        'dust' => true,
       ));
   }
 
@@ -232,13 +230,7 @@ final class PhabricatorChatLogChannelLogController
       );
 
     } else if ($at_date) {
-      $timezone = new DateTimeZone($user->getTimezoneIdentifier());
-      try {
-        $date = new DateTime($at_date, $timezone);
-        $timestamp = $date->format('U');
-      } catch (Exception $e) {
-        $timestamp = null;
-      }
+      $timestamp = PhabricatorTime::parseLocalTime($at_date, $user);
 
       if ($timestamp) {
         $context_logs = $query

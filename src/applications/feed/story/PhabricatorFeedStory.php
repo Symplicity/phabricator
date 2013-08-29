@@ -13,10 +13,10 @@ abstract class PhabricatorFeedStory implements PhabricatorPolicyInterface {
   private $data;
   private $hasViewed;
   private $framed;
+  private $hovercard = false;
 
   private $handles  = array();
   private $objects  = array();
-
 
 /* -(  Loading Stories  )---------------------------------------------------- */
 
@@ -115,6 +115,11 @@ abstract class PhabricatorFeedStory implements PhabricatorPolicyInterface {
     }
 
     return $stories;
+  }
+
+  public function setHovercard($hover) {
+    $this->hovercard = $hover;
+    return $this;
   }
 
   public function setObjects(array $objects) {
@@ -233,11 +238,19 @@ abstract class PhabricatorFeedStory implements PhabricatorPolicyInterface {
     // NOTE: We render our own link here to customize the styling and add
     // the '_top' target for framed feeds.
 
-    return phutil_tag(
+    $class = null;
+    if ($handle->getType() == PhabricatorPeoplePHIDTypeUser::TYPECONST) {
+      $class = 'phui-link-person';
+    }
+
+    return javelin_tag(
       'a',
       array(
         'href'    => $handle->getURI(),
         'target'  => $this->framed ? '_top' : null,
+        'sigil'   => $this->hovercard ? 'hovercard' : null,
+        'meta'    => $this->hovercard ? array('hoverPHID' => $phid) : null,
+        'class'   => $class,
       ),
       $handle->getLinkName());
   }
@@ -256,6 +269,13 @@ abstract class PhabricatorFeedStory implements PhabricatorPolicyInterface {
 
   public function getNotificationAggregations() {
     return array();
+  }
+
+  protected function newStoryView() {
+    return id(new PHUIFeedStoryView())
+      ->setChronologicalKey($this->getChronologicalKey())
+      ->setEpoch($this->getEpoch())
+      ->setViewed($this->getHasViewed());
   }
 
 

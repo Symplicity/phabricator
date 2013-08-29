@@ -15,9 +15,8 @@ final class PhabricatorTokenGivenFeedStory
   }
 
   public function renderView() {
-    $view = new PHUIFeedStoryView();
+    $view = $this->newStoryView();
     $view->setAppIcon('token-dark');
-    $view->setViewed($this->getHasViewed());
     $author_phid = $this->getValue('authorPHID');
 
     $href = $this->getHandle($this->getPrimaryObjectPHID())->getURI();
@@ -36,7 +35,7 @@ final class PhabricatorTokenGivenFeedStory
 
   public function renderText() {
     // TODO: This is grotesque; the feed notification handler relies on it.
-    return strip_tags($this->renderView()->render());
+    return strip_tags(hsprintf('%s', $this->renderView()->render()));
   }
 
 }

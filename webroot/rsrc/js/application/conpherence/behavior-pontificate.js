@@ -38,13 +38,11 @@ JX.behavior('conpherence-pontificate', function(config) {
           );
         }
 
-        var inputs = JX.DOM.scry(form, 'input');
-        for (var ii = 0; ii < inputs.length; ii++) {
-          if (inputs[ii].name == 'latest_transaction_id') {
-            inputs[ii].value = r.latest_transaction_id;
-            break;
-          }
-        }
+        var latest_transaction_dom = JX.DOM.find(
+          root,
+          'input',
+          'latest-transaction-id');
+        latest_transaction_dom.value = r.latest_transaction_id;
 
         var textarea = JX.DOM.find(form, 'textarea');
         textarea.value = '';
@@ -55,8 +53,6 @@ JX.behavior('conpherence-pontificate', function(config) {
           { id : r.conpherence_phid + '-nav-item' }
           );
 
-        JX.DOM.alterClass(header_root, 'loading', false);
-        JX.DOM.alterClass(messages_root, 'loading', false);
         JX.DOM.alterClass(form_root, 'loading', false);
       }))
     .start();

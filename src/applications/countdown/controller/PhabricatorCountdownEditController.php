@@ -15,26 +15,25 @@ final class PhabricatorCountdownEditController
 
     $request = $this->getRequest();
     $user = $request->getUser();
-    $action_label = pht('Create Countdown');
 
     if ($this->id) {
-      $countdown = id(new CountdownQuery())
+      $page_title = pht('Edit Countdown');
+      $countdown = id(new PhabricatorCountdownQuery())
         ->setViewer($user)
         ->withIDs(array($this->id))
+        ->requireCapabilities(
+          array(
+            PhabricatorPolicyCapability::CAN_VIEW,
+            PhabricatorPolicyCapability::CAN_EDIT,
+          ))
         ->executeOne();
 
       // If no countdown is found
       if (!$countdown) {
         return new Aphront404Response();
       }
-
-      if (($countdown->getAuthorPHID() != $user->getPHID())
-          && $user->getIsAdmin() == false) {
-        return new Aphront403Response();
-      }
-
-      $action_label = pht('Update Countdown');
     } else {
+      $page_title = pht('Create Countdown');
       $countdown = new PhabricatorCountdown();
       $countdown->setEpoch(time());
     }
@@ -50,27 +49,25 @@ final class PhabricatorCountdownEditController
       $e_text = null;
       if (!strlen($title)) {
         $e_text = pht('Required');
-        $errors[] = pht('You must give it a name.');
+        $errors[] = pht('You must give the countdown a name.');
       }
 
-      // If the user types something like "5 PM", convert it to a timestamp
-      // using their local time, not the server time.
-      $timezone = new DateTimeZone($user->getTimezoneIdentifier());
-
-      try {
-        $date = new DateTime($epoch, $timezone);
-        $timestamp = $date->format('U');
-      } catch (Exception $e) {
-        $errors[] = pht('You entered an incorrect date. You can enter date'.
-          ' like \'2011-06-26 13:33:37\' to create an event at'.
-          ' 13:33:37 on the 26th of June 2011.');
-        $timestamp = null;
+      if (strlen($epoch)) {
+        $timestamp = PhabricatorTime::parseLocalTime($epoch, $user);
+        if (!$timestamp) {
+          $errors[] = pht(
+            'You entered an incorrect date. You can enter date '.
+            'like \'2011-06-26 13:33:37\' to create an event at '.
+            '13:33:37 on the 26th of June 2011.');
+        }
+      } else {
+        $e_epoch = pht('Required');
+        $errors[] = pht('You must specify the end date for a countdown.');
       }
-
-      $countdown->setTitle($title);
-      $countdown->setEpoch($timestamp);
 
       if (!count($errors)) {
+        $countdown->setTitle($title);
+        $countdown->setEpoch($timestamp);
         $countdown->setAuthorPHID($user->getPHID());
         $countdown->save();
         return id(new AphrontRedirectResponse())
@@ -84,12 +81,31 @@ final class PhabricatorCountdownEditController
     }
 
     if ($countdown->getEpoch()) {
-      $display_epoch = phabricator_datetime(
-        $countdown->getEpoch(),
-        $user);
+      $display_epoch = phabricator_datetime($countdown->getEpoch(), $user);
     } else {
       $display_epoch = $request->getStr('epoch');
     }
+
+    $crumbs = $this->buildApplicationCrumbs();
+
+    $cancel_uri = '/countdown/';
+    if ($countdown->getID()) {
+      $cancel_uri = '/countdown/'.$countdown->getID().'/';
+      $crumbs->addCrumb(
+        id(new PhabricatorCrumbView())
+          ->setName('C'.$countdown->getID())
+          ->setHref($cancel_uri));
+      $crumbs->addCrumb(
+        id(new PhabricatorCrumbView())
+          ->setName(pht('Edit')));
+      $submit_label = pht('Save Changes');
+    } else {
+      $crumbs->addCrumb(
+        id(new PhabricatorCrumbView())
+          ->setName(pht('Create Countdown')));
+      $submit_label = pht('Create Countdown');
+    }
+
 
     $form = id(new AphrontFormView())
       ->setUser($user)
@@ -101,7 +117,7 @@ final class PhabricatorCountdownEditController
           ->setName('title'))
       ->appendChild(
         id(new AphrontFormTextControl())
-          ->setLabel(pht('End date'))
+          ->setLabel(pht('End Date'))
           ->setValue($display_epoch)
           ->setName('epoch')
           ->setCaption(pht('Examples: '.
@@ -109,30 +125,21 @@ final class PhabricatorCountdownEditController
             'June 8 2011, 5 PM.')))
       ->appendChild(
         id(new AphrontFormSubmitControl())
-          ->addCancelButton('/countdown/')
-          ->setValue($action_label));
+          ->addCancelButton($cancel_uri)
+          ->setValue($submit_label));
 
-    $panel = id(new AphrontPanelView())
-      ->setWidth(AphrontPanelView::WIDTH_FORM)
-      ->setHeader($action_label)
-      ->setNoBackground()
-      ->appendChild($form);
-
-    $crumbs = $this
-      ->buildApplicationCrumbs()
-      ->addCrumb(
-        id(new PhabricatorCrumbView())
-          ->setName($action_label)
-          ->setHref($this->getApplicationURI('edit/')));
+    $form_box = id(new PHUIFormBoxView())
+      ->setHeaderText($page_title)
+      ->setFormError($error_view)
+      ->setForm($form);
 
     return $this->buildApplicationPage(
       array(
         $crumbs,
-        $error_view,
-        $panel,
+        $form_box,
       ),
       array(
-        'title' => pht('Edit Countdown'),
+        'title' => $page_title,
         'device' => true,
       ));
   }

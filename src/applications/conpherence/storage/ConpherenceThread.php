@@ -31,7 +31,7 @@ final class ConpherenceThread extends ConpherenceDAO
 
   public function generatePHID() {
     return PhabricatorPHID::generateNewPHID(
-      PhabricatorPHIDConstants::PHID_TYPE_CONP);
+      PhabricatorConpherencePHIDTypeThread::TYPECONST);
   }
 
   public function save() {
@@ -133,7 +133,7 @@ final class ConpherenceThread extends ConpherenceDAO
     return $this->widgetData;
   }
 
-  public function getDisplayData(PhabricatorUser $user, $size) {
+  public function getDisplayData(PhabricatorUser $user) {
     $recent_phids = $this->getRecentParticipantPHIDs();
     $handles = $this->getHandles();
 
@@ -213,6 +213,10 @@ final class ConpherenceThread extends ConpherenceDAO
   }
 
   public function hasAutomaticCapability($capability, PhabricatorUser $user) {
+    // this bad boy isn't even created yet so go nuts $user
+    if (!$this->getID()) {
+      return true;
+    }
     $participants = $this->getParticipants();
     return isset($participants[$user->getPHID()]);
   }

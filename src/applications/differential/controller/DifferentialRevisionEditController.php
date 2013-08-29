@@ -9,28 +9,36 @@ final class DifferentialRevisionEditController extends DifferentialController {
   }
 
   public function processRequest() {
-
     $request = $this->getRequest();
+    $viewer = $request->getUser();
 
     if (!$this->id) {
       $this->id = $request->getInt('revisionID');
     }
 
     if ($this->id) {
-      $revision = id(new DifferentialRevision())->load($this->id);
+      $revision = id(new DifferentialRevisionQuery())
+        ->setViewer($viewer)
+        ->withIDs(array($this->id))
+        ->needRelationships(true)
+        ->needReviewerStatus(true)
+        ->executeOne();
       if (!$revision) {
         return new Aphront404Response();
       }
     } else {
       $revision = new DifferentialRevision();
+      $revision->attachRelationships(array());
     }
 
-    $revision->loadRelationships();
     $aux_fields = $this->loadAuxiliaryFields($revision);
 
     $diff_id = $request->getInt('diffID');
     if ($diff_id) {
-      $diff = id(new DifferentialDiff())->load($diff_id);
+      $diff = id(new DifferentialDiffQuery())
+        ->setViewer($viewer)
+        ->withIDs(array($diff_id))
+        ->executeOne();
       if (!$diff) {
         return new Aphront404Response();
       }
@@ -106,7 +114,6 @@ final class DifferentialRevisionEditController extends DifferentialController {
 
     $form = new AphrontFormView();
     $form->setUser($request->getUser());
-    $form->setFlexible(true);
     if ($diff) {
       $form->addHiddenInput('diffID', $diff->getID());
     }
@@ -139,11 +146,13 @@ final class DifferentialRevisionEditController extends DifferentialController {
           id(new AphrontFormDividerControl()));
     }
 
+    $preview = array();
     foreach ($aux_fields as $aux_field) {
       $control = $aux_field->renderEditControl();
       if ($control) {
         $form->appendChild($control);
       }
+      $preview[] = $aux_field->renderEditPreview();
     }
 
     $submit = id(new AphrontFormSubmitControl())
@@ -175,20 +184,23 @@ final class DifferentialRevisionEditController extends DifferentialController {
       $title = pht('Create New Differential Revision');
     }
 
+    $form_box = id(new PHUIFormBoxView())
+      ->setHeaderText($title)
+      ->setFormError($error_view)
+      ->setForm($form);
+
     $crumbs->addCrumb(
       id(new PhabricatorCrumbView())
-        ->setName($title)
-        ->setHref(''));
+        ->setName($title));
 
     return $this->buildApplicationPage(
       array(
         $crumbs,
-        $error_view,
-        $form),
+        $form_box,
+        $preview),
       array(
         'title' => $title,
         'device' => true,
-        'dust' => true,
       ));
   }
 

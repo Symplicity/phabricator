@@ -100,7 +100,9 @@ abstract class PhabricatorController extends AphrontController {
     }
 
     if ($this->shouldRequireLogin() && !$user->getPHID()) {
-      $login_controller = new PhabricatorLoginController($request);
+      $login_controller = new PhabricatorAuthStartController($request);
+      $this->setCurrentApplication(
+        PhabricatorApplication::getByClass('PhabricatorApplicationAuth'));
       return $this->delegateToController($login_controller);
     }
 
@@ -186,7 +188,6 @@ abstract class PhabricatorController extends AphrontController {
     }
 
     $page->setShowChrome(idx($options, 'chrome', true));
-    $page->setDust(idx($options, 'dust', false));
 
     $application_menu = $this->buildApplicationMenu();
     if ($application_menu) {
@@ -228,6 +229,8 @@ abstract class PhabricatorController extends AphrontController {
         $response->setContent($view->render());
         return $response;
       } else {
+        $response->getDialog()->setIsStandalone(true);
+
         return id(new AphrontAjaxResponse())
           ->setContent(array(
             'dialog' => $response->buildResponseString(),

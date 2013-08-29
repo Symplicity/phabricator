@@ -226,41 +226,42 @@ final class PhrictionEditController
           ->addCancelButton($cancel_uri)
           ->setValue($submit_button));
 
-    $header = id(new PhabricatorHeaderView())
-      ->setHeader($panel_header);
+    $form_box = id(new PHUIFormBoxView())
+      ->setHeaderText(pht('Edit Document'))
+      ->setFormError($error_view)
+      ->setForm($form);
 
-    $preview_panel = hsprintf(
-      '<div class="phriction-wrap">
-        <div class="phriction-content">
-        <div class="phriction-document-preview-header plt pll">%s</div>
-        <div id="document-preview">
-          <div class="aphront-panel-preview-loading-text">%s</div>
-        </div>
-        </div>
-      </div>',
-      pht('Document Preview'),
-      pht('Loading preview...'));
+    $preview = id(new PHUIRemarkupPreviewPanel())
+      ->setHeader(pht('Document Preview'))
+      ->setPreviewURI('/phriction/preview/')
+      ->setControlID('document-textarea')
+      ->setSkin('document');
 
-    Javelin::initBehavior(
-      'phriction-document-preview',
-      array(
-        'preview'   => 'document-preview',
-        'textarea'  => 'document-textarea',
-        'uri'       => '/phriction/preview/?draftkey='.$draft_key,
-      ));
+    $crumbs = $this->buildApplicationCrumbs();
+    if ($document->getID()) {
+      $crumbs->addCrumb(
+        id(new PhabricatorCrumbView())
+          ->setName($content->getTitle())
+          ->setHref(PhrictionDocument::getSlugURI($document->getSlug())));
+      $crumbs->addCrumb(
+        id(new PhabricatorCrumbView())
+          ->setName(pht('Edit')));
+    } else {
+      $crumbs->addCrumb(
+        id(new PhabricatorCrumbView())
+          ->setName(pht('Create')));
+    }
 
     return $this->buildApplicationPage(
       array(
+        $crumbs,
         $draft_note,
-        $error_view,
-        $header,
-        $form,
-        $preview_panel,
+        $form_box,
+        $preview,
       ),
       array(
         'title'   => pht('Edit Document'),
         'device'  => true,
-        'dust'    => true,
       ));
   }
 

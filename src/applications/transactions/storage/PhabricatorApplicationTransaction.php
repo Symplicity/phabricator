@@ -30,8 +30,21 @@ abstract class PhabricatorApplicationTransaction
   private $transactionGroup = array();
 
   abstract public function getApplicationTransactionType();
-  abstract public function getApplicationTransactionCommentObject();
-  abstract public function getApplicationObjectTypeName();
+
+  private function getApplicationObjectTypeName() {
+    $types = PhabricatorPHIDType::getAllTypes();
+
+    $type = idx($types, $this->getApplicationTransactionType());
+    if ($type) {
+      return $type->getTypeName();
+    }
+
+    return pht('Object');
+  }
+
+  public function getApplicationTransactionCommentObject() {
+    throw new Exception("Not implemented!");
+  }
 
   public function getApplicationTransactionViewObject() {
     return new PhabricatorApplicationTransactionView();
@@ -47,7 +60,7 @@ abstract class PhabricatorApplicationTransaction
   }
 
   public function generatePHID() {
-    $type = PhabricatorPHIDConstants::PHID_TYPE_XACT;
+    $type = PhabricatorApplicationTransactionPHIDTypeTransaction::TYPECONST;
     $subtype = $this->getApplicationTransactionType();
 
     return PhabricatorPHID::generateNewPHID($type, $subtype);
@@ -163,7 +176,7 @@ abstract class PhabricatorApplicationTransaction
     return $this->handles;
   }
 
-  protected function renderHandleLink($phid) {
+  public function renderHandleLink($phid) {
     if ($this->renderingTarget == self::TARGET_HTML) {
       return $this->getHandle($phid)->renderLink();
     } else {
@@ -171,7 +184,7 @@ abstract class PhabricatorApplicationTransaction
     }
   }
 
-  protected function renderHandleList(array $phids) {
+  public function renderHandleList(array $phids) {
     $links = array();
     foreach ($phids as $phid) {
       $links[] = $this->renderHandleLink($phid);
@@ -212,6 +225,10 @@ abstract class PhabricatorApplicationTransaction
     }
 
     return false;
+  }
+
+  public function shouldHideForMail() {
+    return $this->shouldHide();
   }
 
   public function getNoEffectDescription() {
@@ -298,11 +315,38 @@ abstract class PhabricatorApplicationTransaction
         }
         break;
       case PhabricatorTransactions::TYPE_EDGE:
+        $new = ipull($new, 'dst');
+        $old = ipull($old, 'dst');
+        $add = array_diff($new, $old);
+        $rem = array_diff($old, $new);
         $type = $this->getMetadata('edge:type');
-        return pht(
-          '%s edited edges of type %s.',
-          $this->renderHandleLink($author_phid),
-          $type);
+        $type = head($type);
+
+        if ($add && $rem) {
+          $string = PhabricatorEdgeConfig::getEditStringForEdgeType($type);
+          return pht(
+            $string,
+            $this->renderHandleLink($author_phid),
+            count($add),
+            $this->renderHandleList($add),
+            count($rem),
+            $this->renderHandleList($rem));
+        } else if ($add) {
+          $string = PhabricatorEdgeConfig::getAddStringForEdgeType($type);
+          return pht(
+            $string,
+            $this->renderHandleLink($author_phid),
+            count($add),
+            $this->renderHandleList($add));
+        } else {
+          $string = PhabricatorEdgeConfig::getRemoveStringForEdgeType($type);
+          return pht(
+            $string,
+            $this->renderHandleLink($author_phid),
+            count($rem),
+            $this->renderHandleList($rem));
+        }
+
       default:
         return pht(
           '%s edited this %s.',
@@ -340,13 +384,32 @@ abstract class PhabricatorApplicationTransaction
           $this->renderHandleLink($author_phid),
           $this->renderHandleLink($object_phid));
       case PhabricatorTransactions::TYPE_EDGE:
+        $type = $this->getMetadata('edge:type');
+        $type = head($type);
+        $string = PhabricatorEdgeConfig::getFeedStringForEdgeType($type);
         return pht(
-          '%s updated edges of %s.',
+          $string,
           $this->renderHandleLink($author_phid),
           $this->renderHandleLink($object_phid));
     }
 
     return $this->getTitle();
+  }
+
+  public function getBodyForFeed(PhabricatorFeedStory $story) {
+    $old = $this->getOldValue();
+    $new = $this->getNewValue();
+
+    $body = null;
+
+    switch ($this->getTransactionType()) {
+      case PhabricatorTransactions::TYPE_COMMENT:
+        $text = $this->getComment()->getContent();
+        $body = phutil_escape_html_newlines(
+          phutil_utf8_shorten($text, 128));
+        break;
+    }
+    return $body;
   }
 
   public function getActionStrength() {

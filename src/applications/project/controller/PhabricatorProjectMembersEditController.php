@@ -91,7 +91,6 @@ final class PhabricatorProjectMembersEditController
     $form = new AphrontFormView();
     $form
       ->setUser($user)
-      ->setFlexible(true)
       ->appendChild(
         id(new AphrontFormTokenizerControl())
           ->setName('phids')
@@ -101,22 +100,19 @@ final class PhabricatorProjectMembersEditController
         id(new AphrontFormSubmitControl())
           ->addCancelButton('/project/view/'.$project->getID().'/')
           ->setValue(pht('Add Members')));
-    $faux_form = id(new AphrontFormLayoutView())
+    $faux_form = id(new AphrontFormView())
+      ->setUser($user)
       ->appendChild(
         id(new AphrontFormInsetView())
-          ->setTitle(pht('Current Members (%d)', count($handles)))
           ->appendChild($list));
 
-    $box = new PHUIBoxView();
-    $box->appendChild($faux_form);
-    $box->setShadow(true);
-    $box->addPadding(PHUI::PADDING_LARGE);
-    $box->addMargin(PHUI::MARGIN_LARGE);
+    $box = id(new PHUIFormBoxView())
+      ->setHeaderText(pht('Current Members (%d)', count($handles)))
+      ->setForm($faux_form);
 
-    $nav = $this->buildLocalNavigation($project);
-    $nav->selectFilter('members');
-    $nav->appendChild($form);
-    $nav->appendChild($box);
+    $form_box = id(new PHUIFormBoxView())
+      ->setHeaderText($title)
+      ->setForm($form);
 
     $crumbs = $this->buildApplicationCrumbs($this->buildSideNavView());
     $crumbs->addCrumb(
@@ -127,14 +123,16 @@ final class PhabricatorProjectMembersEditController
       id(new PhabricatorCrumbView())
         ->setName(pht('Edit Members'))
         ->setHref($this->getApplicationURI()));
-    $nav->setCrumbs($crumbs);
 
     return $this->buildApplicationPage(
-      $nav,
+      array(
+        $crumbs,
+        $form_box,
+        $box,
+      ),
       array(
         'title' => $title,
         'device' => true,
-        'dust' => true,
       ));
   }
 

@@ -81,8 +81,6 @@ final class PhabricatorPropertyListView extends AphrontView {
     $this->invokedWillRenderEvent = true;
   }
 
-
-
   public function render() {
     $this->invokeWillRenderEvent();
 

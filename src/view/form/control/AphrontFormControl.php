@@ -13,6 +13,12 @@ abstract class AphrontFormControl extends AphrontView {
   private $controlStyle;
   private $formPage;
   private $required;
+  private $hidden;
+
+  public function setHidden($hidden) {
+    $this->hidden = $hidden;
+    return $this;
+  }
 
   public function setID($id) {
     $this->id = $id;
@@ -199,12 +205,21 @@ abstract class AphrontFormControl extends AphrontView {
       $caption = null;
     }
 
+    $classes = array();
+    $classes[] = 'aphront-form-control';
+    $classes[] = $custom_class;
+
+    $style = $this->controlStyle;
+    if ($this->hidden) {
+      $style = 'display: none; '.$style;
+    }
+
     return phutil_tag(
       'div',
       array(
-        'class' => "aphront-form-control {$custom_class}",
+        'class' => implode(' ', $classes),
         'id' => $this->controlID,
-        'style' => $this->controlStyle,
+        'style' => $style,
       ),
       array(
         $label,

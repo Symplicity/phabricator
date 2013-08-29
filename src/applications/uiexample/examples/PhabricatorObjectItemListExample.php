@@ -122,7 +122,7 @@ final class PhabricatorObjectItemListExample extends PhabricatorUIExample {
           'some other parts; most of these parts are pretty squishy'))
         ->addFootIcon('search-white', pht('Respiration!'))
         ->addHandleIcon($handle, pht('You have a cardiovascular system!'))
-        ->setBarColor('magenta'));
+        ->setBarColor('indigo'));
 
 
     $out[] = array($head, $list);
@@ -154,7 +154,7 @@ final class PhabricatorObjectItemListExample extends PhabricatorUIExample {
         ->setGrippable(true)
         ->setBarColor('green')
         ->addAction(
-          id(new PhabricatorMenuItemView())
+          id(new PHUIListItemView())
             ->setHref('#')
             ->setIcon('delete')));
 
@@ -170,8 +170,9 @@ final class PhabricatorObjectItemListExample extends PhabricatorUIExample {
         ->setHref('#')
         ->setBarColor('blue')
         ->addAction(
-          id(new PhabricatorMenuItemView())
+          id(new PHUIListItemView())
             ->setHref('#')
+            ->setName(pht('Moo'))
             ->setIcon('edit')));
 
     $list->addItem(
@@ -180,12 +181,14 @@ final class PhabricatorObjectItemListExample extends PhabricatorUIExample {
         ->setHref('#')
         ->setBarColor('violet')
         ->addAction(
-          id(new PhabricatorMenuItemView())
+          id(new PHUIListItemView())
             ->setHref('#')
+            ->setName(pht('Quack'))
             ->setIcon('edit'))
         ->addAction(
-          id(new PhabricatorMenuItemView())
+          id(new PHUIListItemView())
             ->setHref('#')
+            ->setName(pht('Oink'))
             ->setIcon('delete')));
 
     $out[] = array($head, $list);
@@ -243,19 +246,29 @@ final class PhabricatorObjectItemListExample extends PhabricatorUIExample {
 
     $list->addItem(
       id(new PhabricatorObjectItemView())
+        ->setObjectName('X1')
         ->setHeader(pht('Normal'))
         ->setHref('#'));
 
     $list->addItem(
       id(new PhabricatorObjectItemView())
+        ->setObjectName('X2')
         ->setHeader(pht('Highlighted'))
         ->setEffect('highlighted')
         ->setHref('#'));
 
     $list->addItem(
       id(new PhabricatorObjectItemView())
+        ->setObjectName('X3')
         ->setHeader(pht('Selected'))
         ->setEffect('selected')
+        ->setHref('#'));
+
+    $list->addItem(
+      id(new PhabricatorObjectItemView())
+        ->setObjectName('X4')
+        ->setHeader(pht('Disabled'))
+        ->setDisabled(true)
         ->setHref('#'));
 
     $out[] = array($head, $list);

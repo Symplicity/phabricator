@@ -25,9 +25,10 @@ final class PhrictionDocumentController
 
     require_celerity_resource('phriction-document-css');
 
-    $document = id(new PhrictionDocument())->loadOneWhere(
-      'slug = %s',
-      $slug);
+    $document = id(new PhrictionDocumentQuery())
+      ->setViewer($user)
+      ->withSlugs(array($slug))
+      ->executeOne();
 
     $version_note = null;
     $core_content = '';
@@ -85,10 +86,8 @@ final class PhrictionDocumentController
       }
       $page_title = $content->getTitle();
 
-      $subscribers = PhabricatorSubscribersQuery::loadSubscribersForPHID(
-        $document->getPHID());
       $properties = $this
-        ->buildPropertyListView($document, $content, $slug, $subscribers);
+        ->buildPropertyListView($document, $content, $slug);
 
       $doc_status = $document->getStatus();
       $current_status = $content->getChangeType();
@@ -163,18 +162,16 @@ final class PhrictionDocumentController
     $header = id(new PhabricatorHeaderView())
       ->setHeader($page_title);
 
-    $page_content = hsprintf(
-      '<div class="phriction-wrap">
-        <div class="phriction-content">
-          %s%s%s%s%s
-        </div>
-        <div class="phriction-fake-space"></div>
-      </div>',
-      $header,
-      $actions,
-      $properties,
-      $move_notice,
-      $core_content);
+    $page_content = id(new PHUIDocumentView())
+      ->setOffset(true)
+      ->setHeader($header)
+      ->appendChild(
+        array(
+          $actions,
+          $properties,
+          $move_notice,
+          $core_content,
+        ));
 
     $core_page = phutil_tag(
       'div',
@@ -192,9 +189,9 @@ final class PhrictionDocumentController
         $core_page,
       ),
       array(
+        'pageObjects' => array($document->getPHID()),
         'title'   => $page_title,
         'device'  => true,
-        'dust'    => true,
       ));
 
   }
@@ -202,8 +199,7 @@ final class PhrictionDocumentController
   private function buildPropertyListView(
     PhrictionDocument $document,
     PhrictionContent $content,
-    $slug,
-    array $subscribers) {
+    $slug) {
 
     $viewer = $this->getRequest()->getUser();
     $view = id(new PhabricatorPropertyListView())
@@ -225,10 +221,6 @@ final class PhrictionDocumentController
         $content->getAuthorPHID(),
         $project_phid,
       ));
-
-    if ($subscribers) {
-      $phids = array_merge($phids, $subscribers);
-    }
 
     $this->loadHandles($phids);
 
@@ -254,11 +246,6 @@ final class PhrictionDocumentController
     }
     $view->addProperty(pht('Last Updated'), $when);
 
-    if ($subscribers) {
-      $subscribers = $this->renderHandlesForPHIDs($subscribers, ',');
-      $view->addProperty(pht('Subscribers'), $subscribers);
-    }
-
     return $view;
   }
 
@@ -274,6 +261,7 @@ final class PhrictionDocumentController
 
     $action_view = id(new PhabricatorActionListView())
       ->setUser($user)
+      ->setObjectURI($this->getRequest()->getRequestURI())
       ->setObject($document);
 
     if (!$document->getID()) {
@@ -420,15 +408,25 @@ final class PhrictionDocumentController
       $list[] = phutil_tag('li', array(), pht('More...'));
     }
 
-    return hsprintf(
-      '<div class="phriction-wrap">
-        <div class="phriction-children">
-        <div class="phriction-children-header">%s</div>
-        %s
-        </div>
-      </div>',
-      pht('Document Hierarchy'),
-      phutil_tag('ul', array(), $list));
+    $content = array(
+      phutil_tag(
+        'div',
+        array(
+          'class' => 'phriction-children-header '.
+            'sprite-gradient gradient-lightblue-header',
+        ),
+        pht('Document Hierarchy')),
+      phutil_tag(
+        'div',
+        array(
+          'class' => 'phriction-children',
+        ),
+        phutil_tag('ul', array(), $list)),
+    );
+
+    return id(new PHUIDocumentView())
+      ->setOffset(true)
+      ->appendChild($content);
   }
 
   private function renderChildDocumentLink(array $info) {

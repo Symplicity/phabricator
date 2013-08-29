@@ -2,10 +2,14 @@
 
 final class PhabricatorUser
   extends PhabricatorUserDAO
-  implements PhutilPerson, PhabricatorPolicyInterface {
+  implements
+    PhutilPerson,
+    PhabricatorPolicyInterface,
+    PhabricatorCustomFieldInterface {
 
   const SESSION_TABLE = 'phabricator_session';
   const NAMETOKEN_TABLE = 'user_nametoken';
+  const MAXIMUM_USERNAME_LENGTH = 64;
 
   protected $phid;
   protected $userName;
@@ -29,9 +33,10 @@ final class PhabricatorUser
 
   private $profileImage = null;
   private $profile = null;
-  private $status = null;
+  private $status = self::ATTACHABLE;
   private $preferences = null;
   private $omnipotent = false;
+  private $customFields = self::ATTACHABLE;
 
   protected function readField($field) {
     switch ($field) {
@@ -61,7 +66,7 @@ final class PhabricatorUser
 
   public function generatePHID() {
     return PhabricatorPHID::generateNewPHID(
-      PhabricatorPHIDConstants::PHID_TYPE_USER);
+      PhabricatorPeoplePHIDTypeUser::TYPECONST);
   }
 
   public function setPassword(PhutilOpaqueEnvelope $envelope) {
@@ -109,6 +114,10 @@ final class PhabricatorUser
     }
     $result = parent::save();
 
+    if ($this->profile) {
+      $this->profile->save();
+    }
+
     $this->updateNameTokens();
 
     id(new PhabricatorSearchIndexer())
@@ -144,12 +153,14 @@ final class PhabricatorUser
   }
 
   const CSRF_CYCLE_FREQUENCY  = 3600;
+  const CSRF_SALT_LENGTH      = 8;
   const CSRF_TOKEN_LENGTH     = 16;
+  const CSRF_BREACH_PREFIX    = 'B@';
 
   const EMAIL_CYCLE_FREQUENCY = 86400;
   const EMAIL_TOKEN_LENGTH    = 24;
 
-  public function getCSRFToken($offset = 0) {
+  private function getRawCSRFToken($offset = 0) {
     return $this->generateToken(
       time() + (self::CSRF_CYCLE_FREQUENCY * $offset),
       self::CSRF_CYCLE_FREQUENCY,
@@ -157,10 +168,40 @@ final class PhabricatorUser
       self::CSRF_TOKEN_LENGTH);
   }
 
-  public function validateCSRFToken($token) {
+  /**
+   * @phutil-external-symbol class PhabricatorStartup
+   */
+  public function getCSRFToken() {
+    $salt = PhabricatorStartup::getGlobal('csrf.salt');
+    if (!$salt) {
+      $salt = Filesystem::readRandomCharacters(self::CSRF_SALT_LENGTH);
+      PhabricatorStartup::setGlobal('csrf.salt', $salt);
+    }
 
+    // Generate a token hash to mitigate BREACH attacks against SSL. See
+    // discussion in T3684.
+    $token = $this->getRawCSRFToken();
+    $hash = PhabricatorHash::digest($token, $salt);
+    return 'B@'.$salt.substr($hash, 0, self::CSRF_TOKEN_LENGTH);
+  }
+
+  public function validateCSRFToken($token) {
     if (!$this->getPHID()) {
       return true;
+    }
+
+    $salt = null;
+
+    $version = 'plain';
+
+    // This is a BREACH-mitigating token. See T3684.
+    $breach_prefix = self::CSRF_BREACH_PREFIX;
+    $breach_prelen = strlen($breach_prefix);
+
+    if (!strncmp($token, $breach_prefix, $breach_prelen)) {
+      $version = 'breach';
+      $salt = substr($token, $breach_prelen, self::CSRF_SALT_LENGTH);
+      $token = substr($token, $breach_prelen + self::CSRF_SALT_LENGTH);
     }
 
     // When the user posts a form, we check that it contains a valid CSRF token.
@@ -191,9 +232,23 @@ final class PhabricatorUser
     $csrf_window = 6;
 
     for ($ii = -$csrf_window; $ii <= 1; $ii++) {
-      $valid = $this->getCSRFToken($ii);
-      if ($token == $valid) {
-        return true;
+      $valid = $this->getRawCSRFToken($ii);
+      switch ($version) {
+        // TODO: We can remove this after the BREACH version has been in the
+        // wild for a while.
+        case 'plain':
+          if ($token == $valid) {
+            return true;
+          }
+          break;
+        case 'breach':
+          $digest = PhabricatorHash::digest($valid, $salt);
+          if (substr($digest, 0, self::CSRF_TOKEN_LENGTH) == $token) {
+            return true;
+          }
+          break;
+        default:
+          throw new Exception("Unknown CSRF token format!");
       }
     }
 
@@ -604,7 +659,7 @@ EOBODY;
     $new_username = $this->getUserName();
 
     $password_instructions = null;
-    if (PhabricatorEnv::getEnvConfig('auth.password-auth-enabled')) {
+    if (PhabricatorAuthProviderPassword::getPasswordProvider()) {
       $uri = $this->getEmailLoginURI();
       $password_instructions = <<<EOTXT
 If you use a password to login, you'll need to reset it before you can login
@@ -635,8 +690,11 @@ EOBODY;
   }
 
   public static function describeValidUsername() {
-    return 'Usernames must contain only numbers, letters, period, underscore '.
-           'and hyphen, and can not end with a period.';
+    return pht(
+      'Usernames must contain only numbers, letters, period, underscore and '.
+      'hyphen, and can not end with a period. They must have no more than %d '.
+      'characters.',
+      new PhutilNumber(self::MAXIMUM_USERNAME_LENGTH));
   }
 
   public static function validateUsername($username) {
@@ -647,11 +705,29 @@ EOBODY;
     //  - Unit tests, obviously.
     //  - describeValidUsername() method, above.
 
+    if (strlen($username) > self::MAXIMUM_USERNAME_LENGTH) {
+      return false;
+    }
+
     return (bool)preg_match('/^[a-zA-Z0-9._-]*[a-zA-Z0-9_-]$/', $username);
   }
 
   public static function getDefaultProfileImageURI() {
     return celerity_get_resource_uri('/rsrc/image/avatar.png');
+  }
+
+  public function attachStatus(PhabricatorUserStatus $status) {
+    $this->status = $status;
+    return $this;
+  }
+
+  public function getStatus() {
+    $this->assertAttached($this->status);
+    return $this->status;
+  }
+
+  public function hasStatus() {
+    return $this->status !== self::ATTACHABLE;
   }
 
   public function attachProfileImageURI($uri) {
@@ -755,5 +831,25 @@ EOBODY;
     return $this->getPHID() && ($viewer->getPHID() === $this->getPHID());
   }
 
+
+/* -(  PhabricatorCustomFieldInterface  )------------------------------------ */
+
+
+  public function getCustomFieldSpecificationForRole($role) {
+    return PhabricatorEnv::getEnvConfig('user.fields');
+  }
+
+  public function getCustomFieldBaseClass() {
+    return 'PhabricatorUserCustomField';
+  }
+
+  public function getCustomFields() {
+    return $this->assertAttached($this->customFields);
+  }
+
+  public function attachCustomFields(PhabricatorCustomFieldAttachment $fields) {
+    $this->customFields = $fields;
+    return $this;
+  }
 
 }

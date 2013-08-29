@@ -1,5 +1,8 @@
 <?php
 
+/**
+ * @group paste
+ */
 final class PhabricatorPasteQuery
   extends PhabricatorCursorPagedPolicyAwareQuery {
 
@@ -85,10 +88,6 @@ final class PhabricatorPasteQuery
   }
 
   protected function willFilterPage(array $pastes) {
-    if (!$pastes) {
-      return $pastes;
-    }
-
     if ($this->needRawContent) {
       $pastes = $this->loadRawContent($pastes);
     }
@@ -199,7 +198,7 @@ final class PhabricatorPasteQuery
       $key = $this->getContentCacheKey($paste);
       if (isset($caches[$key])) {
         $paste->attachContent(phutil_safe_html($caches[$key]));
-        $results[$key] = $paste;
+        $results[$paste->getID()] = $paste;
       } else {
         $need_raw[$key] = $paste;
       }
@@ -217,7 +216,7 @@ final class PhabricatorPasteQuery
       $paste->attachContent($content);
 
       $write_data[$this->getContentCacheKey($paste)] = (string)$content;
-      $results[$key] = $paste;
+      $results[$paste->getID()] = $paste;
     }
 
     $cache->setKeys($write_data);

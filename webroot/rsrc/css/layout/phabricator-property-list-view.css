@@ -28,7 +28,7 @@
   border-color: #c0c5d1;
   border-style: solid;
   border-width: 0 0 1px;
-  background-color: #f6f6f6;
+  background-color: #F7F7F8;
 }
 
 .device-desktop .phabricator-property-list-container {
@@ -91,6 +91,7 @@
   padding: 12px 18px;
   background: #fdfdfd;
   border-bottom: 1px solid #dbdbdb;
+  overflow: hidden;
 }
 
 .phabricator-property-list-image-content {

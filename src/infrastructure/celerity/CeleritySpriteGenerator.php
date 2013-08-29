@@ -40,11 +40,8 @@ final class CeleritySpriteGenerator {
         if ($color == 'white') {
           $tcss[] = '.device-desktop .phabricator-action-view:hover '.
             '.icons-'.$icon;
-          if ($icon == 'new') {
-            // Hover state for the "+" icons on homepage tiles.
-            $tcss[] = '.phabricator-application-launch-create:hover '.
-                      '.phabricator-application-create-icon.icons-new-grey';
-          }
+          $tcss[] = '.device-desktop .phui-list-sidenav '.
+            '.phui-list-item-href:hover .icons-'.$icon;
         }
 
         $sprite->setTargetCSS(implode(', ', $tcss));
@@ -240,6 +237,16 @@ final class CeleritySpriteGenerator {
         'y' => 24,
         'css' => '.menu-icon-search-blue',
       ),
+      'new' => array(
+        'x' => 24,
+        'y' => 24,
+        'css' => '.menu-icon-new',
+      ),
+      'new_blue' => array(
+        'x' => 24,
+        'y' => 24,
+        'css' => '.menu-icon-new-blue',
+      ),
       'app' => array(
         'x' => 24,
         'y' => 24,
@@ -251,8 +258,8 @@ final class CeleritySpriteGenerator {
         'css' => '.menu-icon-app-blue',
       ),
       'logo' => array(
-        'x' => 139,
-        'y' => 25,
+        'x' => 149,
+        'y' => 26,
         'css' => '.phabricator-main-menu-logo-image',
       ),
       'conf-off' => array(
@@ -440,6 +447,70 @@ final class CeleritySpriteGenerator {
     return $sheet;
   }
 
+  public function buildLoginSheet() {
+    $icons = $this->getDirectoryList('login_1x');
+    $scales = array(
+      '1x' => 1,
+      '2x' => 2,
+    );
+    $template = id(new PhutilSprite())
+      ->setSourceSize(34, 34);
+
+    $sprites = array();
+    $prefix = 'login_';
+    foreach ($icons as $icon) {
+      $sprite = id(clone $template)
+        ->setName('login-'.$icon)
+        ->setTargetCSS('.login-'.$icon);
+
+      foreach ($scales as $scale_key => $scale) {
+        $path = $this->getPath($prefix.$scale_key.'/'.$icon.'.png');
+        $sprite->setSourceFile($path, $scale);
+      }
+      $sprites[] = $sprite;
+    }
+
+    $sheet = $this->buildSheet('login', true);
+    $sheet->setScales($scales);
+    foreach ($sprites as $sprite) {
+      $sheet->addSprite($sprite);
+    }
+
+    return $sheet;
+  }
+
+  public function buildStatusSheet() {
+    $icons = $this->getDirectoryList('status_1x');
+    $scales = array(
+      '1x' => 1,
+      '2x' => 2,
+    );
+    $template = id(new PhutilSprite())
+      ->setSourceSize(14, 14);
+
+    $sprites = array();
+    $prefix = 'status_';
+    foreach ($icons as $icon) {
+      $sprite = id(clone $template)
+        ->setName('status-'.$icon)
+        ->setTargetCSS('.status-'.$icon);
+
+      foreach ($scales as $scale_key => $scale) {
+        $path = $this->getPath($prefix.$scale_key.'/'.$icon.'.png');
+        $sprite->setSourceFile($path, $scale);
+      }
+      $sprites[] = $sprite;
+    }
+
+    $sheet = $this->buildSheet('status', true);
+    $sheet->setScales($scales);
+    foreach ($sprites as $sprite) {
+      $sheet->addSprite($sprite);
+    }
+
+    return $sheet;
+  }
+
   public function buildGradientSheet() {
     $gradients = $this->getDirectoryList('gradients');
 
@@ -455,13 +526,14 @@ final class CeleritySpriteGenerator {
       'yellow-header'   => 70,
       'grey-header'     => 70,
       'dark-grey-header' => 70,
+      'lightblue-header' => 70,
     );
 
     $extra_css = array(
       'dark-menu-label' =>
-        ', .phabricator-dark-menu .phabricator-menu-item-type-label',
+        ', .phabricator-dark-menu .phui-list-item-type-label',
       'menu-label' =>
-        ', .phabricator-side-menu .phabricator-menu-item-type-label',
+        ', .phabricator-side-menu .phui-list-item-type-label',
     );
 
     $sprites = array();
@@ -481,8 +553,8 @@ final class CeleritySpriteGenerator {
       'gradient',
       false,
       PhutilSpriteSheet::TYPE_REPEAT_X,
-      ', .phabricator-dark-menu .phabricator-menu-item-type-label, '.
-      '.phabricator-side-menu .phabricator-menu-item-type-label');
+      ', .phabricator-dark-menu .phui-list-item-type-label, '.
+      '.phabricator-side-menu .phui-list-item-type-label');
     foreach ($sprites as $sprite) {
       $sheet->addSprite($sprite);
     }
@@ -516,6 +588,7 @@ final class CeleritySpriteGenerator {
 
       $colors = array(
         'dark'  => 'dark',
+        'white' => 'white',
       );
     } else if ($variant == 2) {
       $scales = array(
@@ -531,6 +604,7 @@ final class CeleritySpriteGenerator {
         'light' => 'lb',
         'dark'  => 'dark',
         'blue'  => 'blue',
+        'white' => 'white',
       );
     } else {
       $scales = array(

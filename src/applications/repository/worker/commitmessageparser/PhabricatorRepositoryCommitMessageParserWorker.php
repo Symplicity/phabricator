@@ -65,9 +65,27 @@ abstract class PhabricatorRepositoryCommitMessageParserWorker
         reset($field_values['reviewedByPHIDs']));
     }
 
+    $revision_id = idx($field_values, 'revisionID');
+    if (!$revision_id) {
+      $hashes = $this->getCommitHashes(
+        $repository,
+        $commit);
+      if ($hashes) {
+        $revisions = id(new DifferentialRevisionQuery())
+          ->setViewer(PhabricatorUser::getOmnipotentUser())
+          ->withCommitHashes($hashes)
+          ->execute();
+
+        if (!empty($revisions)) {
+          $revision = $this->identifyBestRevision($revisions);
+          $revision_id = $revision->getID();
+        }
+      }
+    }
+
     $data->setCommitDetail(
       'differential.revisionID',
-      idx($field_values, 'revisionID'));
+      $revision_id);
 
     $committer_phid = $this->lookupUser(
       $commit,
@@ -94,29 +112,19 @@ abstract class PhabricatorRepositoryCommitMessageParserWorker
 
     $revision = null;
     $should_autoclose = $repository->shouldAutocloseCommit($commit, $data);
-    $revision_id = $data->getCommitDetail('differential.revisionID');
-    if (!$revision_id) {
-      $hashes = $this->getCommitHashes(
-        $this->repository,
-        $this->commit);
-      if ($hashes) {
-
-        $query = new DifferentialRevisionQuery();
-        $query->withCommitHashes($hashes);
-        $revisions = $query->execute();
-
-        if (!empty($revisions)) {
-          $revision = $this->identifyBestRevision($revisions);
-          $revision_id = $revision->getID();
-        }
-      }
-    }
 
     if ($revision_id) {
       $lock = PhabricatorGlobalLock::newLock(get_class($this).':'.$revision_id);
       $lock->lock(5 * 60);
 
-      $revision = id(new DifferentialRevision())->load($revision_id);
+      // TODO: Check if a more restrictive viewer could be set here
+      $revision = id(new DifferentialRevisionQuery())
+        ->withIDs(array($revision_id))
+        ->setViewer(PhabricatorUser::getOmnipotentUser())
+        ->needRelationships(true)
+        ->needReviewerStatus(true)
+        ->executeOne();
+
       if ($revision) {
         $commit_drev = PhabricatorEdgeConfig::TYPE_COMMIT_HAS_DREV;
         id(new PhabricatorEdgeEditor())
@@ -124,7 +132,6 @@ abstract class PhabricatorRepositoryCommitMessageParserWorker
           ->addEdge($commit->getPHID(), $commit_drev, $revision->getPHID())
           ->save();
 
-        $revision->loadRelationships();
         queryfx(
           $conn_w,
           'INSERT IGNORE INTO %T (revisionID, commitPHID) VALUES (%d, %s)',

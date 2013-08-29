@@ -10,7 +10,7 @@ final class PhabricatorMacroListController extends PhabricatorMacroController
   }
 
   public function willProcessRequest(array $data) {
-    $this->key = idx($data, 'key', 'active');
+    $this->key = idx($data, 'key');
   }
 
   public function processRequest() {
@@ -23,7 +23,10 @@ final class PhabricatorMacroListController extends PhabricatorMacroController
     return $this->delegateToController($controller);
   }
 
-  public function renderResultsList(array $macros) {
+  public function renderResultsList(
+    array $macros,
+    PhabricatorSavedQuery $query) {
+
     assert_instances_of($macros, 'PhabricatorFileImageMacro');
     $viewer = $this->getRequest()->getUser();
 
@@ -33,11 +36,11 @@ final class PhabricatorMacroListController extends PhabricatorMacroController
       $this->getLoadedHandles(),
       $author_phids);
 
-    $pinboard = new PhabricatorPinboardView();
+    $pinboard = new PHUIPinboardView();
     foreach ($macros as $macro) {
       $file = $macro->getFile();
 
-      $item = new PhabricatorPinboardItemView();
+      $item = new PHUIPinboardItemView();
       if ($file) {
         $item->setImageURI($file->getThumb280x210URI());
         $item->setImageSize(280, 210);

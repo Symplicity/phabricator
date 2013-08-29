@@ -10,15 +10,11 @@ final class ConpherenceTransaction extends PhabricatorApplicationTransaction {
   }
 
   public function getApplicationTransactionType() {
-    return PhabricatorPHIDConstants::PHID_TYPE_CONP;
+    return PhabricatorConpherencePHIDTypeThread::TYPECONST;
   }
 
   public function getApplicationTransactionCommentObject() {
     return new ConpherenceTransactionComment();
-  }
-
-  public function getApplicationObjectTypeName() {
-    return pht('conpherence');
   }
 
   public function getNoEffectDescription() {

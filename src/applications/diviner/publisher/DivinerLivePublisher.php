@@ -18,20 +18,24 @@ final class DivinerLivePublisher extends DivinerPublisher {
           ->save();
       }
 
+      $book->setConfigurationData($this->getConfigurationData())->save();
+
       $this->book = $book;
     }
     return $this->book;
   }
 
   private function loadSymbolForAtom(DivinerAtom $atom) {
-    $symbol = id(new DivinerLiveSymbol())->loadOneWhere(
-      'bookPHID = %s AND type = %s AND name = %s AND context = %ns
-        AND atomIndex = %d',
-      $this->loadBook()->getPHID(),
-      $atom->getType(),
-      $atom->getName(),
-      $atom->getContext(),
-      $this->getAtomSimilarIndex($atom));
+    $symbol = id(new DivinerAtomQuery())
+      ->setViewer(PhabricatorUser::getOmnipotentUser())
+      ->withBookPHIDs(array($this->loadBook()->getPHID()))
+      ->withTypes(array($atom->getType()))
+      ->withNames(array($atom->getName()))
+      ->withContexts(array($atom->getContext()))
+      ->withIndexes(array($this->getAtomSimilarIndex($atom)))
+      ->withIncludeUndocumentable(true)
+      ->withIncludeGhosts(true)
+      ->executeOne();
 
     if ($symbol) {
       return $symbol;
@@ -59,9 +63,11 @@ final class DivinerLivePublisher extends DivinerPublisher {
   }
 
   protected function loadAllPublishedHashes() {
-    $symbols = id(new DivinerLiveSymbol())->loadAllWhere(
-      'bookPHID = %s AND graphHash IS NOT NULL',
-      $this->loadBook()->getPHID());
+    $symbols = id(new DivinerAtomQuery())
+      ->setViewer(PhabricatorUser::getOmnipotentUser())
+      ->withBookPHIDs(array($this->loadBook()->getPHID()))
+      ->withIncludeUndocumentable(true)
+      ->execute();
 
     return mpull($symbols, 'getGraphHash');
   }
@@ -80,7 +86,8 @@ final class DivinerLivePublisher extends DivinerPublisher {
     foreach (PhabricatorLiskDAO::chunkSQL($strings, ', ') as $chunk) {
       queryfx(
         $conn_w,
-        'UPDATE %T SET graphHash = NULL WHERE graphHash IN (%Q)',
+        'UPDATE %T SET graphHash = NULL, nodeHash = NULL
+          WHERE graphHash IN (%Q)',
         $symbol_table->getTableName(),
         $chunk);
     }
@@ -97,18 +104,41 @@ final class DivinerLivePublisher extends DivinerPublisher {
   protected function createDocumentsByHash(array $hashes) {
     foreach ($hashes as $hash) {
       $atom = $this->getAtomFromGraphHash($hash);
+      $ref = $atom->getRef();
 
       $symbol = $this->loadSymbolForAtom($atom);
-      $symbol->setGraphHash($hash)->save();
 
-      if ($this->shouldGenerateDocumentForAtom($atom)) {
-        $content = $this->getRenderer()->renderAtom($atom);
+      $is_documentable = $this->shouldGenerateDocumentForAtom($atom);
 
-        $storage = $this->loadAtomStorageForSymbol($symbol)
-          ->setAtomData($atom->toDictionary())
-          ->setContent((string)phutil_safe_html($content))
-          ->save();
+      $symbol
+        ->setGraphHash($hash)
+        ->setIsDocumentable((int)$is_documentable)
+        ->setTitle($ref->getTitle())
+        ->setGroupName($ref->getGroup())
+        ->setNodeHash($atom->getHash());
+
+      if ($is_documentable) {
+        $renderer = $this->getRenderer();
+        $summary = $renderer->renderAtomSummary($atom);
+        $summary = (string)phutil_safe_html($summary);
+        $symbol->setSummary($summary);
       }
+
+      $symbol->save();
+
+      // TODO: We probably need a finer-grained sense of what "documentable"
+      // atoms are. Neither files nor methods are currently considered
+      // documentable, but for different reasons: files appear nowhere, while
+      // methods just don't appear at the top level. These are probably
+      // separate concepts. Since we need atoms in order to build method
+      // documentation, we insert them here. This also means we insert files,
+      // which are unnecessary and unused. Make sure this makes sense, but then
+      // probably introduce separate "isTopLevel" and "isDocumentable" flags?
+
+      $storage = $this->loadAtomStorageForSymbol($symbol)
+        ->setAtomData($atom->toDictionary())
+        ->setContent(null)
+        ->save();
     }
   }
 

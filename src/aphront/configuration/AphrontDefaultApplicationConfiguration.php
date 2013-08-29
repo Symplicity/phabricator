@@ -24,30 +24,6 @@ class AphrontDefaultApplicationConfiguration
           => 'PhabricatorTypeaheadCommonDatasourceController',
       ),
 
-      '/login/' => array(
-        '' => 'PhabricatorLoginController',
-        'email/' => 'PhabricatorEmailLoginController',
-        'etoken/(?P<token>\w+)/' => 'PhabricatorEmailTokenController',
-        'refresh/' => 'PhabricatorRefreshCSRFController',
-        'validate/' => 'PhabricatorLoginValidateController',
-        'mustverify/' => 'PhabricatorMustVerifyEmailController',
-      ),
-
-      '/logout/' => 'PhabricatorLogoutController',
-
-      '/oauth/' => array(
-        '(?P<provider>\w+)/' => array(
-          'login/'     => 'PhabricatorOAuthLoginController',
-          'diagnose/'  => 'PhabricatorOAuthDiagnosticsController',
-          'unlink/'    => 'PhabricatorOAuthUnlinkController',
-        ),
-      ),
-
-      '/ldap/' => array(
-        'login/' => 'PhabricatorLDAPLoginController',
-        'unlink/'    => 'PhabricatorLDAPUnlinkController',
-      ),
-
       '/oauthserver/' => array(
         'auth/'          => 'PhabricatorOAuthServerAuthController',
         'test/'          => 'PhabricatorOAuthServerTestController',
@@ -110,10 +86,36 @@ class AphrontDefaultApplicationConfiguration
     );
   }
 
+  /**
+   * @phutil-external-symbol class PhabricatorStartup
+   */
   public function buildRequest() {
+    $parser = new PhutilQueryStringParser();
+    $data   = array();
+
+    // If the request has "multipart/form-data" content, we can't use
+    // PhutilQueryStringParser to parse it, and the raw data supposedly is not
+    // available anyway (according to the PHP documentation, "php://input" is
+    // not available for "multipart/form-data" requests). However, it is
+    // available at least some of the time (see T3673), so double check that
+    // we aren't trying to parse data we won't be able to parse correctly by
+    // examining the Content-Type header.
+    $content_type = idx($_SERVER, 'CONTENT_TYPE');
+    $is_form_data = preg_match('@^multipart/form-data@i', $content_type);
+
+    $raw_input = PhabricatorStartup::getRawInput();
+    if (strlen($raw_input) && !$is_form_data) {
+      $data += $parser->parseQueryString($raw_input);
+    } else if ($_POST) {
+      $data += $_POST;
+    }
+
+    $data += $parser->parseQueryString(idx($_SERVER, 'QUERY_STRING', ''));
+
     $request = new AphrontRequest($this->getHost(), $this->getPath());
-    $request->setRequestData($_GET + $_POST);
+    $request->setRequestData($data);
     $request->setApplicationConfiguration($this);
+
     return $request;
   }
 
@@ -133,6 +135,10 @@ class AphrontDefaultApplicationConfiguration
 
     // For non-workflow requests, return a Ajax response.
     if ($request->isAjax() && !$request->isJavelinWorkflow()) {
+      // Log these; they don't get shown on the client and can be difficult
+      // to debug.
+      phlog($ex);
+
       $response = new AphrontAjaxResponse();
       $response->setError(
         array(
@@ -159,7 +165,7 @@ class AphrontDefaultApplicationConfiguration
         //
         // Possibly we should add a header here like "you need to login to see
         // the thing you are trying to look at".
-        $login_controller = new PhabricatorLoginController($request);
+        $login_controller = new PhabricatorAuthStartController($request);
         return $login_controller->processRequest();
       }
 

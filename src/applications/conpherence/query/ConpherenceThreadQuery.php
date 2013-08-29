@@ -216,16 +216,10 @@ final class ConpherenceThreadQuery
     $participant_phids = array_mergev($participant_phids);
     $file_phids = array_mergev($file_phids);
 
-    // statuses of everyone currently in the conpherence
-    // for a rolling three day window
-    $start_epoch = phabricator_format_local_time(
-      strtotime('today', strtotime('tomorrow')),
-      $this->getViewer(),
-      'U');
-    $end_epoch = phabricator_format_local_time(
-      strtotime('+3 days', strtotime('tomorrow')),
-      $this->getViewer(),
-      'U');
+    $epochs = ConpherenceTimeUtil::getCalendarEventEpochs(
+      $this->getViewer());
+    $start_epoch = $epochs['start_epoch'];
+    $end_epoch = $epochs['end_epoch'];
     $statuses = id(new PhabricatorUserStatus())
       ->loadAllWhere(
         'userPHID in (%Ls) AND dateTo >= %d AND dateFrom <= %d',

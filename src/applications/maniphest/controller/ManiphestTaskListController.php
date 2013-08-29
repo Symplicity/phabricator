@@ -124,7 +124,6 @@ final class ManiphestTaskListController extends ManiphestController {
 
     $form = id(new AphrontFormView())
       ->setUser($user)
-      ->setNoShading(true)
       ->setAction(
           $request->getRequestURI()
             ->alter('key', null)
@@ -180,7 +179,7 @@ final class ManiphestTaskListController extends ManiphestController {
       }
       $form->appendChild(
         id(new AphrontFormTokenizerControl())
-          ->setDatasource('/typeahead/common/users/')
+          ->setDatasource('/typeahead/common/authors/')
           ->setName('set_authors')
           ->setLabel(pht('Authors'))
           ->setValue($tokens));
@@ -416,7 +415,7 @@ final class ManiphestTaskListController extends ManiphestController {
         id(new PhabricatorCrumbView())
           ->setName($title))
       ->addAction(
-        id(new PhabricatorMenuItemView())
+        id(new PHUIListItemView())
           ->setHref($this->getApplicationURI('/task/create/'))
           ->setName(pht('Create Task'))
           ->setIcon('create'));
@@ -428,7 +427,6 @@ final class ManiphestTaskListController extends ManiphestController {
       array(
         'title' => $title,
         'device' => true,
-        'dust' => true,
       ));
   }
 
@@ -577,6 +575,7 @@ final class ManiphestTaskListController extends ManiphestController {
       $author_phids,
       $project_group_phids,
       $any_project_phids,
+      $any_user_project_phids,
       array_mergev(mpull($data, 'getProjectPHIDs')));
     $handles = id(new PhabricatorObjectHandleData($handle_phids))
       ->setViewer($viewer)

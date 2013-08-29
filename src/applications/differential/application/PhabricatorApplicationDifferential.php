@@ -39,10 +39,8 @@ final class PhabricatorApplicationDifferential extends PhabricatorApplication {
     return array(
       '/D(?P<id>[1-9]\d*)' => 'DifferentialRevisionViewController',
       '/differential/' => array(
-        '' => 'DifferentialRevisionListController',
-        'filter/(?P<filter>\w+)/(?:(?P<username>[\w._-]+)/)?' =>
-          'DifferentialRevisionListController',
-        'stats/(?P<filter>\w+)/' => 'DifferentialRevisionStatsController',
+        '(?:query/(?P<queryKey>[^/]+)/)?'
+          => 'DifferentialRevisionListController',
         'diff/' => array(
           '(?P<id>[1-9]\d*)/' => 'DifferentialDiffViewController',
           'create/' => 'DifferentialDiffCreateController',
@@ -62,6 +60,7 @@ final class PhabricatorApplicationDifferential extends PhabricatorApplication {
         ),
         'subscribe/(?P<action>add|rem)/(?P<id>[1-9]\d*)/'
           => 'DifferentialSubscribeController',
+        'preview/' => 'PhabricatorMarkupPreviewController',
       ),
     );
   }
@@ -82,6 +81,7 @@ final class PhabricatorApplicationDifferential extends PhabricatorApplication {
 
   public function loadStatus(PhabricatorUser $user) {
     $revisions = id(new DifferentialRevisionQuery())
+      ->setViewer($user)
       ->withResponsibleUsers(array($user->getPHID()))
       ->withStatus(DifferentialRevisionQuery::STATUS_OPEN)
       ->needRelationships(true)

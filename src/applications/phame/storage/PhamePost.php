@@ -81,7 +81,7 @@ final class PhamePost extends PhameDAO
 
   public function generatePHID() {
     return PhabricatorPHID::generateNewPHID(
-      PhabricatorPHIDConstants::PHID_TYPE_POST);
+      PhabricatorPhamePHIDTypePost::TYPECONST);
   }
 
   public static function getVisibilityOptionsForSelect() {
@@ -96,7 +96,7 @@ final class PhamePost extends PhameDAO
     $options = array();
 
     if ($current == 'facebook' ||
-        PhabricatorEnv::getEnvConfig('facebook.application-id')) {
+        PhabricatorAuthProviderOAuthFacebook::getFacebookApplicationID()) {
       $options['facebook'] = 'Facebook';
     }
     if ($current == 'disqus' ||

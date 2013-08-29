@@ -5,10 +5,6 @@
  */
 final class PhabricatorApplicationConpherence extends PhabricatorApplication {
 
-  public function isBeta() {
-    return true;
-  }
-
   public function getBaseURI() {
     return '/conpherence/';
   }
@@ -47,6 +43,7 @@ final class PhabricatorApplicationConpherence extends PhabricatorApplication {
         'thread/(?P<id>[1-9]\d*)/' => 'ConpherenceListController',
         '(?P<id>[1-9]\d*)/'        => 'ConpherenceViewController',
         'new/'                     => 'ConpherenceNewController',
+        'panel/'                   => 'ConpherenceNotificationPanelController',
         'widget/(?P<id>[1-9]\d*)/' => 'ConpherenceWidgetController',
         'update/(?P<id>[1-9]\d*)/' => 'ConpherenceUpdateController',
       ),

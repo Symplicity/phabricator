@@ -1,7 +1,9 @@
 <?php
 
 final class ReleephRequest extends ReleephDAO
-  implements PhabricatorPolicyInterface {
+  implements
+    PhabricatorPolicyInterface,
+    PhabricatorCustomFieldInterface {
 
   protected $phid;
   protected $branchID;
@@ -21,6 +23,8 @@ final class ReleephRequest extends ReleephDAO
 
   // Pre-populated handles that we'll bulk load in ReleephBranch
   private $handles;
+  private $customFields = self::ATTACHABLE;
+
 
 
 /* -(  Constants and helper methods  )--------------------------------------- */
@@ -125,7 +129,7 @@ final class ReleephRequest extends ReleephDAO
 
   public function generatePHID() {
     return PhabricatorPHID::generateNewPHID(
-      ReleephPHIDConstants::PHID_TYPE_RERQ);
+      ReleephPHIDTypeRequest::TYPECONST);
   }
 
   public function save() {
@@ -230,14 +234,6 @@ final class ReleephRequest extends ReleephDAO
     return $this->loadReleephBranch()->loadReleephProject();
   }
 
-  public function loadEvents() {
-    return $this->loadRelatives(
-      new ReleephRequestEvent(),
-      'releephRequestID',
-      'getID',
-      '(1 = 1) ORDER BY dateCreated, id');
-  }
-
   public function loadPhabricatorRepositoryCommit() {
     return $this->loadOneRelative(
       new PhabricatorRepositoryCommit(),
@@ -292,11 +288,14 @@ final class ReleephRequest extends ReleephDAO
     return parent::setUserIntents($ar);
   }
 
+
 /* -(  PhabricatorPolicyInterface  )----------------------------------------- */
+
 
   public function getCapabilities() {
     return array(
       PhabricatorPolicyCapability::CAN_VIEW,
+      PhabricatorPolicyCapability::CAN_EDIT,
     );
   }
 
@@ -307,5 +306,27 @@ final class ReleephRequest extends ReleephDAO
   public function hasAutomaticCapability($capability, PhabricatorUser $viewer) {
     return false;
   }
+
+
+/* -(  PhabricatorCustomFieldInterface  )------------------------------------ */
+
+
+  public function getCustomFieldSpecificationForRole($role) {
+    return PhabricatorEnv::getEnvConfig('releeph.fields');
+  }
+
+  public function getCustomFieldBaseClass() {
+    return 'ReleephFieldSpecification';
+  }
+
+  public function getCustomFields() {
+    return $this->assertAttached($this->customFields);
+  }
+
+  public function attachCustomFields(PhabricatorCustomFieldAttachment $fields) {
+    $this->customFields = $fields;
+    return $this;
+  }
+
 
 }

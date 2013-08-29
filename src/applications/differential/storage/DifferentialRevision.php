@@ -32,6 +32,7 @@ final class DifferentialRevision extends DifferentialDAO
   private $diffIDs;
   private $hashes;
 
+  private $reviewerStatus;
 
   const RELATIONSHIP_TABLE    = 'differential_relationship';
   const TABLE_COMMIT          = 'differential_commit';
@@ -137,7 +138,7 @@ final class DifferentialRevision extends DifferentialDAO
 
   public function generatePHID() {
     return PhabricatorPHID::generateNewPHID(
-      PhabricatorPHIDConstants::PHID_TYPE_DREV);
+      DifferentialPHIDTypeRevision::TYPECONST);
   }
 
   public function loadDiffs() {
@@ -153,9 +154,9 @@ final class DifferentialRevision extends DifferentialDAO
     if (!$this->getID()) {
       return array();
     }
-    return id(new DifferentialComment())->loadAllWhere(
-      'revisionID = %d',
-      $this->getID());
+    return id(new DifferentialCommentQuery())
+      ->withRevisionIDs(array($this->getID()))
+      ->execute();
   }
 
   public function loadActiveDiff() {
@@ -192,16 +193,16 @@ final class DifferentialRevision extends DifferentialDAO
         self::TABLE_COMMIT,
         $this->getID());
 
-      $comments = id(new DifferentialComment())->loadAllWhere(
-        'revisionID = %d',
-        $this->getID());
+      $comments = id(new DifferentialCommentQuery())
+        ->withRevisionIDs(array($this->getID()))
+        ->execute();
       foreach ($comments as $comment) {
         $comment->delete();
       }
 
-      $inlines = id(new DifferentialInlineComment())->loadAllWhere(
-        'revisionID = %d',
-        $this->getID());
+      $inlines = id(new DifferentialInlineCommentQuery())
+        ->withRevisionIDs(array($this->getID()))
+        ->execute();
       foreach ($inlines as $inline) {
         $inline->delete();
       }
@@ -335,4 +336,19 @@ final class DifferentialRevision extends DifferentialDAO
     );
   }
 
+  public function getReviewerStatus() {
+    if ($this->reviewerStatus === null) {
+      throw new Exception(
+        "Call attachReviewerStatus() before getReviewerStatus()!"
+      );
+    }
+    return $this->reviewerStatus;
+  }
+
+  public function attachReviewerStatus(array $reviewers) {
+    assert_instances_of($reviewers, 'DifferentialReviewer');
+
+    $this->reviewerStatus = $reviewers;
+    return $this;
+  }
 }

@@ -75,7 +75,6 @@ final class PhameBlogViewController extends PhameController {
       array(
         'device' => true,
         'title' => $blog->getName(),
-        'dust' => true,
       ));
   }
 
@@ -144,6 +143,7 @@ final class PhameBlogViewController extends PhameController {
 
     $actions = id(new PhabricatorActionListView())
       ->setObject($blog)
+      ->setObjectURI($this->getRequest()->getRequestURI())
       ->setUser($user);
 
     $can_edit = PhabricatorPolicyFilter::hasCapability(
@@ -155,6 +155,8 @@ final class PhameBlogViewController extends PhameController {
       $user,
       $blog,
       PhabricatorPolicyCapability::CAN_JOIN);
+
+    $must_use_form = $blog->getDomain();
 
     $actions->addAction(
       id(new PhabricatorActionView())
@@ -169,7 +171,7 @@ final class PhameBlogViewController extends PhameController {
         ->setUser($user)
         ->setIcon('world')
         ->setHref($this->getApplicationURI('live/'.$blog->getID().'/'))
-        ->setRenderAsForm(true)
+        ->setRenderAsForm($must_use_form)
         ->setName(pht('View Live')));
 
     $actions->addAction(

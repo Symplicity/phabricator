@@ -12,13 +12,12 @@ final class PhabricatorStandardPageView extends PhabricatorBarePageView {
   private $glyph;
   private $menuContent;
   private $showChrome = true;
-  private $layDownSomeDust = false;
   private $disableConsole;
   private $searchDefaultScope;
   private $pageObjects = array();
   private $applicationMenu;
 
-  public function setApplicationMenu(PhabricatorMenuView $application_menu) {
+  public function setApplicationMenu(PHUIListView $application_menu) {
     $this->applicationMenu = $application_menu;
     return $this;
   }
@@ -55,17 +54,8 @@ final class PhabricatorStandardPageView extends PhabricatorBarePageView {
     return $this;
   }
 
-  public function setDust($is_dusty) {
-    $this->layDownSomeDust = $is_dusty;
-    return $this;
-  }
-
   public function getShowChrome() {
     return $this->showChrome;
-  }
-
-  public function getDust() {
-    return $this->layDownSomeDust;
   }
 
   public function setSearchDefaultScope($search_default_scope) {
@@ -128,9 +118,9 @@ final class PhabricatorStandardPageView extends PhabricatorBarePageView {
 
     require_celerity_resource('phabricator-core-css');
     require_celerity_resource('phabricator-zindex-css');
-    require_celerity_resource('phabricator-core-buttons-css');
-    require_celerity_resource('spacing-css');
-    require_celerity_resource('phui-form-css'); // Evan will hate this
+    require_celerity_resource('phui-button-css');
+    require_celerity_resource('phui-spacing-css');
+    require_celerity_resource('phui-form-css');
     require_celerity_resource('sprite-gradient-css');
     require_celerity_resource('phabricator-standard-page-view');
 
@@ -199,7 +189,10 @@ final class PhabricatorStandardPageView extends PhabricatorBarePageView {
       Javelin::initBehavior(
         'dark-console',
         array(
-          'uri' => $request ? (string)$request->getRequestURI() : '?',
+          // NOTE: We use a generic label here to prevent input reflection
+          // and mitigate compression attacks like BREACH. See discussion in
+          // T3684.
+          'uri' => pht('Main Request'),
           'selected' => $user ? $user->getConsoleTab() : null,
           'visible'  => $user ? (int)$user->getConsoleVisible() : true,
           'headers' => $headers,
@@ -402,10 +395,6 @@ final class PhabricatorStandardPageView extends PhabricatorBarePageView {
 
     if (!$this->getShowChrome()) {
       $classes[] = 'phabricator-chromeless-page';
-    }
-
-    if ($this->getDust()) {
-      $classes[] = 'make-me-sneeze';
     }
 
     $agent = AphrontRequest::getHTTPHeader('User-Agent');
