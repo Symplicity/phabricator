@@ -48,7 +48,7 @@ $search_type = PhabricatorPHIDConstants::PHID_TYPE_SOURCE;
 $search_object = newv('PhabricatorSearchDocument', array());
 
 $engine = PhabricatorSearchEngineSelector::newSelector()->newEngine();
-
+echo date('Y-m-d H:i') . ": updating " . count($repos) . " repositories\n";
 foreach ($repos as $repo) {
   $details = $repo->getDetails();
   $subpath = $details['svn-subpath'];
@@ -60,19 +60,20 @@ foreach ($repos as $repo) {
   $force_update = false;
   if (file_exists($repo_path)) {
     chdir($repo_path);
-    echo "Updating $name\n";
     exec("svn update --accept theirs-full", $svn_out);
-    foreach ($svn_out as $line) {
-      //U    SympleObjects.class
-      list($action, $path) = preg_split('/\s+/', $line);
-      if ($action === 'D') {
-        $phid = "PHID-$search_type-" . md5($repo_code . ':' . $path);
-        $indexed_file = $search_object->loadOneWhere('phid = %s', $phid);
-        if ($indexed_file) {
-          $indexed_file->delete();
+    if (count($svn_out) > 1) {
+      echo "Updating $name\n";
+      foreach ($svn_out as $line) {
+        list($action, $path) = preg_split('/\s+/', $line);
+        if ($action === 'D') {
+          $phid = "PHID-$search_type-" . md5($repo_code . ':' . $path);
+          $indexed_file = $search_object->loadOneWhere('phid = %s', $phid);
+          if ($indexed_file) {
+            $indexed_file->delete();
+          }
+        } elseif (file_exists($repo_path . $path)) {
+          $files[] = new SplFileInfo($path);
         }
-      } elseif (file_exists($repo_path . $path)) {
-        $files[] = new SplFileInfo($path);
       }
     }
   } else {
@@ -161,4 +162,3 @@ foreach ($repos as $repo) {
     }
   }
 }
-
