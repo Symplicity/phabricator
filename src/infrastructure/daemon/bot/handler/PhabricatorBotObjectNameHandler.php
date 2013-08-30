@@ -22,7 +22,6 @@ final class PhabricatorBotObjectNameHandler extends PhabricatorBotHandler {
       'Chuck Norris can solve the Towers of Hanoi in one move.',
       'Project managers never ask Chuck Norris for estimations...ever.',
       '"It works on my machine" always holds true for Chuck Norris.',
-      'When Chuck Norris is web surfing, websites get the message "Warning: Internet Explorer has deemed this user to be malicious or dangerous. Proceed?".',
       'Chuck Norris can divide by zero.',
       'Chuck Norris can access private methods.',
       'Chuck Norris can instantiate an abstract class.',
