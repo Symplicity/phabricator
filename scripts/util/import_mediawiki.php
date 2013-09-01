@@ -129,6 +129,10 @@ foreach ($loop_categories as $category) {
           $existing = null;
         }
         if ($action == 'delete') {
+          if (!$existing) {
+            echo "does not exist\n";
+            continue;
+          }
           $text = '';
         }
         if ($existing && $existing['content'] == $text) {
