@@ -23,7 +23,7 @@
 
 .config-option-table th em {
   font-weight: normal;
-  color: #666666;
+  color: {$greytext};
 }
 
 .config-option-table td {
@@ -44,5 +44,5 @@
 }
 
 .config-options-current-value span {
-  color: #777;
+  color: {$greytext};
 }
