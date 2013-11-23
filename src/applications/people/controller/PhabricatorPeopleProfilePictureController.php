@@ -82,6 +82,7 @@ final class PhabricatorPeopleProfilePictureController
           $user->setProfileImagePHID(null);
         } else {
           $user->setProfileImagePHID($xformed->getPHID());
+          $xformed->attachToObject($viewer, $user->getPHID());
         }
         $user->save();
         return id(new AphrontRedirectResponse())->setURI($profile_uri);
@@ -260,7 +261,7 @@ final class PhabricatorPeopleProfilePictureController
         ->setLabel(pht('Use Picture'))
         ->setValue($buttons));
 
-    $form_box = id(new PHUIFormBoxView())
+    $form_box = id(new PHUIObjectBoxView())
       ->setHeaderText($title)
       ->setFormError($errors)
       ->setForm($form);
@@ -284,12 +285,12 @@ final class PhabricatorPeopleProfilePictureController
       $errors = id(new AphrontErrorView())->setErrors($errors);
     }
 
-    $form_box = id(new PHUIFormBoxView())
+    $form_box = id(new PHUIObjectBoxView())
       ->setHeaderText($title)
       ->setFormError($errors)
       ->setForm($form);
 
-    $upload_box = id(new PHUIFormBoxView())
+    $upload_box = id(new PHUIObjectBoxView())
       ->setHeaderText(pht('Upload New Picture'))
       ->setForm($upload_form);
 

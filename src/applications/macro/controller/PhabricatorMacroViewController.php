@@ -35,7 +35,17 @@ final class PhabricatorMacroViewController
         ->setHref($this->getApplicationURI('/view/'.$macro->getID().'/'))
         ->setName($title_short));
 
-    $properties = $this->buildPropertyView($macro, $file);
+    $properties = $this->buildPropertyView($macro, $actions);
+    if ($file) {
+      $file_view = new PHUIPropertyListView();
+      $file_view->addImageContent(
+        phutil_tag(
+          'img',
+          array(
+            'src'     => $file->getViewURI(),
+            'class'   => 'phabricator-image-macro-hero',
+          )));
+    }
 
     $xactions = id(new PhabricatorMacroTransactionQuery())
       ->setViewer($request->getUser())
@@ -59,7 +69,9 @@ final class PhabricatorMacroViewController
       ->setTransactions($xactions)
       ->setMarkupEngine($engine);
 
-    $header = id(new PhabricatorHeaderView())
+    $header = id(new PHUIHeaderView())
+      ->setUser($user)
+      ->setPolicyObject($macro)
       ->setHeader($title_long);
 
     if ($macro->getIsDisabled()) {
@@ -72,11 +84,9 @@ final class PhabricatorMacroViewController
 
     $is_serious = PhabricatorEnv::getEnvConfig('phabricator.serious-business');
 
-    $add_comment_header = id(new PhabricatorHeaderView())
-      ->setHeader(
-        $is_serious
-          ? pht('Add Comment')
-          : pht('Grovel in Awe'));
+    $comment_header = $is_serious
+      ? pht('Add Comment')
+      : pht('Grovel in Awe');
 
     $submit_button_name = $is_serious
       ? pht('Add Comment')
@@ -88,17 +98,23 @@ final class PhabricatorMacroViewController
       ->setUser($user)
       ->setObjectPHID($macro->getPHID())
       ->setDraft($draft)
+      ->setHeaderText($comment_header)
       ->setAction($this->getApplicationURI('/comment/'.$macro->getID().'/'))
       ->setSubmitButtonName($submit_button_name);
+
+    $object_box = id(new PHUIObjectBoxView())
+      ->setHeader($header)
+      ->addPropertyList($properties);
+
+    if ($file_view) {
+      $object_box->addPropertyList($file_view);
+    }
 
     return $this->buildApplicationPage(
       array(
         $crumbs,
-        $header,
-        $actions,
-        $properties,
+        $object_box,
         $timeline,
-        $add_comment_header,
         $add_comment_form,
       ),
       array(
@@ -108,6 +124,10 @@ final class PhabricatorMacroViewController
   }
 
   private function buildActionView(PhabricatorFileImageMacro $macro) {
+
+    $can_manage = $this->hasApplicationCapability(
+      PhabricatorMacroCapabilityManage::CAPABILITY);
+
     $request = $this->getRequest();
     $view = id(new PhabricatorActionListView())
       ->setUser($request->getUser())
@@ -117,7 +137,17 @@ final class PhabricatorMacroViewController
         id(new PhabricatorActionView())
         ->setName(pht('Edit Macro'))
         ->setHref($this->getApplicationURI('/edit/'.$macro->getID().'/'))
+        ->setDisabled(!$can_manage)
+        ->setWorkflow(!$can_manage)
         ->setIcon('edit'));
+
+    $view->addAction(
+      id(new PhabricatorActionView())
+        ->setName(pht('Edit Audio'))
+        ->setHref($this->getApplicationURI('/audio/'.$macro->getID().'/'))
+        ->setDisabled(!$can_manage)
+        ->setWorkflow(!$can_manage)
+        ->setIcon('herald'));
 
     if ($macro->getIsDisabled()) {
       $view->addAction(
@@ -125,6 +155,7 @@ final class PhabricatorMacroViewController
           ->setName(pht('Restore Macro'))
           ->setHref($this->getApplicationURI('/disable/'.$macro->getID().'/'))
           ->setWorkflow(true)
+          ->setDisabled(!$can_manage)
           ->setIcon('undo'));
     } else {
       $view->addAction(
@@ -132,6 +163,7 @@ final class PhabricatorMacroViewController
           ->setName(pht('Disable Macro'))
           ->setHref($this->getApplicationURI('/disable/'.$macro->getID().'/'))
           ->setWorkflow(true)
+          ->setDisabled(!$can_manage)
           ->setIcon('delete'));
     }
 
@@ -140,23 +172,31 @@ final class PhabricatorMacroViewController
 
   private function buildPropertyView(
     PhabricatorFileImageMacro $macro,
-    PhabricatorFile $file = null) {
+    PhabricatorActionListView $actions) {
 
-    $view = id(new PhabricatorPropertyListView())
+    $view = id(new PHUIPropertyListView())
       ->setUser($this->getRequest()->getUser())
-      ->setObject($macro);
+      ->setObject($macro)
+      ->setActionList($actions);
+
+    switch ($macro->getAudioBehavior()) {
+      case PhabricatorFileImageMacro::AUDIO_BEHAVIOR_ONCE:
+        $view->addProperty(pht('Audio Behavior'), pht('Play Once'));
+        break;
+      case PhabricatorFileImageMacro::AUDIO_BEHAVIOR_LOOP:
+        $view->addProperty(pht('Audio Behavior'), pht('Loop'));
+        break;
+    }
+
+    $audio_phid = $macro->getAudioPHID();
+    if ($audio_phid) {
+      $this->loadHandles(array($audio_phid));
+      $view->addProperty(
+        pht('Audio'),
+        $this->getHandle($audio_phid)->renderLink());
+    }
 
     $view->invokeWillRenderEvent();
-
-    if ($file) {
-      $view->addImageContent(
-        phutil_tag(
-          'img',
-          array(
-            'src'     => $file->getViewURI(),
-            'class'   => 'phabricator-image-macro-hero',
-          )));
-    }
 
     return $view;
   }

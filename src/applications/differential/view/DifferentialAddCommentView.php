@@ -71,7 +71,6 @@ final class DifferentialAddCommentView extends AphrontView {
     $form
       ->setWorkflow(true)
       ->setUser($this->user)
-      ->setShaded(true)
       ->setAction($this->actionURI)
       ->addHiddenInput('revision_id', $revision->getID())
       ->appendChild(
@@ -119,12 +118,12 @@ final class DifferentialAddCommentView extends AphrontView {
               'add_reviewers' => 1,
               'resign' => 1,
             ),
-            'src' => '/typeahead/common/users/',
+            'src' => '/typeahead/common/usersorprojects/',
             'value' => $this->reviewers,
             'row' => 'add-reviewers',
             'ondemand' => PhabricatorEnv::getEnvConfig('tokenizer.ondemand'),
             'labels' => $add_reviewers_labels,
-            'placeholder' => pht('Type a user name...'),
+            'placeholder' => pht('Type a user or project name...'),
           ),
           'add-ccs-tokenizer' => array(
             'actions' => array('add_ccs' => 1),
@@ -173,28 +172,34 @@ final class DifferentialAddCommentView extends AphrontView {
       }
     }
 
-    $header = id(new PhabricatorHeaderView())
+    $header = id(new PHUIHeaderView())
       ->setHeader($is_serious ? pht('Add Comment') : pht('Leap Into Action'));
 
-    return hsprintf(
-      '%s'.
-      '<div class="differential-add-comment-panel">'.
-        '%s%s%s'.
-        '<div class="aphront-panel-preview aphront-panel-flush">'.
-          '<div id="comment-preview">'.
-            '<span class="aphront-panel-preview-loading-text">%s</span>'.
-          '</div>'.
-          '<div id="inline-comment-preview">'.
-          '</div>'.
-        '</div>'.
-      '</div>',
-      id(new PhabricatorAnchorView())
+    $anchor = id(new PhabricatorAnchorView())
         ->setAnchorName('comment')
-        ->setNavigationMarker(true)
-        ->render(),
-      $header->render(),
-      $form->render(),
-      phutil_tag('div', array('id' => 'warnings'), $warning_container),
+        ->setNavigationMarker(true);
+
+    $warn = phutil_tag('div', array('id' => 'warnings'), $warning_container);
+
+    $loading = phutil_tag(
+      'span',
+      array('class' => 'aphront-panel-preview-loading-text'),
       pht('Loading comment preview...'));
+
+    $preview = phutil_tag_div(
+      'aphront-panel-preview aphront-panel-flush',
+      array(
+        phutil_tag('div', array('id' => 'comment-preview'), $loading),
+        phutil_tag('div', array('id' => 'inline-comment-preview')),
+      ));
+
+
+    $comment_box = id(new PHUIObjectBoxView())
+      ->setHeader($header)
+      ->appendChild($anchor)
+      ->appendChild($warn)
+      ->appendChild($form);
+
+    return array($comment_box, $preview);
   }
 }

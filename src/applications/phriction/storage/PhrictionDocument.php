@@ -7,10 +7,9 @@ final class PhrictionDocument extends PhrictionDAO
   implements
     PhabricatorPolicyInterface,
     PhabricatorSubscribableInterface,
+    PhabricatorFlaggableInterface,
     PhabricatorTokenReceiverInterface {
 
-  protected $id;
-  protected $phid;
   protected $slug;
   protected $depth;
   protected $contentID;
@@ -124,6 +123,14 @@ final class PhrictionDocument extends PhrictionDAO
       return $this->getProject()->hasAutomaticCapability($capability, $user);
     }
     return false;
+  }
+
+  public function describeAutomaticCapability($capability) {
+    if ($this->hasProject()) {
+      return pht(
+        "This is a project wiki page, and inherits the project's policies.");
+    }
+    return null;
   }
 
   public function isAutomaticallySubscribed($phid) {

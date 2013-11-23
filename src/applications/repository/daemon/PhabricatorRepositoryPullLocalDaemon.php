@@ -92,6 +92,15 @@ final class PhabricatorRepositoryPullLocalDaemon
       shuffle($repositories);
       $repositories = mpull($repositories, null, 'getID');
 
+      // If any repositories have the NEEDS_UPDATE flag set, pull them
+      // as soon as possible.
+      $type_need_update = PhabricatorRepositoryStatusMessage::TYPE_NEEDS_UPDATE;
+      $need_update_messages = id(new PhabricatorRepositoryStatusMessage())
+        ->loadAllWhere('statusType = %s', $type_need_update);
+      foreach ($need_update_messages as $message) {
+        $retry_after[$message->getRepositoryID()] = time();
+      }
+
       // If any repositories were deleted, remove them from the retry timer map
       // so we don't end up with a retry timer that never gets updated and
       // causes us to sleep for the minimum amount of time.
@@ -128,15 +137,30 @@ final class PhabricatorRepositoryPullLocalDaemon
 
           if (!$no_discovery) {
             // TODO: It would be nice to discover only if we pulled something,
-            // but this isn't totally trivial.
+            // but this isn't totally trivial. It's slightly more complicated
+            // with hosted repositories, too.
 
             $lock_name = get_class($this).':'.$callsign;
             $lock = PhabricatorGlobalLock::newLock($lock_name);
             $lock->lock();
 
+            $repository->writeStatusMessage(
+              PhabricatorRepositoryStatusMessage::TYPE_NEEDS_UPDATE,
+              null);
+
             try {
               $this->discoverRepository($repository);
+              $repository->writeStatusMessage(
+                PhabricatorRepositoryStatusMessage::TYPE_FETCH,
+                PhabricatorRepositoryStatusMessage::CODE_OKAY);
             } catch (Exception $ex) {
+              $repository->writeStatusMessage(
+                PhabricatorRepositoryStatusMessage::TYPE_FETCH,
+                PhabricatorRepositoryStatusMessage::CODE_ERROR,
+                array(
+                  'message' => pht(
+                    'Error updating working copy: %s', $ex->getMessage()),
+                ));
               $lock->unlock();
               throw $ex;
             }
@@ -176,37 +200,72 @@ final class PhabricatorRepositoryPullLocalDaemon
    * @task pull
    */
   protected function loadRepositories(array $names) {
-    if (!count($names)) {
-      return id(new PhabricatorRepository())->loadAll();
-    } else {
-      return PhabricatorRepository::loadAllByPHIDOrCallsign($names);
+    $query = id(new PhabricatorRepositoryQuery())
+      ->setViewer($this->getViewer());
+
+    if ($names) {
+      $query->withCallsigns($names);
     }
+
+    $repos = $query->execute();
+
+    if ($names) {
+      $by_callsign = mpull($repos, null, 'getCallsign');
+      foreach ($names as $name) {
+        if (empty($by_callsign[$name])) {
+          throw new Exception(
+            "No repository exists with callsign '{$name}'!");
+        }
+      }
+    }
+
+    return $repos;
   }
 
   public function discoverRepository(PhabricatorRepository $repository) {
     $vcs = $repository->getVersionControlSystem();
+
+    $result = null;
+    $refs = null;
     switch ($vcs) {
       case PhabricatorRepositoryType::REPOSITORY_TYPE_GIT:
-        return $this->executeGitDiscover($repository);
+        $result = $this->executeGitDiscover($repository);
+        break;
       case PhabricatorRepositoryType::REPOSITORY_TYPE_SVN:
+      case PhabricatorRepositoryType::REPOSITORY_TYPE_MERCURIAL:
         $refs = $this->getDiscoveryEngine($repository)
           ->discoverCommits();
         break;
-      case PhabricatorRepositoryType::REPOSITORY_TYPE_MERCURIAL:
-        return $this->executeHgDiscover($repository);
       default:
         throw new Exception("Unknown VCS '{$vcs}'!");
     }
 
-    foreach ($refs as $ref) {
-      $this->recordCommit(
-        $repository,
-        $ref->getIdentifier(),
-        $ref->getEpoch(),
-        $ref->getBranch());
+    if ($refs !== null) {
+      foreach ($refs as $ref) {
+        $this->recordCommit(
+          $repository,
+          $ref->getIdentifier(),
+          $ref->getEpoch(),
+          $ref->getBranch());
+      }
     }
 
-    return (bool)count($refs);
+    $this->checkIfRepositoryIsFullyImported($repository);
+
+    try {
+      $this->pushToMirrors($repository);
+    } catch (Exception $ex) {
+      // TODO: We should report these into the UI properly, but for
+      // now just complain. These errors are much less severe than
+      // pull errors.
+      phlog($ex);
+    }
+
+    if ($refs !== null) {
+      return (bool)count($refs);
+    } else {
+      return $result;
+    }
   }
 
   private function getDiscoveryEngine(PhabricatorRepository $repository) {
@@ -440,7 +499,40 @@ final class PhabricatorRepositoryPullLocalDaemon
     return $repository->getID().':'.$commit_identifier;
   }
 
+  private function checkIfRepositoryIsFullyImported(
+    PhabricatorRepository $repository) {
 
+    // Check if the repository has the "Importing" flag set. We want to clear
+    // the flag if we can.
+    $importing = $repository->getDetail('importing');
+    if (!$importing) {
+      // This repository isn't marked as "Importing", so we're done.
+      return;
+    }
+
+    // Look for any commit which hasn't imported.
+    $unparsed_commit = queryfx_one(
+      $repository->establishConnection('r'),
+      'SELECT * FROM %T WHERE repositoryID = %d AND importStatus != %d
+        LIMIT 1',
+      id(new PhabricatorRepositoryCommit())->getTableName(),
+      $repository->getID(),
+      PhabricatorRepositoryCommit::IMPORTED_ALL);
+    if ($unparsed_commit) {
+      // We found a commit which still needs to import, so we can't clear the
+      // flag.
+      return;
+    }
+
+    // Clear the "importing" flag.
+    $repository->openTransaction();
+      $repository->beginReadLocking();
+        $repository = $repository->reload();
+        $repository->setDetail('importing', false);
+        $repository->save();
+      $repository->endReadLocking();
+    $repository->saveTransaction();
+  }
 
 /* -(  Git Implementation  )------------------------------------------------- */
 
@@ -451,26 +543,22 @@ final class PhabricatorRepositoryPullLocalDaemon
   private function executeGitDiscover(
     PhabricatorRepository $repository) {
 
-    list($remotes) = $repository->execxLocalCommand(
-      'remote show -n origin');
-
-    $matches = null;
-    if (!preg_match('/^\s*Fetch URL:\s*(.*?)\s*$/m', $remotes, $matches)) {
-      throw new Exception(
-        "Expected 'Fetch URL' in 'git remote show -n origin'.");
+    if (!$repository->isHosted()) {
+      $this->verifyOrigin($repository);
     }
 
-    self::executeGitVerifySameOrigin(
-      $matches[1],
-      $repository->getRemoteURI(),
-      $repository->getLocalPath());
+    $refs = id(new DiffusionLowLevelGitRefQuery())
+      ->setRepository($repository)
+      ->withIsOriginBranch(true)
+      ->execute();
 
-    list($stdout) = $repository->execxLocalCommand(
-      'branch -r --verbose --no-abbrev');
+    $branches = mpull($refs, 'getCommitIdentifier', 'getShortName');
 
-    $branches = DiffusionGitBranch::parseRemoteBranchOutput(
-      $stdout,
-      $only_this_remote = DiffusionBranchInformation::DEFAULT_GIT_REMOTE);
+    if (!$branches) {
+      // This repository has no branches at all, so we don't need to do
+      // anything. Generally, this means the repository is empty.
+      return;
+    }
 
     $callsign = $repository->getCallsign();
 
@@ -600,23 +688,100 @@ final class PhabricatorRepositoryPullLocalDaemon
 
 
   /**
+   * Verify that the "origin" remote exists, and points at the correct URI.
+   *
+   * This catches or corrects some types of misconfiguration, and also repairs
+   * an issue where Git 1.7.1 does not create an "origin" for `--bare` clones.
+   * See T4041.
+   *
+   * @param   PhabricatorRepository Repository to verify.
+   * @return  void
+   */
+  private function verifyOrigin(PhabricatorRepository $repository) {
+    list($remotes) = $repository->execxLocalCommand(
+      'remote show -n origin');
+
+    $matches = null;
+    if (!preg_match('/^\s*Fetch URL:\s*(.*?)\s*$/m', $remotes, $matches)) {
+      throw new Exception(
+        "Expected 'Fetch URL' in 'git remote show -n origin'.");
+    }
+
+    $remote_uri = $matches[1];
+    $expect_remote = $repository->getRemoteURI();
+
+    if ($remote_uri == "origin") {
+      // If a remote does not exist, git pretends it does and prints out a
+      // made up remote where the URI is the same as the remote name. This is
+      // definitely not correct.
+
+      // Possibly, we should use `git remote --verbose` instead, which does not
+      // suffer from this problem (but is a little more complicated to parse).
+      $valid = false;
+      $exists = false;
+    } else {
+      $valid = self::isSameGitOrigin($remote_uri, $expect_remote);
+      $exists = true;
+    }
+
+    if (!$valid) {
+      if (!$exists) {
+        // If there's no "origin" remote, just create it regardless of how
+        // strongly we own the working copy. There is almost no conceivable
+        // scenario in which this could do damage.
+        $this->log(
+          pht(
+            'Remote "origin" does not exist. Creating "origin", with '.
+            'URI "%s".',
+            $expect_remote));
+        $repository->execxLocalCommand(
+          'remote add origin %s',
+          $expect_remote);
+
+        // NOTE: This doesn't fetch the origin (it just creates it), so we won't
+        // know about origin branches until the next "pull" happens. That's fine
+        // for our purposes, but might impact things in the future.
+      } else {
+        if ($repository->canDestroyWorkingCopy()) {
+          // Bad remote, but we can try to repair it.
+          $this->log(
+            pht(
+              'Remote "origin" exists, but is pointed at the wrong URI, "%s". '.
+              'Resetting origin URI to "%s.',
+              $remote_uri,
+              $expect_remote));
+          $repository->execxLocalCommand(
+            'remote set-url origin %s',
+            $expect_remote);
+        } else {
+          // Bad remote and we aren't comfortable repairing it.
+          $message = pht(
+            'Working copy at "%s" has a mismatched origin URI, "%s". '.
+            'The expected origin URI is "%s". Fix your configuration, or '.
+            'set the remote URI correctly. To avoid breaking anything, '.
+            'Phabricator will not automatically fix this.',
+            $repository->getLocalPath(),
+            $remote_uri,
+            $expect_remote);
+          throw new Exception($message);
+        }
+      }
+    }
+  }
+
+
+
+  /**
    * @task git
    */
-  public static function executeGitVerifySameOrigin($remote, $expect, $where) {
+  public static function isSameGitOrigin($remote, $expect) {
     $remote_path = self::getPathFromGitURI($remote);
     $expect_path = self::getPathFromGitURI($expect);
 
     $remote_match = self::executeGitNormalizePath($remote_path);
     $expect_match = self::executeGitNormalizePath($expect_path);
 
-    if ($remote_match != $expect_match) {
-      throw new Exception(
-        "Working copy at '{$where}' has a mismatched origin URL. It has ".
-        "origin URL '{$remote}' (with remote path '{$remote_path}'), but the ".
-        "configured URL '{$expect}' (with remote path '{$expect_path}') is ".
-        "expected. Refusing to proceed because this may indicate that the ".
-        "working copy is actually some other repository.");
-    }
+    return ($remote_match == $expect_match);
   }
 
   private static function getPathFromGitURI($raw_uri) {
@@ -646,62 +811,43 @@ final class PhabricatorRepositoryPullLocalDaemon
   }
 
 
-/* -(  Mercurial Implementation  )------------------------------------------- */
-
-
-  private function executeHgDiscover(PhabricatorRepository $repository) {
-    // NOTE: "--debug" gives us 40-character hashes.
-    list($stdout) = $repository->execxLocalCommand('--debug branches');
-
-    $branches = ArcanistMercurialParser::parseMercurialBranches($stdout);
-    $got_something = false;
-    foreach ($branches as $name => $branch) {
-      $commit = $branch['rev'];
-      if ($this->isKnownCommit($repository, $commit)) {
-        continue;
-      } else {
-        $this->executeHgDiscoverCommit($repository, $commit);
-        $got_something = true;
-      }
+  private function pushToMirrors(PhabricatorRepository $repository) {
+    if (!$repository->canMirror()) {
+      return;
     }
 
-    return $got_something;
-  }
+    $mirrors = id(new PhabricatorRepositoryMirrorQuery())
+      ->setViewer($this->getViewer())
+      ->withRepositoryPHIDs(array($repository->getPHID()))
+      ->execute();
 
-  private function executeHgDiscoverCommit(
-    PhabricatorRepository $repository,
-    $commit) {
+    // TODO: This is a little bit janky, but we don't have first-class
+    // infrastructure for running remote commands against an arbitrary remote
+    // right now. Just make an emphemeral copy of the repository and muck with
+    // it a little bit. In the medium term, we should pull this command stuff
+    // out and use it here and for "Land to ...".
 
-    $discover = array($commit);
-    $insert = array($commit);
+    $proxy = clone $repository;
+    $proxy->makeEphemeral();
 
-    $seen_parent = array();
+    $proxy->setDetail('hosting-enabled', false);
+    foreach ($mirrors as $mirror) {
+      $proxy->setDetail('remote-uri', $mirror->getRemoteURI());
+      $proxy->setCredentialPHID($mirror->getCredentialPHID());
 
-    $stream = new PhabricatorMercurialGraphStream($repository);
+      $this->log(pht('Pushing to remote "%s"...', $mirror->getRemoteURI()));
 
-    // For all the new commits at the branch heads, walk backward until we
-    // find only commits we've aleady seen.
-    while ($discover) {
-      $target = array_pop($discover);
-
-      $parents = $stream->getParents($target);
-
-      foreach ($parents as $parent) {
-        if (isset($seen_parent[$parent])) {
-          continue;
-        }
-        $seen_parent[$parent] = true;
-        if (!$this->isKnownCommit($repository, $parent)) {
-          $discover[] = $parent;
-          $insert[] = $parent;
-        }
+      if (!$proxy->isGit()) {
+        throw new Exception('Unsupported VCS!');
       }
-    }
 
-    foreach ($insert as $target) {
-      $epoch = $stream->getCommitDate($target);
-      $this->recordCommit($repository, $target, $epoch);
+      $future = $proxy->getRemoteCommandFuture(
+        'push --verbose --mirror -- %s',
+        $proxy->getRemoteURI());
+
+      $future
+        ->setCWD($proxy->getLocalPath())
+        ->resolvex();
     }
   }
-
 }

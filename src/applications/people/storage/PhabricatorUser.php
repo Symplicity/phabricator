@@ -11,7 +11,6 @@ final class PhabricatorUser
   const NAMETOKEN_TABLE = 'user_nametoken';
   const MAXIMUM_USERNAME_LENGTH = 64;
 
-  protected $phid;
   protected $userName;
   protected $realName;
   protected $sex;
@@ -30,6 +29,8 @@ final class PhabricatorUser
   protected $isSystemAgent = 0;
   protected $isAdmin = 0;
   protected $isDisabled = 0;
+  protected $isEmailVerified = 0;
+  protected $isApproved = 0;
 
   private $profileImage = null;
   private $profile = null;
@@ -52,9 +53,39 @@ final class PhabricatorUser
         return (bool)$this->isDisabled;
       case 'isSystemAgent':
         return (bool)$this->isSystemAgent;
+      case 'isEmailVerified':
+        return (bool)$this->isEmailVerified;
+      case 'isApproved':
+        return (bool)$this->isApproved;
       default:
         return parent::readField($field);
     }
+  }
+
+
+  /**
+   * Is this a live account which has passed required approvals? Returns true
+   * if this is an enabled, verified (if required), approved (if required)
+   * account, and false otherwise.
+   *
+   * @return bool True if this is a standard, usable account.
+   */
+  public function isUserActivated() {
+    if ($this->getIsDisabled()) {
+      return false;
+    }
+
+    if (!$this->getIsApproved()) {
+      return false;
+    }
+
+    if (PhabricatorUserEmail::isEmailVerificationRequired()) {
+      if (!$this->getIsEmailVerified()) {
+        return false;
+      }
+    }
+
+    return true;
   }
 
   public function getConfiguration() {
@@ -464,8 +495,18 @@ final class PhabricatorUser
       }
     }
     $token = $this->generateEmailToken($email);
-    $uri = PhabricatorEnv::getProductionURI('/login/etoken/'.$token.'/');
+
+    $uri = '/login/etoken/'.$token.'/';
+    try {
+      $uri = PhabricatorEnv::getProductionURI($uri);
+    } catch (Exception $ex) {
+      // If a user runs `bin/auth recover` before configuring the base URI,
+      // just show the path. We don't have any way to figure out the domain.
+      // See T4132.
+    }
+
     $uri = new PhutilURI($uri);
+
     return $uri->alter('email', $email->getAddress());
   }
 
@@ -746,6 +787,8 @@ EOBODY;
     $src_phid = $this->getProfileImagePHID();
 
     if ($src_phid) {
+      // TODO: (T603) Can we get rid of this entirely and move it to
+      // PeopleQuery with attach/attachable?
       $file = id(new PhabricatorFile())->loadOneWhere('phid = %s', $src_phid);
       if ($file) {
         $this->profileImage = $file->getBestURI();
@@ -832,6 +875,15 @@ EOBODY;
 
   public function hasAutomaticCapability($capability, PhabricatorUser $viewer) {
     return $this->getPHID() && ($viewer->getPHID() === $this->getPHID());
+  }
+
+  public function describeAutomaticCapability($capability) {
+    switch ($capability) {
+      case PhabricatorPolicyCapability::CAN_EDIT:
+        return pht('Only you can edit your information.');
+      default:
+        return null;
+    }
   }
 
 

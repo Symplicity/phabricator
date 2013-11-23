@@ -13,6 +13,7 @@ final class PhabricatorPeopleQuery
   private $isAdmin;
   private $isSystemAgent;
   private $isDisabled;
+  private $isApproved;
   private $nameLike;
 
   private $needPrimaryEmail;
@@ -70,6 +71,11 @@ final class PhabricatorPeopleQuery
     return $this;
   }
 
+  public function withIsApproved($approved) {
+    $this->isApproved = $approved;
+    return $this;
+  }
+
   public function withNameLike($like) {
     $this->nameLike = $like;
     return $this;
@@ -101,10 +107,11 @@ final class PhabricatorPeopleQuery
 
     $data = queryfx_all(
       $conn_r,
-      'SELECT * FROM %T user %Q %Q %Q %Q',
+      'SELECT * FROM %T user %Q %Q %Q %Q %Q',
       $table->getTableName(),
       $this->buildJoinsClause($conn_r),
       $this->buildWhereClause($conn_r),
+      $this->buildApplicationSearchGroupClause($conn_r),
       $this->buildOrderClause($conn_r),
       $this->buildLimitClause($conn_r));
 
@@ -112,8 +119,10 @@ final class PhabricatorPeopleQuery
       $table->putInSet(new LiskDAOSet());
     }
 
-    $users = $table->loadAllFromArray($data);
+    return $table->loadAllFromArray($data);
+  }
 
+  protected function didFilterPage(array $users) {
     if ($this->needProfile) {
       $user_list = mpull($users, null, 'getPHID');
       $profiles = new PhabricatorUserProfile();
@@ -133,11 +142,18 @@ final class PhabricatorPeopleQuery
     }
 
     if ($this->needProfileImage) {
-      $files = id(new PhabricatorFileQuery())
-        ->setViewer($this->getViewer())
-        ->withPHIDs(mpull($users, 'getProfileImagePHID'))
-        ->execute();
-      $files = mpull($files, null, 'getPHID');
+      $user_profile_file_phids = mpull($users, 'getProfileImagePHID');
+      $user_profile_file_phids = array_filter($user_profile_file_phids);
+      if ($user_profile_file_phids) {
+        $files = id(new PhabricatorFileQuery())
+          ->setParentQuery($this)
+          ->setViewer($this->getViewer())
+          ->withPHIDs($user_profile_file_phids)
+          ->execute();
+        $files = mpull($files, null, 'getPHID');
+      } else {
+        $files = array();
+      }
       foreach ($users as $user) {
         $image_phid = $user->getProfileImagePHID();
         if (isset($files[$image_phid])) {
@@ -174,6 +190,8 @@ final class PhabricatorPeopleQuery
         'JOIN %T email ON email.userPHID = user.PHID',
         $email_table->getTableName());
     }
+
+    $joins[] = $this->buildApplicationSearchJoinClause($conn_r);
 
     $joins = implode(' ', $joins);
     return  $joins;
@@ -237,10 +255,18 @@ final class PhabricatorPeopleQuery
         'user.isAdmin = 1');
     }
 
-    if ($this->isDisabled) {
+    if ($this->isDisabled !== null) {
       $where[] = qsprintf(
         $conn_r,
-        'user.isDisabled = 1');
+        'user.isDisabled = %d',
+        (int)$this->isDisabled);
+    }
+
+    if ($this->isApproved !== null) {
+      $where[] = qsprintf(
+        $conn_r,
+        'user.isApproved = %d',
+        (int)$this->isApproved);
     }
 
     if ($this->isSystemAgent) {
@@ -257,11 +283,21 @@ final class PhabricatorPeopleQuery
         $this->nameLike);
     }
 
+    $where[] = $this->buildPagingClause($conn_r);
+
     return $this->formatWhereClause($where);
   }
 
   protected function getPagingColumn() {
     return 'user.id';
+  }
+
+  protected function getApplicationSearchObjectPHIDColumn() {
+    return 'user.phid';
+  }
+
+  public function getQueryApplicationClass() {
+    return 'PhabricatorApplicationPeople';
   }
 
 }

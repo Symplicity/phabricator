@@ -30,7 +30,7 @@ final class PhabricatorDaemonLogViewController
       id(new PhabricatorCrumbView())
         ->setName(pht('Daemon %s', $log->getID())));
 
-    $header = id(new PhabricatorHeaderView())
+    $header = id(new PHUIHeaderView())
       ->setHeader($log->getDaemon());
 
     $tag = id(new PhabricatorTagView())
@@ -72,11 +72,14 @@ final class PhabricatorDaemonLogViewController
     $event_panel->setNoBackground();
     $event_panel->appendChild($event_view);
 
+    $object_box = id(new PHUIObjectBoxView())
+      ->setHeader($header)
+      ->addPropertyList($properties);
+
     return $this->buildApplicationPage(
       array(
         $crumbs,
-        $header,
-        $properties,
+        $object_box,
         $event_panel,
       ),
       array(
@@ -88,7 +91,7 @@ final class PhabricatorDaemonLogViewController
     $request = $this->getRequest();
     $viewer = $request->getUser();
 
-    $view = id(new PhabricatorPropertyListView())
+    $view = id(new PHUIPropertyListView())
       ->setUser($viewer);
 
     $id = $daemon->getID();

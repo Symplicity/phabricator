@@ -22,7 +22,7 @@ final class PhabricatorApplicationConpherence extends PhabricatorApplication {
   }
 
   public function getTitleGlyph() {
-    return "\xE2\x98\x8E";
+    return "\xE2\x9C\x86";
   }
 
   public function getApplicationGroup() {
@@ -31,7 +31,7 @@ final class PhabricatorApplicationConpherence extends PhabricatorApplication {
 
   public function getEventListeners() {
     return array(
-      new ConpherencePeopleMenuEventListener(),
+      new ConpherenceActionMenuEventListener(),
       new ConpherenceHovercardEventListener(),
     );
   }

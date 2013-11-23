@@ -21,7 +21,7 @@ final class PhabricatorPasteEditController extends PhabricatorPasteController {
     if (!$this->id) {
       $is_create = true;
 
-      $paste = new PhabricatorPaste();
+      $paste = PhabricatorPaste::initializeNewPaste($user);
 
       $parent_id = $request->getStr('parent');
       if ($parent_id) {
@@ -205,7 +205,7 @@ final class PhabricatorPasteEditController extends PhabricatorPasteController {
 
     $form->appendChild($submit);
 
-    $form_box = id(new PHUIFormBoxView())
+    $form_box = id(new PHUIObjectBoxView())
       ->setHeaderText($title)
       ->setFormError($error_view)
       ->setForm($form);

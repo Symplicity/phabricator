@@ -148,6 +148,13 @@
   max-height: 640px;
 }
 
+.phabricator-remarkup audio {
+  display: block;
+  margin: 16px auto;
+  min-width: 240px;
+  width: 50%;
+}
+
 .phabricator-remarkup-mention-exists {
   font-weight: bold;
   background: #e6f3ff;
@@ -320,6 +327,20 @@
 
   width: 0px;
   border-right: 1px solid #cccccc;
+}
+
+.remarkup-interpreter-error {
+  padding: 8px;
+  border: 1px solid {$red};
+  background-color: {$lightred};
+}
+
+.remarkup-cowsay {
+  white-space: pre-wrap;
+}
+
+.remarkup-figlet {
+  white-space: pre-wrap;
 }
 
 .remarkup-assist {

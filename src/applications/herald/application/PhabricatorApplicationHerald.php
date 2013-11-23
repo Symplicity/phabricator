@@ -38,8 +38,9 @@ final class PhabricatorApplicationHerald extends PhabricatorApplication {
           => 'HeraldNewController',
         'rule/(?P<id>[1-9]\d*)/' => 'HeraldRuleViewController',
         'edit/(?:(?P<id>[1-9]\d*)/)?' => 'HeraldRuleController',
+        'disable/(?P<id>[1-9]\d*)/(?P<action>\w+)/' =>
+          'HeraldDisableController',
         'history/(?:(?P<id>[1-9]\d*)/)?' => 'HeraldRuleEditHistoryController',
-        'delete/(?P<id>[1-9]\d*)/' => 'HeraldDeleteController',
         'test/' => 'HeraldTestConsoleController',
         'transcript/' => 'HeraldTranscriptListController',
         'transcript/(?P<id>[1-9]\d*)/(?:(?P<filter>\w+)/)?'
@@ -47,5 +48,15 @@ final class PhabricatorApplicationHerald extends PhabricatorApplication {
       ),
     );
   }
+
+  protected function getCustomCapabilities() {
+    return array(
+      HeraldCapabilityManageGlobalRules::CAPABILITY => array(
+        'caption' => pht('Global rules can bypass access controls.'),
+        'default' => PhabricatorPolicies::POLICY_ADMIN,
+      ),
+    );
+  }
+
 
 }

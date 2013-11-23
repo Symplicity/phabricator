@@ -19,14 +19,12 @@ final class PhabricatorPhamePHIDTypeBlog extends PhabricatorPHIDType {
     return new PhameBlog();
   }
 
-  public function loadObjects(
+  protected function buildQueryForObjects(
     PhabricatorObjectQuery $query,
     array $phids) {
 
     return id(new PhameBlogQuery())
-      ->setViewer($query->getViewer())
-      ->withPHIDs($phids)
-      ->execute();
+      ->withPHIDs($phids);
   }
 
   public function loadHandles(

@@ -8,6 +8,10 @@ final class PhabricatorSearchController
 
   private $key;
 
+  public function shouldAllowPublic() {
+    return true;
+  }
+
   public function willProcessRequest(array $data) {
     $this->key = idx($data, 'key');
   }
@@ -32,7 +36,9 @@ final class PhabricatorSearchController
         $pref_jump = PhabricatorUserPreferences::PREFERENCE_SEARCHBAR_JUMP;
         if ($request->getStr('jump') != 'no' &&
             $user && $user->loadPreferences()->getPreference($pref_jump, 1)) {
-          $response = PhabricatorJumpNavHandler::jumpPostResponse($query_str);
+          $response = PhabricatorJumpNavHandler::getJumpResponse(
+            $user,
+            $query_str);
         } else {
           $response = null;
         }
@@ -127,22 +133,18 @@ final class PhabricatorSearchController
     $author_value = array_select_keys(
       $handles,
       $query->getParameter('author', array()));
-    $author_value = mpull($author_value, 'getFullName', 'getPHID');
 
     $owner_value = array_select_keys(
       $handles,
       $query->getParameter('owner', array()));
-    $owner_value = mpull($owner_value, 'getFullName', 'getPHID');
 
     $subscribers_value = array_select_keys(
       $handles,
       $query->getParameter('subscribers', array()));
-    $subscribers_value = mpull($subscribers_value, 'getFullName', 'getPHID');
 
     $project_value = array_select_keys(
       $handles,
       $query->getParameter('project', array()));
-    $project_value = mpull($project_value, 'getFullName', 'getPHID');
 
     $repository_value = array_select_keys(
       $handles,
@@ -249,11 +251,14 @@ final class PhabricatorSearchController
       }
 
       if ($results) {
-
-        $loader = id(new PhabricatorObjectHandleData($results))
-          ->setViewer($user);
-        $handles = $loader->loadHandles();
-        $objects = $loader->loadObjects();
+        $handles = id(new PhabricatorHandleQuery())
+          ->setViewer($user)
+          ->withPHIDs($results)
+          ->execute();
+        $objects = id(new PhabricatorObjectQuery())
+          ->setViewer($user)
+          ->withPHIDs($results)
+          ->execute();
         $results = array();
         foreach ($handles as $phid => $handle) {
           $view = id(new PhabricatorSearchResultView())
@@ -263,18 +268,17 @@ final class PhabricatorSearchController
           $results[] = $view->render();
         }
 
-        $results = hsprintf(
-          '<div class="phabricator-search-result-list">'.
-            '%s'.
-            '<div class="search-results-pager">%s</div>'.
-          '</div>',
+        $results = phutil_tag_div('phabricator-search-result-list', array(
           phutil_implode_html("\n", $results),
-          $pager->render());
+          phutil_tag_div('search-results-pager', $pager->render()),
+        ));
       } else {
-        $results = hsprintf(
-          '<div class="phabricator-search-result-list">'.
-            '<p class="phabricator-search-no-results">No search results.</p>'.
-          '</div>');
+        $results = phutil_tag_div(
+          'phabricator-search-result-list',
+          phutil_tag(
+            'p',
+            array('class' => 'phabricator-search-no-results'),
+            pht('No search results.')));
       }
       $results = id(new PHUIBoxView())
         ->addMargin(PHUI::MARGIN_LARGE)
@@ -286,9 +290,14 @@ final class PhabricatorSearchController
       $results = null;
     }
 
+    $crumbs = $this->buildApplicationCrumbs();
+    $crumbs->addCrumb(
+      id(new PhabricatorCrumbView())
+        ->setName(pht('Search')));
 
     return $this->buildApplicationPage(
       array(
+        $crumbs,
         $search_panel,
         $results,
       ),

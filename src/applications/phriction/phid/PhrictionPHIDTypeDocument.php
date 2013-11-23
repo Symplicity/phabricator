@@ -16,14 +16,12 @@ final class PhrictionPHIDTypeDocument extends PhabricatorPHIDType {
     return new PhrictionDocument();
   }
 
-  public function loadObjects(
+  protected function buildQueryForObjects(
     PhabricatorObjectQuery $query,
     array $phids) {
 
     return id(new PhrictionDocumentQuery())
-      ->setViewer($query->getViewer())
-      ->withPHIDs($phids)
-      ->execute();
+      ->withPHIDs($phids);
   }
 
   public function loadHandles(

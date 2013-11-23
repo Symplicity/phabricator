@@ -9,6 +9,7 @@ final class PholioMock extends PholioDAO
     PhabricatorPolicyInterface,
     PhabricatorSubscribableInterface,
     PhabricatorTokenReceiverInterface,
+    PhabricatorFlaggableInterface,
     PhabricatorApplicationTransactionInterface {
 
   const MARKUP_FIELD_DESCRIPTION  = 'markup:description';
@@ -147,6 +148,10 @@ final class PholioMock extends PholioDAO
 
   public function hasAutomaticCapability($capability, PhabricatorUser $viewer) {
     return ($viewer->getPHID() == $this->getAuthorPHID());
+  }
+
+  public function describeAutomaticCapability($capability) {
+    return pht("A mock's owner can always view and edit it.");
   }
 
 

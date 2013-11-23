@@ -39,54 +39,11 @@ abstract class PhabricatorAuthProviderOAuth1 extends PhabricatorAuthProvider {
   }
 
   protected function renderLoginForm(AphrontRequest $request, $mode) {
-    $viewer = $request->getUser();
-
-    if ($mode == 'link') {
-      $button_text = pht('Link External Account');
-    } else if ($mode == 'refresh') {
-      $button_text = pht('Refresh Account Link');
-    } else if ($this->shouldAllowRegistration()) {
-      $button_text = pht('Login or Register');
-    } else {
-      $button_text = pht('Login');
-    }
-
-    $icon = id(new PHUIIconView())
-      ->setSpriteSheet(PHUIIconView::SPRITE_LOGIN)
-      ->setSpriteIcon($this->getLoginIcon());
-
-    $button = id(new PHUIButtonView())
-        ->setSize(PHUIButtonView::BIG)
-        ->setColor(PHUIButtonView::GREY)
-        ->setIcon($icon)
-        ->setText($button_text)
-        ->setSubtext($this->getProviderName());
-
-    $adapter = $this->getAdapter();
-
-    $uri = new PhutilURI($this->getLoginURI());
-    $params = $uri->getQueryParams();
-    $uri->setQueryParams(array());
-
-    $content = array($button);
-
-    foreach ($params as $key => $value) {
-      $content[] = phutil_tag(
-        'input',
-        array(
-          'type' => 'hidden',
-          'name' => $key,
-          'value' => $value,
-        ));
-    }
-
-    return phabricator_form(
-      $viewer,
-      array(
-        'method' => 'POST',
-        'action' => (string)$uri,
-      ),
-      $content);
+    $attributes = array(
+      'method' => 'POST',
+      'uri' => $this->getLoginURI(),
+    );
+    return $this->renderStandardLoginButton($request, $mode, $attributes);
   }
 
   public function processLoginRequest(
@@ -101,6 +58,13 @@ abstract class PhabricatorAuthProviderOAuth1 extends PhabricatorAuthProvider {
       $uri = $adapter->getClientRedirectURI();
       $response = id(new AphrontRedirectResponse())->setURI($uri);
       return array($account, $response);
+    }
+
+    $denied = $request->getStr('denied');
+    if (strlen($denied)) {
+      // Twitter indicates that the user cancelled the login attempt by
+      // returning "denied" as a parameter.
+      throw new PhutilAuthUserAbortedException();
     }
 
     // NOTE: You can get here via GET, this should probably be a bit more
@@ -281,7 +245,7 @@ abstract class PhabricatorAuthProviderOAuth1 extends PhabricatorAuthProvider {
 
   public function willRenderLinkedAccount(
     PhabricatorUser $viewer,
-    PhabricatorObjectItemView $item,
+    PHUIObjectItemView $item,
     PhabricatorExternalAccount $account) {
 
     $item->addAttribute(pht('OAuth1 Account'));

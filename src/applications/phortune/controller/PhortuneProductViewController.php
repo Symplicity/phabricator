@@ -23,7 +23,7 @@ final class PhortuneProductViewController extends PhortuneController {
 
     $title = pht('Product: %s', $product->getProductName());
 
-    $header = id(new PhabricatorHeaderView())
+    $header = id(new PHUIHeaderView())
       ->setHeader($product->getProductName());
 
     $account = $this->loadActiveAccount($user);
@@ -59,8 +59,9 @@ final class PhortuneProductViewController extends PhortuneController {
         ->setName(pht('#%d', $product->getID()))
         ->setHref($request->getRequestURI()));
 
-    $properties = id(new PhabricatorPropertyListView())
+    $properties = id(new PHUIPropertyListView())
       ->setUser($user)
+      ->setActionList($actions)
       ->addProperty(pht('Type'), $product->getTypeName())
       ->addProperty(
         pht('Price'),
@@ -81,12 +82,14 @@ final class PhortuneProductViewController extends PhortuneController {
       ->setTransactions($xactions)
       ->setMarkupEngine($engine);
 
+    $object_box = id(new PHUIObjectBoxView())
+      ->setHeader($header)
+      ->addPropertyList($properties);
+
     return $this->buildApplicationPage(
       array(
         $crumbs,
-        $header,
-        $actions,
-        $properties,
+        $object_box,
         $xaction_view,
       ),
       array(

@@ -40,9 +40,11 @@ final class PhrictionDocumentController
       $document = new PhrictionDocument();
 
       if (PhrictionDocument::isProjectSlug($slug)) {
-        $project = id(new PhabricatorProject())->loadOneWhere(
-          'phrictionSlug = %s',
-          PhrictionDocument::getProjectSlugIdentifier($slug));
+        $project = id(new PhabricatorProjectQuery())
+          ->setViewer($user)
+          ->withPhrictionSlugs(array(
+            PhrictionDocument::getProjectSlugIdentifier($slug)))
+          ->executeOne();
         if (!$project) {
           return new Aphront404Response();
         }
@@ -159,8 +161,14 @@ final class PhrictionDocumentController
       $crumbs->addCrumb($view);
     }
 
-    $header = id(new PhabricatorHeaderView())
+    $header = id(new PHUIHeaderView())
       ->setHeader($page_title);
+
+    $prop_list = null;
+    if ($properties) {
+      $prop_list = new PHUIPropertyGroupView();
+      $prop_list->addPropertyList($properties);
+    }
 
     $page_content = id(new PHUIDocumentView())
       ->setOffset(true)
@@ -168,7 +176,7 @@ final class PhrictionDocumentController
       ->appendChild(
         array(
           $actions,
-          $properties,
+          $prop_list,
           $move_notice,
           $core_content,
         ));
@@ -202,15 +210,17 @@ final class PhrictionDocumentController
     $slug) {
 
     $viewer = $this->getRequest()->getUser();
-    $view = id(new PhabricatorPropertyListView())
+    $view = id(new PHUIPropertyListView())
       ->setUser($viewer)
       ->setObject($document);
 
     $project_phid = null;
     if (PhrictionDocument::isProjectSlug($slug)) {
-      $project = id(new PhabricatorProject())->loadOneWhere(
-        'phrictionSlug = %s',
-        PhrictionDocument::getProjectSlugIdentifier($slug));
+      $project = id(new PhabricatorProjectQuery())
+        ->setViewer($viewer)
+        ->withPhrictionSlugs(array(
+          PhrictionDocument::getProjectSlugIdentifier($slug)))
+        ->executeOne();
       if ($project) {
         $project_phid = $project->getPHID();
       }

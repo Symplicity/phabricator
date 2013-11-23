@@ -83,9 +83,6 @@ try {
       $controller->willProcessRequest($uri_data);
       $response = $controller->processRequest();
     }
-  } catch (AphrontRedirectException $ex) {
-    $response = id(new AphrontRedirectResponse())
-      ->setURI($ex->getURI());
   } catch (Exception $ex) {
     $original_exception = $ex;
     $response = $application->handleException($ex);
@@ -102,10 +99,15 @@ try {
       phlog($unexpected_output);
 
       if ($response instanceof AphrontWebpageResponse) {
-        echo hsprintf(
-          '<div style="background: #eeddff; white-space: pre-wrap;
-                       z-index: 200000; position: relative; padding: 8px;
-                       font-family: monospace;">%s</div>',
+        echo phutil_tag(
+          'div',
+          array('style' =>
+            'background: #eeddff;'.
+            'white-space: pre-wrap;'.
+            'z-index: 200000;'.
+            'position: relative;'.
+            'padding: 8px;'.
+            'font-family: monospace'),
           $unexpected_output);
       }
     }

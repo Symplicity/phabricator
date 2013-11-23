@@ -313,24 +313,11 @@ final class PhabricatorConduitAPIController
     ConduitAPIRequest $request,
     PhabricatorUser $user) {
 
-    if ($user->getIsDisabled()) {
+    if (!$user->isUserActivated()) {
       return array(
         'ERR-USER-DISABLED',
-        'User is disabled.');
-    }
-
-    if (PhabricatorUserEmail::isEmailVerificationRequired()) {
-      $email = $user->loadPrimaryEmail();
-      if (!$email) {
-        return array(
-          'ERR-USER-NOEMAIL',
-          'User has no primary email address.');
-      }
-      if (!$email->getIsVerified()) {
-        return array(
-          'ERR-USER-UNVERIFIED',
-          'User has unverified email address.');
-      }
+        pht('User account is not activated.'),
+      );
     }
 
     $request->setUser($user);
@@ -385,10 +372,10 @@ final class PhabricatorConduitAPIController
     $result_panel->setHeader('Method Result');
     $result_panel->appendChild($result_table);
 
-    $param_head = id(new PhabricatorHeaderView())
+    $param_head = id(new PHUIHeaderView())
       ->setHeader(pht('Method Parameters'));
 
-    $result_head = id(new PhabricatorHeaderView())
+    $result_head = id(new PHUIHeaderView())
       ->setHeader(pht('Method Result'));
 
     $method_uri = $this->getApplicationURI('method/'.$method.'/');
@@ -423,7 +410,10 @@ final class PhabricatorConduitAPIController
       $value = $json->encodeFormatted($value);
     }
 
-    $value = hsprintf('<pre style="white-space: pre-wrap;">%s</pre>', $value);
+    $value = phutil_tag(
+      'pre',
+      array('style' => 'white-space: pre-wrap;'),
+      $value);
 
     return $value;
   }

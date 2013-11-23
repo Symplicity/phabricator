@@ -97,7 +97,7 @@ final class PhabricatorApplicationSearchController
       $saved_query = $engine->buildSavedQueryFromRequest($request);
       $this->saveQuery($saved_query);
       return id(new AphrontRedirectResponse())->setURI(
-        $engine->getQueryResultsPageURI($saved_query->getQueryKey()));
+        $engine->getQueryResultsPageURI($saved_query->getQueryKey()).'#R');
     }
 
     $named_query = null;
@@ -190,11 +190,24 @@ final class PhabricatorApplicationSearchController
     $nav->appendChild($filter_view);
 
     if ($run_query) {
+      $nav->appendChild(
+        $anchor = id(new PhabricatorAnchorView())
+          ->setAnchorName('R'));
+
       $query = $engine->buildQueryFromSavedQuery($saved_query);
 
       $pager = new AphrontCursorPagerView();
       $pager->readFromRequest($request);
-      $pager->setPageSize($engine->getPageSize($saved_query));
+      $page_size = $engine->getPageSize($saved_query);
+      if (is_finite($page_size)) {
+        $pager->setPageSize($page_size);
+      } else {
+        // Consider an INF pagesize to mean a large finite pagesize.
+
+        // TODO: It would be nice to handle this more gracefully, but math
+        // with INF seems to vary across PHP versions, systems, and runtimes.
+        $pager->setPageSize(0xFFFF);
+      }
       $objects = $query->setViewer($request->getUser())
         ->executeWithCursorPager($pager);
 
@@ -203,11 +216,18 @@ final class PhabricatorApplicationSearchController
       $nav->appendChild($list);
 
       // TODO: This is a bit hacky.
-      if ($list instanceof PhabricatorObjectItemListView) {
+      if ($list instanceof PHUIObjectItemListView) {
         $list->setNoDataString(pht("No results found for this query."));
         $list->setPager($pager);
       } else {
-        $nav->appendChild($pager);
+        if ($pager->willShowPagingControls()) {
+          $pager_box = id(new PHUIBoxView())
+            ->addPadding(PHUI::PADDING_MEDIUM)
+            ->addMargin(PHUI::MARGIN_LARGE)
+            ->setShadow(true)
+            ->appendChild($pager);
+          $nav->appendChild($pager_box);
+        }
       }
     }
 
@@ -248,7 +268,7 @@ final class PhabricatorApplicationSearchController
 
     $list_id = celerity_generate_unique_node_id();
 
-    $list = new PhabricatorObjectItemListView();
+    $list = new PHUIObjectItemListView();
     $list->setUser($user);
     $list->setID($list_id);
 
@@ -263,7 +283,7 @@ final class PhabricatorApplicationSearchController
       $class = get_class($engine);
       $key = $named_query->getQueryKey();
 
-      $item = id(new PhabricatorObjectItemView())
+      $item = id(new PHUIObjectItemView())
         ->setHeader($named_query->getQueryName())
         ->setHref($engine->getQueryResultsPageURI($key));
 

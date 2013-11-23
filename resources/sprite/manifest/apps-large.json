@@ -64,22 +64,22 @@
     "apps-authentication-blue-large"  : {
       "name" : "apps-authentication-blue-large",
       "rule" : ".apps-authentication-blue-large, .phabricator-crumb-view:hover .apps-authentication-dark-large",
-      "hash" : "9a8389120be19de5b0fba2814736d2c4"
+      "hash" : "3d5e35b539e11d69635d04651c973adf"
     },
     "apps-authentication-dark-large"  : {
       "name" : "apps-authentication-dark-large",
       "rule" : ".apps-authentication-dark-large",
-      "hash" : "478a7a1ae296ccf988ccce89bc7de25d"
+      "hash" : "2321ca8222a5368f80717c5424f3fd17"
     },
     "apps-authentication-light-large" : {
       "name" : "apps-authentication-light-large",
       "rule" : ".apps-authentication-light-large",
-      "hash" : "034256f1056033424b936e94debaa9ad"
+      "hash" : "8ec1778a94a9b17d22dec23e466077b3"
     },
     "apps-authentication-white-large" : {
       "name" : "apps-authentication-white-large",
       "rule" : ".apps-authentication-white-large",
-      "hash" : "29a681a8825dbeb805480bdddb91c737"
+      "hash" : "9ccbff0a913a20892846b0df6a502bbe"
     },
     "apps-calendar-blue-large"        : {
       "name" : "apps-calendar-blue-large",
@@ -581,6 +581,26 @@
       "rule" : ".apps-new-white-large",
       "hash" : "be597ce11c4d1630f67282cd7b81cc85"
     },
+    "apps-nuance-blue-large"          : {
+      "name" : "apps-nuance-blue-large",
+      "rule" : ".apps-nuance-blue-large, .phabricator-crumb-view:hover .apps-nuance-dark-large",
+      "hash" : "a6c11b6c091b15c93bb75e40f5014c46"
+    },
+    "apps-nuance-dark-large"          : {
+      "name" : "apps-nuance-dark-large",
+      "rule" : ".apps-nuance-dark-large",
+      "hash" : "a179a6802048440f0c4dfd99784ad740"
+    },
+    "apps-nuance-light-large"         : {
+      "name" : "apps-nuance-light-large",
+      "rule" : ".apps-nuance-light-large",
+      "hash" : "f6f36066f33b015e0e44e125182db158"
+    },
+    "apps-nuance-white-large"         : {
+      "name" : "apps-nuance-white-large",
+      "rule" : ".apps-nuance-white-large",
+      "hash" : "8510afe6941a33000ca02a054a3f78e0"
+    },
     "apps-owners-blue-large"          : {
       "name" : "apps-owners-blue-large",
       "rule" : ".apps-owners-blue-large, .phabricator-crumb-view:hover .apps-owners-dark-large",
@@ -600,6 +620,26 @@
       "name" : "apps-owners-white-large",
       "rule" : ".apps-owners-white-large",
       "hash" : "a267ce517c928ce5861fe7ac85116af7"
+    },
+    "apps-passphrase-blue-large"      : {
+      "name" : "apps-passphrase-blue-large",
+      "rule" : ".apps-passphrase-blue-large, .phabricator-crumb-view:hover .apps-passphrase-dark-large",
+      "hash" : "bb5ff2b25e5f7df50ec77ed4a5d38ea6"
+    },
+    "apps-passphrase-dark-large"      : {
+      "name" : "apps-passphrase-dark-large",
+      "rule" : ".apps-passphrase-dark-large",
+      "hash" : "8f5dea9e2e329a1d5001bbc8e739899c"
+    },
+    "apps-passphrase-light-large"     : {
+      "name" : "apps-passphrase-light-large",
+      "rule" : ".apps-passphrase-light-large",
+      "hash" : "b036bcd1cff87d5733fee676ae1d45c0"
+    },
+    "apps-passphrase-white-large"     : {
+      "name" : "apps-passphrase-white-large",
+      "rule" : ".apps-passphrase-white-large",
+      "hash" : "7c16e3be0fec2b107da1a770026e1155"
     },
     "apps-paste-blue-large"           : {
       "name" : "apps-paste-blue-large",
@@ -940,6 +980,26 @@
       "name" : "apps-repositories-white-large",
       "rule" : ".apps-repositories-white-large",
       "hash" : "e249fe8d4137e4b357c88ee237535632"
+    },
+    "apps-search-blue-large"          : {
+      "name" : "apps-search-blue-large",
+      "rule" : ".apps-search-blue-large, .phabricator-crumb-view:hover .apps-search-dark-large",
+      "hash" : "92d4f29ba421c9511c24587ddef9610c"
+    },
+    "apps-search-dark-large"          : {
+      "name" : "apps-search-dark-large",
+      "rule" : ".apps-search-dark-large",
+      "hash" : "c734624259fdbc5bd2f9a5660cea1ea9"
+    },
+    "apps-search-light-large"         : {
+      "name" : "apps-search-light-large",
+      "rule" : ".apps-search-light-large",
+      "hash" : "69e3b578e40caa14ec814b624bd596fe"
+    },
+    "apps-search-white-large"         : {
+      "name" : "apps-search-white-large",
+      "rule" : ".apps-search-white-large",
+      "hash" : "0e1f6f3142848d8a4b679aac36caa7b8"
     },
     "apps-settings-blue-large"        : {
       "name" : "apps-settings-blue-large",

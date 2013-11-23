@@ -6,9 +6,14 @@
 abstract class ConduitAPI_diffusion_abstractquery_Method
   extends ConduitAPI_diffusion_Method {
 
+  public function shouldAllowPublic() {
+    return true;
+  }
+
   public function getMethodStatus() {
     return self::METHOD_STATUS_UNSTABLE;
   }
+
   public function getMethodStatusDescription() {
     return pht(
       'See T2784 - migrating diffusion working copy calls to conduit methods. '.
@@ -43,9 +48,10 @@ abstract class ConduitAPI_diffusion_abstractquery_Method
         $this->repository = $this->getDiffusionRequest()->getRepository();
       } else {
         $callsign = $request->getValue('callsign');
-        $repository = id(new PhabricatorRepository())->loadOneWhere(
-          'callsign = %s',
-          $callsign);
+        $repository = id(new PhabricatorRepositoryQuery())
+          ->setViewer($request->getUser())
+          ->withCallsigns(array($callsign))
+          ->executeOne();
         if (!$repository) {
           throw new ConduitException('ERR-UNKNOWN-REPOSITORY');
         }

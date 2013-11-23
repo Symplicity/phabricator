@@ -15,8 +15,6 @@ final class PhamePost extends PhameDAO
   const VISIBILITY_DRAFT     = 0;
   const VISIBILITY_PUBLISHED = 1;
 
-  protected $id;
-  protected $phid;
   protected $bloggerPHID;
   protected $title;
   protected $phameTitle;
@@ -147,6 +145,12 @@ final class PhamePost extends PhameDAO
       case PhabricatorPolicyCapability::CAN_EDIT:
         return ($user->getPHID() == $this->getBloggerPHID());
     }
+  }
+
+
+  public function describeAutomaticCapability($capability) {
+    return pht(
+      'The author of a blog post can always view and edit it.');
   }
 
 

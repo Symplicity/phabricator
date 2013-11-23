@@ -3,7 +3,7 @@
 final class PhabricatorHandleQuery
   extends PhabricatorCursorPagedPolicyAwareQuery {
 
-  private $phids;
+  private $phids = array();
 
   public function withPHIDs(array $phids) {
     $this->phids = $phids;
@@ -13,15 +13,17 @@ final class PhabricatorHandleQuery
   public function loadPage() {
     $types = PhabricatorPHIDType::getAllTypes();
 
-    $phids = $this->phids;
+    $phids = array_unique($this->phids);
     if (!$phids) {
       return array();
     }
 
-    $objects = id(new PhabricatorObjectQuery())
+    $object_query = id(new PhabricatorObjectQuery())
       ->withPHIDs($phids)
-      ->setViewer($this->getViewer())
-      ->execute();
+      ->setViewer($this->getViewer());
+
+    $objects = $object_query->execute();
+    $filtered = $object_query->getPolicyFilteredPHIDs();
 
     $groups = array();
     foreach ($phids as $phid) {
@@ -43,6 +45,8 @@ final class PhabricatorHandleQuery
           ->setPHID($phid);
         if (isset($objects[$phid])) {
           $handles[$phid]->setComplete(true);
+        } else if (isset($filtered[$phid])) {
+          $handles[$phid]->setPolicyFiltered(true);
         }
       }
 
@@ -61,6 +65,10 @@ final class PhabricatorHandleQuery
     }
 
     return $results;
+  }
+
+  public function getQueryApplicationClass() {
+    return null;
   }
 
 }

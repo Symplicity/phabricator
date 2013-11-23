@@ -61,11 +61,13 @@ final class LegalpadDocumentViewController extends LegalpadController {
 
     $title = $document_body->getTitle();
 
-    $header = id(new PhabricatorHeaderView())
-      ->setHeader($title);
+    $header = id(new PHUIHeaderView())
+      ->setHeader($title)
+      ->setUser($user)
+      ->setPolicyObject($document);
 
     $actions = $this->buildActionView($document);
-    $properties = $this->buildPropertyView($document, $engine);
+    $properties = $this->buildPropertyView($document, $engine, $actions);
 
     $comment_form_id = celerity_generate_unique_node_id();
 
@@ -84,12 +86,14 @@ final class LegalpadDocumentViewController extends LegalpadController {
         ->setName('L'.$document->getID())
         ->setHref($this->getApplicationURI('view/'.$document->getID())));
 
+    $object_box = id(new PHUIObjectBoxView())
+      ->setHeader($header)
+      ->addPropertyList($properties)
+      ->addPropertyList($this->buildDocument($engine, $document_body));
+
     $content = array(
       $crumbs,
-      $header,
-      $actions,
-      $properties,
-      $this->buildDocument($engine, $document_body),
+      $object_box,
       $xaction_view,
       $add_comment,
     );
@@ -107,14 +111,12 @@ final class LegalpadDocumentViewController extends LegalpadController {
     PhabricatorMarkupEngine
     $engine, LegalpadDocumentBody $body) {
 
-    require_celerity_resource('legalpad-documentbody-css');
-
-    return phutil_tag(
-      'div',
-      array(
-        'class' => 'legalpad-documentbody'
-      ),
+    $view = new PHUIPropertyListView();
+    $view->addSectionHeader(pht('Document'));
+    $view->addTextContent(
       $engine->getOutput($body, LegalpadDocumentBody::MARKUP_FIELD_TEXT));
+
+    return $view;
 
   }
 
@@ -144,13 +146,15 @@ final class LegalpadDocumentViewController extends LegalpadController {
 
   private function buildPropertyView(
     LegalpadDocument $document,
-    PhabricatorMarkupEngine $engine) {
+    PhabricatorMarkupEngine $engine,
+    PhabricatorActionListView $actions) {
 
     $user = $this->getRequest()->getUser();
 
-    $properties = id(new PhabricatorPropertyListView())
+    $properties = id(new PHUIPropertyListView())
       ->setUser($user)
-      ->setObject($document);
+      ->setObject($document)
+      ->setActionList($actions);
 
     $properties->addProperty(
       pht('Last Updated'),
@@ -174,14 +178,6 @@ final class LegalpadDocumentViewController extends LegalpadController {
       pht('Contributors'),
       $contributor_view);
 
-    $descriptions = PhabricatorPolicyQuery::renderPolicyDescriptions(
-      $user,
-      $document);
-
-    $properties->addProperty(
-      pht('Visible To'),
-      $descriptions[PhabricatorPolicyCapability::CAN_VIEW]);
-
     $properties->invokeWillRenderEvent();
 
     return $properties;
@@ -200,9 +196,6 @@ final class LegalpadDocumentViewController extends LegalpadController {
       ? pht('Add Comment')
       : pht('Debate Legislation');
 
-    $header = id(new PhabricatorHeaderView())
-      ->setHeader($title);
-
     $button_name = $is_serious
       ? pht('Add Comment')
       : pht('Commence Filibuster');
@@ -211,15 +204,14 @@ final class LegalpadDocumentViewController extends LegalpadController {
       ->setUser($user)
       ->setObjectPHID($document->getPHID())
       ->setFormID($comment_form_id)
+      ->setHeaderText($title)
       ->setDraft($draft)
       ->setSubmitButtonName($button_name)
       ->setAction($this->getApplicationURI('/comment/'.$document->getID().'/'))
       ->setRequestURI($this->getRequest()->getRequestURI());
 
-    return array(
-      $header,
-      $form,
-    );
+    return $form;
+
   }
 
 }

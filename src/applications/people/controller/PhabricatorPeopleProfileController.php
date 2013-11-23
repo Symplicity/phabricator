@@ -19,6 +19,7 @@ final class PhabricatorPeopleProfileController
     $user = id(new PhabricatorPeopleQuery())
       ->setViewer($viewer)
       ->withUsernames(array($this->username))
+      ->needProfileImage(true)
       ->executeOne();
     if (!$user) {
       return new Aphront404Response();
@@ -31,7 +32,7 @@ final class PhabricatorPeopleProfileController
 
     $picture = $user->loadProfileImageURI();
 
-    $header = id(new PhabricatorHeaderView())
+    $header = id(new PHUIHeaderView())
       ->setHeader($user->getUserName().' ('.$user->getRealName().')')
       ->setSubheader($profile->getTitle())
       ->setImage($picture);
@@ -67,7 +68,7 @@ final class PhabricatorPeopleProfileController
           ->setHref($this->getApplicationURI('edit/'.$user->getID().'/')));
     }
 
-    $properties = $this->buildPropertyView($user);
+    $properties = $this->buildPropertyView($user, $actions);
 
     $crumbs = $this->buildApplicationCrumbs();
     $crumbs->addCrumb(
@@ -75,12 +76,14 @@ final class PhabricatorPeopleProfileController
         ->setName($user->getUsername()));
     $feed = $this->renderUserFeed($user);
 
+    $object_box = id(new PHUIObjectBoxView())
+      ->setHeader($header)
+      ->addPropertyList($properties);
+
     return $this->buildApplicationPage(
       array(
         $crumbs,
-        $header,
-        $actions,
-        $properties,
+        $object_box,
         $feed,
       ),
       array(
@@ -89,12 +92,15 @@ final class PhabricatorPeopleProfileController
       ));
   }
 
-  private function buildPropertyView(PhabricatorUser $user) {
-    $viewer = $this->getRequest()->getUser();
+  private function buildPropertyView(
+    PhabricatorUser $user,
+    PhabricatorActionListView $actions) {
 
-    $view = id(new PhabricatorPropertyListView())
+    $viewer = $this->getRequest()->getUser();
+    $view = id(new PHUIPropertyListView())
       ->setUser($viewer)
-      ->setObject($user);
+      ->setObject($user)
+      ->setActionList($actions);
 
     $field_list = PhabricatorCustomField::getObjectFields(
       $user,
@@ -121,10 +127,8 @@ final class PhabricatorPeopleProfileController
     $builder->setShowHovercards(true);
     $view = $builder->buildView();
 
-    return hsprintf(
-      '<div class="profile-feed profile-wrap-responsive">
-        %s
-      </div>',
+    return phutil_tag_div(
+      'profile-feed profile-wrap-responsive',
       $view->render());
   }
 }

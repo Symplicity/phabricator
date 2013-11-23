@@ -16,14 +16,12 @@ final class PhabricatorMailingListPHIDTypeList extends PhabricatorPHIDType {
     return new PhabricatorMetaMTAMailingList();
   }
 
-  public function loadObjects(
+  protected function buildQueryForObjects(
     PhabricatorObjectQuery $query,
     array $phids) {
 
     return id(new PhabricatorMailingListQuery())
-      ->setViewer($query->getViewer())
-      ->withPHIDs($phids)
-      ->execute();
+      ->withPHIDs($phids);
   }
 
   public function loadHandles(

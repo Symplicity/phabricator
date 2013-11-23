@@ -27,7 +27,7 @@ final class DiffusionCommitEditController extends DiffusionController {
       $commit_phid,
       $edge_type);
     $handles = $this->loadViewerHandles($current_proj_phids);
-    $proj_t_values = mpull($handles, 'getFullName', 'getPHID');
+    $proj_t_values = $handles;
 
     if ($request->isFormPost()) {
       $proj_phids = $request->getArr('projects');
@@ -81,7 +81,7 @@ final class DiffusionCommitEditController extends DiffusionController {
       ->addCancelButton('/r'.$callsign.$commit->getCommitIdentifier());
     $form->appendChild($submit);
 
-    $form_box = id(new PHUIFormBoxView())
+    $form_box = id(new PHUIObjectBoxView())
       ->setHeaderText($page_title)
       ->setForm($form);
 

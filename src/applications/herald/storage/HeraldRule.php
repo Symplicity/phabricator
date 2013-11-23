@@ -1,7 +1,9 @@
 <?php
 
 final class HeraldRule extends HeraldDAO
-  implements PhabricatorPolicyInterface {
+  implements
+    PhabricatorFlaggableInterface,
+    PhabricatorPolicyInterface {
 
   const TABLE_RULE_APPLIED = 'herald_ruleapplied';
 
@@ -12,11 +14,13 @@ final class HeraldRule extends HeraldDAO
   protected $mustMatchAll;
   protected $repetitionPolicy;
   protected $ruleType;
+  protected $isDisabled = 0;
 
-  protected $configVersion = 9;
+  protected $configVersion = 14;
 
-  private $ruleApplied = array(); // phids for which this rule has been applied
+  private $ruleApplied = self::ATTACHABLE; // phids for which this rule has been applied
   private $validAuthor = self::ATTACHABLE;
+  private $author = self::ATTACHABLE;
   private $conditions;
   private $actions;
 
@@ -31,13 +35,13 @@ final class HeraldRule extends HeraldDAO
   }
 
   public function getRuleApplied($phid) {
-    if (idx($this->ruleApplied, $phid) === null) {
-      throw new Exception("Call setRuleApplied() before getRuleApplied()!");
-    }
-    return $this->ruleApplied[$phid];
+    return $this->assertAttachedKey($this->ruleApplied, $phid);
   }
 
   public function setRuleApplied($phid, $applied) {
+    if ($this->ruleApplied === self::ATTACHABLE) {
+      $this->ruleApplied = array();
+    }
     $this->ruleApplied[$phid] = $applied;
     return $this;
   }
@@ -167,6 +171,15 @@ final class HeraldRule extends HeraldDAO
     return $this;
   }
 
+  public function getAuthor() {
+    return $this->assertAttached($this->author);
+  }
+
+  public function attachAuthor(PhabricatorUser $user) {
+    $this->author = $user;
+    return $this;
+  }
+
   public function isGlobalRule() {
     return ($this->getRuleType() === HeraldRuleTypeConfig::RULE_TYPE_GLOBAL);
   }
@@ -188,7 +201,15 @@ final class HeraldRule extends HeraldDAO
 
   public function getPolicy($capability) {
     if ($this->isGlobalRule()) {
-      return PhabricatorPolicies::POLICY_USER;
+      switch ($capability) {
+        case PhabricatorPolicyCapability::CAN_VIEW:
+          return PhabricatorPolicies::POLICY_USER;
+        case PhabricatorPolicyCapability::CAN_EDIT:
+          $app = 'PhabricatorApplicationHerald';
+          $herald = PhabricatorApplication::getByClass($app);
+          $global = HeraldCapabilityManageGlobalRules::CAPABILITY;
+          return $herald->getPolicy($global);
+      }
     } else {
       return PhabricatorPolicies::POLICY_NOONE;
     }
@@ -200,6 +221,14 @@ final class HeraldRule extends HeraldDAO
     } else {
       return false;
     }
+  }
+
+  public function describeAutomaticCapability($capability) {
+    if ($this->isPersonalRule()) {
+      return pht("A personal rule's owner can always view and edit it.");
+    }
+
+    return null;
   }
 
 }

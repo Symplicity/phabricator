@@ -1,8 +1,5 @@
 <?php
 
-/**
- * @group paste
- */
 final class PhabricatorPasteTransaction
   extends PhabricatorApplicationTransaction {
 
@@ -88,7 +85,7 @@ final class PhabricatorPasteTransaction
     return parent::getTitle();
   }
 
-  public function getTitleForFeed() {
+  public function getTitleForFeed(PhabricatorFeedStory $story) {
     $author_phid = $this->getAuthorPHID();
     $object_phid = $this->getObjectPHID();
 
@@ -117,7 +114,7 @@ final class PhabricatorPasteTransaction
         break;
     }
 
-    return parent::getTitleForFeed();
+    return parent::getTitleForFeed($story);
   }
 
   public function getColor() {

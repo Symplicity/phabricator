@@ -30,10 +30,10 @@ final class PhabricatorSettingsPanelExternalAccounts
       ->needImages(true)
       ->execute();
 
-    $linked_head = id(new PhabricatorHeaderView())
+    $linked_head = id(new PHUIHeaderView())
       ->setHeader(pht('Linked Accounts and Authentication'));
 
-    $linked = id(new PhabricatorObjectItemListView())
+    $linked = id(new PHUIObjectItemListView())
       ->setUser($viewer)
       ->setNoDataString(pht('You have no linked accounts.'));
 
@@ -45,7 +45,7 @@ final class PhabricatorSettingsPanelExternalAccounts
     }
 
     foreach ($accounts as $account) {
-      $item = id(new PhabricatorObjectItemView());
+      $item = id(new PHUIObjectItemView());
 
       $provider = idx($providers, $account->getProviderKey());
       if ($provider) {
@@ -92,10 +92,10 @@ final class PhabricatorSettingsPanelExternalAccounts
       $linked->addItem($item);
     }
 
-    $linkable_head = id(new PhabricatorHeaderView())
+    $linkable_head = id(new PHUIHeaderView())
       ->setHeader(pht('Add External Account'));
 
-    $linkable = id(new PhabricatorObjectItemListView())
+    $linkable = id(new PHUIObjectItemListView())
       ->setUser($viewer)
       ->setNoDataString(
         pht('Your account is linked with all available providers.'));
@@ -115,7 +115,7 @@ final class PhabricatorSettingsPanelExternalAccounts
 
       $link_uri = '/auth/link/'.$provider->getProviderKey().'/';
 
-      $item = id(new PhabricatorObjectItemView());
+      $item = id(new PHUIObjectItemView());
       $item->setHeader($provider->getProviderName());
       $item->setHref($link_uri);
       $item->addAction(

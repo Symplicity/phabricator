@@ -27,10 +27,10 @@ final class PhortuneProductListController extends PhabricatorController {
         ->setHref($this->getApplicationURI('product/edit/'))
         ->setIcon('create'));
 
-    $header = id(new PhabricatorHeaderView())
+    $header = id(new PHUIHeaderView())
       ->setHeader(pht('Product List'));
 
-    $product_list = id(new PhabricatorObjectItemListView())
+    $product_list = id(new PHUIObjectItemListView())
       ->setUser($user)
       ->setNoDataString(pht('No products.'));
 
@@ -40,7 +40,7 @@ final class PhortuneProductListController extends PhabricatorController {
 
       $price = $product->getPriceInCents();
 
-      $item = id(new PhabricatorObjectItemView())
+      $item = id(new PHUIObjectItemView())
         ->setObjectName($product->getID())
         ->setHeader($product->getProductName())
         ->setHref($view_uri)

@@ -16,14 +16,12 @@ final class PhabricatorOwnersPHIDTypePackage extends PhabricatorPHIDType {
     return new PhabricatorOwnersPackage();
   }
 
-  public function loadObjects(
+  protected function buildQueryForObjects(
     PhabricatorObjectQuery $query,
     array $phids) {
 
     return id(new PhabricatorOwnersPackageQuery())
-      ->setViewer($query->getViewer())
-      ->withPHIDs($phids)
-      ->execute();
+      ->withPHIDs($phids);
   }
 
   public function loadHandles(

@@ -159,8 +159,8 @@ final class PhabricatorSettingsPanelPassword
         id(new AphrontFormSubmitControl())
           ->setValue(pht('Save')));
 
-    $form_box = id(new PHUIFormBoxView())
-      ->setHeaderText(pht('Delete User'))
+    $form_box = id(new PHUIObjectBoxView())
+      ->setHeaderText(pht('Change Password'))
       ->setFormError($notice)
       ->setForm($form);
 

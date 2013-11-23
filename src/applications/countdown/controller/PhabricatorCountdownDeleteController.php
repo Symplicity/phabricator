@@ -31,11 +31,6 @@ final class PhabricatorCountdownDeleteController
       return new Aphront404Response();
     }
 
-    if (($countdown->getAuthorPHID() !== $user->getPHID())
-        && $user->getIsAdmin() === false) {
-      return new Aphront403Response();
-    }
-
     if ($request->isFormPost()) {
       $countdown->delete();
       return id(new AphrontRedirectResponse())
@@ -48,7 +43,7 @@ final class PhabricatorCountdownDeleteController
     $dialog = new AphrontDialogView();
     $dialog->setUser($request->getUser());
     $dialog->setTitle(pht('Really delete this countdown?'));
-    $dialog->appendChild(hsprintf('<p>%s</p>', $inst));
+    $dialog->appendChild(phutil_tag('p', array(), $inst));
     $dialog->addSubmitButton(pht('Delete'));
     $dialog->addCancelButton('/countdown/');
     $dialog->setSubmitURI($request->getPath());

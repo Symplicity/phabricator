@@ -59,16 +59,30 @@ final class PhabricatorAuthRegisterController
     $default_realname = $account->getRealName();
     $default_email = $account->getEmail();
     if ($default_email) {
-      // If the account source provided an email but it's not allowed by
-      // the configuration, just pretend we didn't get an email at all.
+      // If the account source provided an email, but it's not allowed by
+      // the configuration, roadblock the user. Previously, we let the user
+      // pick a valid email address instead, but this does not align well with
+      // user expectation and it's not clear the cases it enables are valuable.
+      // See discussion in T3472.
       if (!PhabricatorUserEmail::isAllowedAddress($default_email)) {
-        $default_email = null;
+        return $this->renderError(
+          array(
+            pht(
+              'The account you are attempting to register with has an invalid '.
+              'email address (%s). This Phabricator install only allows '.
+              'registration with specific email addresses:',
+              $default_email),
+            phutil_tag('br'),
+            phutil_tag('br'),
+            PhabricatorUserEmail::describeAllowedAddresses(),
+          ));
       }
 
       // If the account source provided an email, but another account already
       // has that email, just pretend we didn't get an email.
 
       // TODO: See T3340.
+      // TODO: See T3472.
 
       if ($default_email) {
         $same_email = id(new PhabricatorUserEmail())->loadOneWhere(
@@ -123,12 +137,23 @@ final class PhabricatorAuthRegisterController
     $e_realname = strlen($value_realname) ? null : true;
     $e_email = strlen($value_email) ? null : true;
     $e_password = true;
+    $e_captcha = true;
 
     $min_len = PhabricatorEnv::getEnvConfig('account.minimum-password-length');
     $min_len = (int)$min_len;
 
     if ($request->isFormPost() || !$can_edit_anything) {
       $unguarded = AphrontWriteGuard::beginScopedUnguardedWrites();
+
+      if ($must_set_password) {
+        $e_captcha = pht('Again');
+
+        $captcha_ok = AphrontFormRecaptchaControl::processCaptcha($request);
+        if (!$captcha_ok) {
+          $errors[] = pht("Captcha response is incorrect, try again.");
+          $e_captcha = pht('Invalid');
+        }
+      }
 
       if ($can_edit_username) {
         $value_username = $request->getStr('username');
@@ -207,6 +232,19 @@ final class PhabricatorAuthRegisterController
           $user->setUsername($value_username);
           $user->setRealname($value_realname);
 
+          if ($is_setup) {
+            $must_approve = false;
+          } else {
+            $must_approve = PhabricatorEnv::getEnvConfig(
+              'auth.require-approval');
+          }
+
+          if ($must_approve) {
+            $user->setIsApproved(0);
+          } else {
+            $user->setIsApproved(1);
+          }
+
           $user->openTransaction();
 
             $editor = id(new PhabricatorUserEditor())
@@ -230,6 +268,10 @@ final class PhabricatorAuthRegisterController
 
           if (!$email_obj->getIsVerified()) {
             $email_obj->sendVerificationEmail($user);
+          }
+
+          if ($must_approve) {
+            $this->sendWaitingForApprovalEmail($user);
           }
 
           return $this->loginUser($user);
@@ -284,13 +326,20 @@ final class PhabricatorAuthRegisterController
     }
 
 
-    $form
-      ->appendChild(
+    if ($can_edit_username) {
+      $form->appendChild(
         id(new AphrontFormTextControl())
           ->setLabel(pht('Phabricator Username'))
           ->setName('username')
           ->setValue($value_username)
           ->setError($e_username));
+    } else {
+      $form->appendChild(
+        id(new AphrontFormMarkupControl())
+          ->setLabel(pht('Phabricator Username'))
+          ->setValue($value_username)
+          ->setError($e_username));
+    }
 
     if ($must_set_password) {
       $form->appendChild(
@@ -326,6 +375,13 @@ final class PhabricatorAuthRegisterController
           ->setName('realName')
           ->setValue($value_realname)
           ->setError($e_realname));
+    }
+
+    if ($must_set_password) {
+      $form->appendChild(
+        id(new AphrontFormRecaptchaControl())
+          ->setLabel(pht('Captcha'))
+          ->setError($e_captcha));
     }
 
     $submit = id(new AphrontFormSubmitControl());
@@ -371,12 +427,16 @@ final class PhabricatorAuthRegisterController
             'other authentication mechanisms (like LDAP or OAuth) later on.'));
     }
 
+    $object_box = id(new PHUIObjectBoxView())
+      ->setHeaderText($title)
+      ->setForm($form)
+      ->setFormError($error_view);
+
     return $this->buildApplicationPage(
       array(
         $crumbs,
         $welcome_view,
-        $error_view,
-        $form,
+        $object_box,
       ),
       array(
         'title' => $title,
@@ -420,6 +480,12 @@ final class PhabricatorAuthRegisterController
 
   private function loadSetupAccount() {
     $provider = new PhabricatorAuthProviderPassword();
+    $provider->attachProviderConfig(
+      id(new PhabricatorAuthProviderConfig())
+        ->setShouldAllowRegistration(1)
+        ->setShouldAllowLogin(1)
+        ->setIsEnabled(true));
+
     $account = $provider->getDefaultExternalAccount();
     $response = null;
     return array($account, $provider, $response);
@@ -462,6 +528,45 @@ final class PhabricatorAuthRegisterController
     return $this->renderErrorPage(
       pht('Registration Failed'),
       array($message));
+  }
+
+  private function sendWaitingForApprovalEmail(PhabricatorUser $user) {
+    $title = '[Phabricator] '.pht(
+      'New User "%s" Awaiting Approval',
+      $user->getUsername());
+
+    $body = new PhabricatorMetaMTAMailBody();
+
+    $body->addRawSection(
+      pht(
+        'Newly registered user "%s" is awaiting account approval by an '.
+        'administrator.',
+        $user->getUsername()));
+
+    $body->addTextSection(
+      pht('APPROVAL QUEUE'),
+      PhabricatorEnv::getProductionURI(
+        '/people/query/approval/'));
+
+    $body->addTextSection(
+      pht('DISABLE APPROVAL QUEUE'),
+      PhabricatorEnv::getProductionURI(
+        '/config/edit/auth.require-approval/'));
+
+    $admins = id(new PhabricatorPeopleQuery())
+      ->setViewer(PhabricatorUser::getOmnipotentUser())
+      ->withIsAdmin(true)
+      ->execute();
+
+    if (!$admins) {
+      return;
+    }
+
+    $mail = id(new PhabricatorMetaMTAMail())
+      ->addTos(mpull($admins, 'getPHID'))
+      ->setSubject($title)
+      ->setBody($body->render())
+      ->saveAndSend();
   }
 
 }

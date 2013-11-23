@@ -19,14 +19,12 @@ final class PhabricatorPhamePHIDTypePost extends PhabricatorPHIDType {
     return new PhamePost();
   }
 
-  public function loadObjects(
+  protected function buildQueryForObjects(
     PhabricatorObjectQuery $query,
     array $phids) {
 
     return id(new PhamePostQuery())
-      ->setViewer($query->getViewer())
-      ->withPHIDs($phids)
-      ->execute();
+      ->withPHIDs($phids);
   }
 
   public function loadHandles(

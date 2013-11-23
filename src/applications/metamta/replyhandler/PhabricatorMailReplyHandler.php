@@ -87,12 +87,11 @@ abstract class PhabricatorMailReplyHandler {
     $template->setBody($this->buildErrorMailBody($error, $mail));
     $template->setRelatedPHID($mail->getRelatedPHID());
     $phid = $this->getActor()->getPHID();
-    $tos = array(
-      $phid => PhabricatorObjectHandleData::loadOneHandle(
-        $phid,
-        // TODO: This could be cleaner (T603).
-        PhabricatorUser::getOmnipotentUser()),
-    );
+    $handle = id(new PhabricatorHandleQuery())
+      ->setViewer($this->getActor())
+      ->withPHIDs(array($phid))
+      ->executeOne();
+    $tos = array($phid => $handle);
     $mails = $this->multiplexMail($template, $tos, array());
 
     foreach ($mails as $email) {
@@ -308,7 +307,7 @@ EOBODY;
     return $this->getSingleReplyHandlerPrefix($address);
   }
 
-  final protected function enhanceBodyWithAttachments(
+ final protected function enhanceBodyWithAttachments(
     $body,
     array $attachments,
     $format = '- {F%d, layout=link}') {
@@ -316,6 +315,7 @@ EOBODY;
       return $body;
     }
 
+    // TODO: (T603) What's the policy here?
     $files = id(new PhabricatorFile())
       ->loadAllWhere('phid in (%Ls)', $attachments);
 

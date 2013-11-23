@@ -185,6 +185,9 @@ final class PhabricatorStandardPageView extends PhabricatorBarePageView {
       if (DarkConsoleXHProfPluginAPI::isProfilerStarted()) {
         $headers[DarkConsoleXHProfPluginAPI::getProfilerHeader()] = 'page';
       }
+      if (DarkConsoleServicesPlugin::isQueryAnalyzerRequested()) {
+        $headers[DarkConsoleServicesPlugin::getQueryAnalyzerHeader()] = true;
+      }
 
       Javelin::initBehavior(
         'dark-console',
@@ -202,8 +205,14 @@ final class PhabricatorStandardPageView extends PhabricatorBarePageView {
       require_celerity_resource('javelin-behavior-error-log');
     }
 
+    if ($user) {
+      $viewer = $user;
+    } else {
+      $viewer = new PhabricatorUser();
+    }
+
     $menu = id(new PhabricatorMainMenuView())
-      ->setUser($request->getUser())
+      ->setUser($viewer)
       ->setDefaultSearchScope($this->getSearchDefaultScope());
 
     if ($this->getController()) {
@@ -292,11 +301,8 @@ final class PhabricatorStandardPageView extends PhabricatorBarePageView {
     $developer_warning = null;
     if (PhabricatorEnv::getEnvConfig('phabricator.developer-mode') &&
         DarkConsoleErrorLogPluginAPI::getErrors()) {
-      $developer_warning = phutil_tag(
-        'div',
-        array(
-          'class' => 'aphront-developer-error-callout',
-        ),
+      $developer_warning = phutil_tag_div(
+        'aphront-developer-error-callout',
         pht(
           'This page raised PHP errors. Find them in DarkConsole '.
           'or the error log.'));
@@ -307,11 +313,8 @@ final class PhabricatorStandardPageView extends PhabricatorBarePageView {
     if ($user && $user->getIsAdmin()) {
       $open = PhabricatorSetupCheck::getOpenSetupIssueCount();
       if ($open) {
-        $setup_warning = phutil_tag(
-          'div',
-          array(
-            'class' => 'setup-warning-callout',
-          ),
+        $setup_warning = phutil_tag_div(
+          'setup-warning-callout',
           phutil_tag(
             'a',
             array(
@@ -328,16 +331,16 @@ final class PhabricatorStandardPageView extends PhabricatorBarePageView {
           'id' => 'base-page',
           'class' => 'phabricator-standard-page',
         ),
-        hsprintf(
-          '%s%s%s'.
-          '<div class="phabricator-standard-page-body">'.
-            '%s%s<div style="clear: both;"></div>'.
-          '</div>',
-        $developer_warning,
-        $setup_warning,
-        $header_chrome,
-        ($console ? hsprintf('<darkconsole />') : null),
-        parent::getBody()));
+        array(
+          $developer_warning,
+          $setup_warning,
+          $header_chrome,
+          phutil_tag_div('phabricator-standard-page-body', array(
+            ($console ? hsprintf('<darkconsole />') : null),
+            parent::getBody(),
+            phutil_tag('div', array('style' => 'clear: both;')),
+          )),
+        ));
   }
 
   protected function getTail() {
@@ -345,7 +348,7 @@ final class PhabricatorStandardPageView extends PhabricatorBarePageView {
     $user = $request->getUser();
 
     $container = null;
-    if ($user->isLoggedIn()) {
+    if ($user && $user->isLoggedIn()) {
 
       $aphlict_object_id = celerity_generate_unique_node_id();
       $aphlict_container_id = celerity_generate_unique_node_id();
@@ -416,6 +419,10 @@ final class PhabricatorStandardPageView extends PhabricatorBarePageView {
       $classes[] = 'platform-mac';
     } else if (preg_match('@X11@', $agent)) {
       $classes[] = 'platform-linux';
+    }
+
+    if ($this->getRequest()->getStr('__print__')) {
+      $classes[] = 'printable';
     }
 
     return implode(' ', $classes);

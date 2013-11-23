@@ -36,7 +36,9 @@ final class PhabricatorPeopleListController extends PhabricatorPeopleController
     $request = $this->getRequest();
     $viewer = $request->getUser();
 
-    $list = new PhabricatorObjectItemListView();
+    $list = new PHUIObjectItemListView();
+
+    $is_approval = ($query->getQueryKey() == 'approval');
 
     foreach ($users as $user) {
       $primary_email = $user->loadPrimaryEmail();
@@ -49,7 +51,7 @@ final class PhabricatorPeopleListController extends PhabricatorPeopleController
       $user_handle = new PhabricatorObjectHandle();
       $user_handle->setImageURI($user->loadProfileImageURI());
 
-      $item = new PhabricatorObjectItemView();
+      $item = new PHUIObjectItemView();
       $item->setHeader($user->getFullName())
         ->setHref('/p/'.$user->getUsername().'/')
         ->addAttribute(hsprintf('%s %s',
@@ -61,6 +63,12 @@ final class PhabricatorPeopleListController extends PhabricatorPeopleController
         $item->addIcon('disable', pht('Disabled'));
       }
 
+      if (!$is_approval) {
+        if (!$user->getIsApproved()) {
+          $item->addIcon('perflab-grey', pht('Needs Approval'));
+        }
+      }
+
       if ($user->getIsAdmin()) {
         $item->addIcon('highlight', pht('Admin'));
       }
@@ -70,11 +78,26 @@ final class PhabricatorPeopleListController extends PhabricatorPeopleController
       }
 
       if ($viewer->getIsAdmin()) {
-        $uid = $user->getID();
-        $item->addAction(
-          id(new PHUIListItemView())
-            ->setIcon('edit')
-            ->setHref($this->getApplicationURI('edit/'.$uid.'/')));
+        $user_id = $user->getID();
+        if ($is_approval) {
+          $item->addAction(
+            id(new PHUIListItemView())
+              ->setIcon('disable')
+              ->setName(pht('Disable'))
+              ->setWorkflow(true)
+              ->setHref($this->getApplicationURI('disable/'.$user_id.'/')));
+          $item->addAction(
+            id(new PHUIListItemView())
+              ->setIcon('like')
+              ->setName(pht('Approve'))
+              ->setWorkflow(true)
+              ->setHref($this->getApplicationURI('approve/'.$user_id.'/')));
+        } else {
+          $item->addAction(
+            id(new PHUIListItemView())
+              ->setIcon('edit')
+              ->setHref($this->getApplicationURI('edit/'.$user_id.'/')));
+        }
       }
 
       $list->addItem($item);

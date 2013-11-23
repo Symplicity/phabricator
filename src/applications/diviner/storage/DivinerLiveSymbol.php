@@ -3,7 +3,6 @@
 final class DivinerLiveSymbol extends DivinerDAO
   implements PhabricatorPolicyInterface, PhabricatorMarkupInterface {
 
-  protected $phid;
   protected $bookPHID;
   protected $context;
   protected $type;
@@ -143,6 +142,10 @@ final class DivinerLiveSymbol extends DivinerDAO
     return $this->getBook()->hasAutomaticCapability($capability, $viewer);
   }
 
+  public function describeAutomaticCapability($capability) {
+    return pht('Atoms inherit the policies of the books they are part of.');
+  }
+
 
 /* -(  Markup Interface  )--------------------------------------------------- */
 
@@ -153,13 +156,7 @@ final class DivinerLiveSymbol extends DivinerDAO
 
 
   public function newMarkupEngine($field) {
-    $engine = PhabricatorMarkupEngine::newMarkupEngine(array());
-
-    $engine->setConfig('preserve-linebreaks', false);
-//    $engine->setConfig('diviner.renderer', new DivinerDefaultRenderer());
-    $engine->setConfig('header.generate-toc', true);
-
-    return $engine;
+    return PhabricatorMarkupEngine::getEngine('diviner');
   }
 
 

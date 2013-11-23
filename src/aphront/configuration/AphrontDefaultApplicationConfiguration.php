@@ -166,19 +166,41 @@ class AphrontDefaultApplicationConfiguration
         // Possibly we should add a header here like "you need to login to see
         // the thing you are trying to look at".
         $login_controller = new PhabricatorAuthStartController($request);
+
+        $auth_app_class = 'PhabricatorApplicationAuth';
+        $auth_app = PhabricatorApplication::getByClass($auth_app_class);
+        $login_controller->setCurrentApplication($auth_app);
+
         return $login_controller->processRequest();
       }
 
-      $content = hsprintf(
-        '<div class="aphront-policy-exception">%s</div>',
-        $ex->getMessage());
+      $list = $ex->getMoreInfo();
+      foreach ($list as $key => $item) {
+        $list[$key] = phutil_tag('li', array(), $item);
+      }
+      if ($list) {
+        $list = phutil_tag('ul', array(), $list);
+      }
+
+      $content = array(
+        phutil_tag(
+          'div',
+          array(
+            'class' => 'aphront-policy-rejection',
+          ),
+          $ex->getRejection()),
+        phutil_tag(
+          'div',
+          array(
+            'class' => 'aphront-capability-details',
+          ),
+          pht('Users with the "%s" capability:', $ex->getCapabilityName())),
+        $list,
+      );
 
       $dialog = new AphrontDialogView();
       $dialog
-        ->setTitle(
-            $is_serious
-              ? 'Access Denied'
-              : "You Shall Not Pass")
+        ->setTitle($ex->getTitle())
         ->setClass('aphront-access-dialog')
         ->setUser($user)
         ->appendChild($content);
@@ -205,6 +227,7 @@ class AphrontDefaultApplicationConfiguration
 
       $response = new AphrontWebpageResponse();
       $response->setContent($view->render());
+      $response->setHTTPResponseCode(500);
 
       return $response;
     }
@@ -225,18 +248,20 @@ class AphrontDefaultApplicationConfiguration
     }
 
     if (PhabricatorEnv::getEnvConfig('phabricator.developer-mode')) {
-      $trace = $this->renderStackTrace($ex->getTrace(), $user);
+      $trace = id(new AphrontStackTraceView())
+        ->setUser($user)
+        ->setTrace($ex->getTrace());
     } else {
       $trace = null;
     }
 
-    $content = hsprintf(
-      '<div class="aphront-unhandled-exception">'.
-        '<div class="exception-message">%s</div>'.
-        '%s'.
-      '</div>',
-      $message,
-      $trace);
+    $content = phutil_tag(
+      'div',
+      array('class' => 'aphront-unhandled-exception'),
+      array(
+        phutil_tag('div', array('class' => 'exception-message'), $message),
+        $trace,
+      ));
 
     $dialog = new AphrontDialogView();
     $dialog
@@ -251,6 +276,7 @@ class AphrontDefaultApplicationConfiguration
 
     $response = new AphrontDialogResponse();
     $response->setDialog($dialog);
+    $response->setHTTPResponseCode(500);
 
     return $response;
   }
@@ -269,108 +295,6 @@ class AphrontDefaultApplicationConfiguration
       array(
         'uri' => $uri,
       ));
-  }
-
-  private function renderStackTrace($trace, PhabricatorUser $user) {
-
-    $libraries = PhutilBootloader::getInstance()->getAllLibraries();
-
-    // TODO: Make this configurable?
-    $path = 'https://secure.phabricator.com/diffusion/%s/browse/master/src/';
-
-    $callsigns = array(
-      'arcanist' => 'ARC',
-      'phutil' => 'PHU',
-      'phabricator' => 'P',
-    );
-
-    $rows = array();
-    $depth = count($trace);
-    foreach ($trace as $part) {
-      $lib = null;
-      $file = idx($part, 'file');
-      $relative = $file;
-      foreach ($libraries as $library) {
-        $root = phutil_get_library_root($library);
-        if (Filesystem::isDescendant($file, $root)) {
-          $lib = $library;
-          $relative = Filesystem::readablePath($file, $root);
-          break;
-        }
-      }
-
-      $where = '';
-      if (isset($part['class'])) {
-        $where .= $part['class'].'::';
-      }
-      if (isset($part['function'])) {
-        $where .= $part['function'].'()';
-      }
-
-      if ($file) {
-        if (isset($callsigns[$lib])) {
-          $attrs = array('title' => $file);
-          try {
-            $attrs['href'] = $user->loadEditorLink(
-              '/src/'.$relative,
-              $part['line'],
-              $callsigns[$lib]);
-          } catch (Exception $ex) {
-            // The database can be inaccessible.
-          }
-          if (empty($attrs['href'])) {
-            $attrs['href'] = sprintf($path, $callsigns[$lib]).
-              str_replace(DIRECTORY_SEPARATOR, '/', $relative).
-              '$'.$part['line'];
-            $attrs['target'] = '_blank';
-          }
-          $file_name = phutil_tag(
-            'a',
-            $attrs,
-            $relative);
-        } else {
-          $file_name = phutil_tag(
-            'span',
-            array(
-              'title' => $file,
-            ),
-            $relative);
-        }
-        $file_name = hsprintf('%s : %d', $file_name, $part['line']);
-      } else {
-        $file_name = phutil_tag('em', array(), '(Internal)');
-      }
-
-
-      $rows[] = array(
-        $depth--,
-        $lib,
-        $file_name,
-        $where,
-      );
-    }
-    $table = new AphrontTableView($rows);
-    $table->setHeaders(
-      array(
-        'Depth',
-        'Library',
-        'File',
-        'Where',
-      ));
-    $table->setColumnClasses(
-      array(
-        'n',
-        '',
-        '',
-        'wide',
-      ));
-
-    return hsprintf(
-      '<div class="exception-trace">'.
-        '<div class="exception-trace-header">Stack Trace</div>'.
-        '%s'.
-      '</div>',
-      $table->render());
   }
 
 }

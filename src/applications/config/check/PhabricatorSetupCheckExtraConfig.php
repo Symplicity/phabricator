@@ -142,11 +142,32 @@ final class PhabricatorSetupCheckExtraConfig extends PhabricatorSetupCheck {
 
     $ancient_config = array_fill_keys($auth_config, $reason_auth);
 
+    $markup_reason = pht(
+      'Custom remarkup rules are now added by subclassing '.
+      'PhabricatorRemarkupCustomInlineRule or '.
+      'PhabricatorRemarkupCustomBlockRule.');
+
     $ancient_config += array(
       'phid.external-loaders' =>
         pht(
           'External loaders have been replaced. Extend `PhabricatorPHIDType` '.
           'to implement new PHID and handle types.'),
+      'maniphest.custom-task-extensions-class' =>
+        pht(
+          'Maniphest fields are now loaded automatically. You can configure '.
+          'them with `maniphest.fields`.'),
+      'maniphest.custom-fields' =>
+        pht(
+          'Maniphest fields are now defined in '.
+          '`maniphest.custom-field-definitions`. Existing definitions have '.
+          'been migrated.'),
+      'differential.custom-remarkup-rules' => $markup_reason,
+      'differential.custom-remarkup-block-rules' => $markup_reason,
+      'auth.sshkeys.enabled' => pht(
+        'SSH keys are now actually useful, so they are always enabled.'),
+      'differential.anonymous-access' => pht(
+        'Phabricator now has meaningful global access controls. See '.
+        '`policy.allow-public`.'),
     );
 
     return $ancient_config;

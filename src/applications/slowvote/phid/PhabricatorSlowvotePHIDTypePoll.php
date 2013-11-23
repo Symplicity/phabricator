@@ -16,14 +16,12 @@ final class PhabricatorSlowvotePHIDTypePoll extends PhabricatorPHIDType {
     return new PhabricatorSlowvotePoll();
   }
 
-  public function loadObjects(
+  protected function buildQueryForObjects(
     PhabricatorObjectQuery $query,
     array $phids) {
 
     return id(new PhabricatorSlowvoteQuery())
-      ->setViewer($query->getViewer())
-      ->withPHIDs($phids)
-      ->execute();
+      ->withPHIDs($phids);
   }
 
   public function loadHandles(

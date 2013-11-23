@@ -29,10 +29,10 @@ final class PhabricatorSlowvoteSearchEngine
     AphrontFormView $form,
     PhabricatorSavedQuery $saved_query) {
     $phids = $saved_query->getParameter('authorPHIDs', array());
-    $handles = id(new PhabricatorObjectHandleData($phids))
+    $author_handles = id(new PhabricatorHandleQuery())
       ->setViewer($this->requireViewer())
-      ->loadHandles();
-    $author_tokens = mpull($handles, 'getFullName', 'getPHID');
+      ->withPHIDs($phids)
+      ->execute();
 
     $voted = $saved_query->getParameter('voted', false);
 
@@ -42,7 +42,7 @@ final class PhabricatorSlowvoteSearchEngine
           ->setDatasource('/typeahead/common/users/')
           ->setName('authors')
           ->setLabel(pht('Authors'))
-          ->setValue($author_tokens))
+          ->setValue($author_handles))
       ->appendChild(
         id(new AphrontFormCheckboxControl())
           ->addCheckbox(

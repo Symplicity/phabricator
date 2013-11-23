@@ -33,8 +33,10 @@ final class PhameBlogViewController extends PhameController {
 
     $nav = $this->renderSideNavFilterView(null);
 
-    $header = id(new PhabricatorHeaderView())
-      ->setHeader($blog->getName());
+    $header = id(new PHUIHeaderView())
+      ->setHeader($blog->getName())
+      ->setUser($user)
+      ->setPolicyObject($blog);
 
     $handle_phids = array_merge(
       mpull($posts, 'getBloggerPHID'),
@@ -42,7 +44,7 @@ final class PhameBlogViewController extends PhameController {
     $this->loadHandles($handle_phids);
 
     $actions = $this->renderActions($blog, $user);
-    $properties = $this->renderProperties($blog, $user);
+    $properties = $this->renderProperties($blog, $user, $actions);
     $post_list = $this->renderPostList(
       $posts,
       $user,
@@ -61,12 +63,14 @@ final class PhameBlogViewController extends PhameController {
         ->setName($blog->getName())
         ->setHref($this->getApplicationURI()));
 
+    $object_box = id(new PHUIObjectBoxView())
+      ->setHeader($header)
+      ->addPropertyList($properties);
+
     $nav->appendChild(
       array(
         $crumbs,
-        $header,
-        $actions,
-        $properties,
+        $object_box,
         $post_list,
       ));
 
@@ -78,11 +82,16 @@ final class PhameBlogViewController extends PhameController {
       ));
   }
 
-  private function renderProperties(PhameBlog $blog, PhabricatorUser $user) {
+  private function renderProperties(
+    PhameBlog $blog,
+    PhabricatorUser $user,
+    PhabricatorActionListView $actions) {
+
     require_celerity_resource('aphront-tooltip-css');
     Javelin::initBehavior('phabricator-tooltips');
 
-    $properties = new PhabricatorPropertyListView();
+    $properties = new PHUIPropertyListView();
+    $properties->setActionList($actions);
 
     $properties->addProperty(
       pht('Skin'),
@@ -110,10 +119,6 @@ final class PhameBlogViewController extends PhameController {
     $descriptions = PhabricatorPolicyQuery::renderPolicyDescriptions(
       $user,
       $blog);
-
-    $properties->addProperty(
-      pht('Visible To'),
-      $descriptions[PhabricatorPolicyCapability::CAN_VIEW]);
 
     $properties->addProperty(
       pht('Editable By'),

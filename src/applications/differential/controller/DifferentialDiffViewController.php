@@ -36,8 +36,9 @@ final class DifferentialDiffViewController extends DifferentialController {
       // TODO: implement optgroup support in AphrontFormSelectControl?
       $select = array();
       $select[] = hsprintf('<optgroup label="%s">', pht('Create New Revision'));
-      $select[] = hsprintf(
-        '<option value="">%s</option>',
+      $select[] = phutil_tag(
+        'option',
+        array('value' => ''),
         pht('Create a new Revision...'));
       $select[] = hsprintf('</optgroup>');
 
@@ -114,10 +115,10 @@ final class DifferentialDiffViewController extends DifferentialController {
       }
     }
 
-    $property_head = id(new PhabricatorHeaderView())
+    $property_head = id(new PHUIHeaderView())
       ->setHeader(pht('Properties'));
 
-    $property_view = new PhabricatorPropertyListView();
+    $property_view = new PHUIPropertyListView();
     foreach ($dict as $key => $value) {
       $property_view->addProperty($key, $value);
     }

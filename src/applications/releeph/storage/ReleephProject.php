@@ -10,7 +10,6 @@ final class ReleephProject extends ReleephDAO
   const COMMIT_AUTHOR_FROM_DIFF = 'commit-author-is-from-diff';
   const COMMIT_AUTHOR_REQUESTOR = 'commit-author-is-requestor';
 
-  protected $phid;
   protected $name;
 
   // Specifying the place to pick from is a requirement for svn, though not
@@ -113,7 +112,7 @@ final class ReleephProject extends ReleephDAO
     return $this->assertAttached($this->repository);
   }
 
-  // TODO: Remove once everything uses ProjectQuery.
+  // TODO: Remove once everything uses ProjectQuery. Also, T603.
   public function loadPhabricatorRepository() {
     return $this->loadOneRelative(
       new PhabricatorRepository(),
@@ -192,5 +191,10 @@ final class ReleephProject extends ReleephDAO
   public function hasAutomaticCapability($capability, PhabricatorUser $viewer) {
     return false;
   }
+
+  public function describeAutomaticCapability($capability) {
+    return null;
+  }
+
 
 }

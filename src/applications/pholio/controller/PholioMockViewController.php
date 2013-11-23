@@ -67,11 +67,13 @@ final class PholioMockViewController extends PholioController {
 
     $title = $mock->getName();
 
-    $header = id(new PhabricatorHeaderView())
-      ->setHeader($title);
+    $header = id(new PHUIHeaderView())
+      ->setHeader($title)
+      ->setUser($user)
+      ->setPolicyObject($mock);
 
     $actions = $this->buildActionView($mock);
-    $properties = $this->buildPropertyView($mock, $engine);
+    $properties = $this->buildPropertyView($mock, $engine, $actions);
 
     require_celerity_resource('pholio-css');
     require_celerity_resource('pholio-inline-comments-css');
@@ -101,12 +103,14 @@ final class PholioMockViewController extends PholioController {
         ->setName('M'.$mock->getID())
         ->setHref('/M'.$mock->getID()));
 
+    $object_box = id(new PHUIObjectBoxView())
+      ->setHeader($header)
+      ->addPropertyList($properties);
+
     $content = array(
       $crumbs,
       $image_status,
-      $header,
-      $actions,
-      $properties,
+      $object_box,
       $output->render(),
       $xaction_view,
       $add_comment,
@@ -192,13 +196,15 @@ final class PholioMockViewController extends PholioController {
 
   private function buildPropertyView(
     PholioMock $mock,
-    PhabricatorMarkupEngine $engine) {
+    PhabricatorMarkupEngine $engine,
+    PhabricatorActionListView $actions) {
 
     $user = $this->getRequest()->getUser();
 
-    $properties = id(new PhabricatorPropertyListView())
+    $properties = id(new PHUIPropertyListView())
       ->setUser($user)
-      ->setObject($mock);
+      ->setObject($mock)
+      ->setActionList($actions);
 
     $properties->addProperty(
       pht('Author'),
@@ -207,14 +213,6 @@ final class PholioMockViewController extends PholioController {
     $properties->addProperty(
       pht('Created'),
       phabricator_datetime($mock->getDateCreated(), $user));
-
-    $descriptions = PhabricatorPolicyQuery::renderPolicyDescriptions(
-      $user,
-      $mock);
-
-    $properties->addProperty(
-      pht('Visible To'),
-      $descriptions[PhabricatorPolicyCapability::CAN_VIEW]);
 
     if ($this->getManiphestTaskPHIDs()) {
       $properties->addProperty(
@@ -225,7 +223,7 @@ final class PholioMockViewController extends PholioController {
     $properties->invokeWillRenderEvent();
 
     $properties->addImageContent(
-      $engine->getOutput($mock, PholioMock::MARKUP_FIELD_DESCRIPTION));
+        $engine->getOutput($mock, PholioMock::MARKUP_FIELD_DESCRIPTION));
 
     return $properties;
   }
@@ -241,9 +239,6 @@ final class PholioMockViewController extends PholioController {
       ? pht('Add Comment')
       : pht('History Beckons');
 
-    $header = id(new PhabricatorHeaderView())
-      ->setHeader($title);
-
     $button_name = $is_serious
       ? pht('Add Comment')
       : pht('Answer The Call');
@@ -253,14 +248,12 @@ final class PholioMockViewController extends PholioController {
       ->setObjectPHID($mock->getPHID())
       ->setFormID($comment_form_id)
       ->setDraft($draft)
+      ->setHeaderText($title)
       ->setSubmitButtonName($button_name)
       ->setAction($this->getApplicationURI('/comment/'.$mock->getID().'/'))
       ->setRequestURI($this->getRequest()->getRequestURI());
 
-    return array(
-      $header,
-      $form,
-    );
+    return $form;
   }
 
 }

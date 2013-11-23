@@ -24,7 +24,7 @@
   text-align: right;
   font-weight: bold;
   font-size: 13px;
-  color: #6b748c;
+  color: {$bluetext};
   -webkit-font-smoothing: antialiased;
 }
 
@@ -108,7 +108,8 @@
   margin: 4px 0 0 8px;
 }
 
-.phui-form-control-multi-submit input {
+.phui-form-control-multi-submit input,
+.phui-form-control-multi-submit a {
   float: right;
   margin: 0.5em 0 0em 2%;
   width: auto;
@@ -128,7 +129,7 @@
 
 .phui-form-view .aphront-form-caption {
   font-size: 12px;
-  color: #6b748c;
+  color: {$bluetext};
   padding: 8px 4px;
   text-align: right;
   margin-right: 20%;
@@ -410,8 +411,7 @@ table.aphront-form-control-checkbox-layout th {
 }
 
 .login-to-comment {
-  padding: 12px;
-  float: right;
+  margin: 12px;
 }
 
 .phui-form-divider hr {
@@ -426,16 +426,10 @@ table.aphront-form-control-checkbox-layout th {
   display: none;
 }
 
-.phui-form-box .phabricator-action-header {
-  padding: 4px 5px 4px 12px;
-  border-bottom: 1px solid {$lightblueborder};
-}
-
-.phui-form-box .phabricator-action-header h3 {
-  color: #6b748c;
-  text-shadow: 0 1px 2px #fff;
-}
-
-.phui-form-box .aphront-error-view {
-  margin-bottom: 0;
+.phabricator-standard-custom-field-header {
+  font-size: 16px;
+  color: {$bluetext};
+  border-bottom: 1px solid {$lightbluetext};
+  padding: 16px 0 4px;
+  margin-bottom: 4px;
 }

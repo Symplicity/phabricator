@@ -21,7 +21,7 @@
 }
 
 .aphront-dialog-head .phabricator-action-header {
-  border-bottom: 1px solid #d4dadf;
+  border-bottom: 1px solid {$lightblueborder};
   padding: 4px 16px;
   white-space: nowrap;
 }
@@ -29,7 +29,7 @@
 .aphront-dialog-head .phabricator-action-header
   .phabricator-action-header-title {
   font-size: 15px;
-  color: #6b748c;
+  color: {$bluetext};
   text-shadow: 0 1px 2px #fff;
 }
 
@@ -110,4 +110,21 @@
 
 .aphront-access-dialog {
   width: 50%;
+}
+
+.aphront-access-dialog ul {
+  margin: 12px 24px;
+  list-style: circle;
+}
+
+.aphront-policy-rejection {
+  font-weight: bold;
+}
+
+.aphront-capability-details {
+  margin: 20px 0 4px;
+}
+
+.aphront-dialog-view-paragraph + .aphront-dialog-view-paragraph {
+  margin-top: 16px;
 }

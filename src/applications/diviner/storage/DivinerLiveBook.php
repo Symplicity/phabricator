@@ -3,7 +3,6 @@
 final class DivinerLiveBook extends DivinerDAO
   implements PhabricatorPolicyInterface {
 
-  protected $phid;
   protected $name;
   protected $viewPolicy;
   protected $configurationData = array();
@@ -59,6 +58,10 @@ final class DivinerLiveBook extends DivinerDAO
 
   public function hasAutomaticCapability($capability, PhabricatorUser $viewer) {
     return false;
+  }
+
+  public function describeAutomaticCapability($capability) {
+    return null;
   }
 
 }

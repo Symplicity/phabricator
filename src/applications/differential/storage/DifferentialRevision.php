@@ -4,41 +4,61 @@ final class DifferentialRevision extends DifferentialDAO
   implements
     PhabricatorTokenReceiverInterface,
     PhabricatorPolicyInterface,
+    PhabricatorFlaggableInterface,
     PhrequentTrackableInterface {
 
-  protected $title;
+  protected $title = '';
   protected $originalTitle;
   protected $status;
 
-  protected $summary;
-  protected $testPlan;
+  protected $summary = '';
+  protected $testPlan = '';
 
-  protected $phid;
   protected $authorPHID;
   protected $lastReviewerPHID;
 
   protected $dateCommitted;
 
-  protected $lineCount;
+  protected $lineCount = 0;
   protected $attached = array();
 
   protected $mailKey;
   protected $branchName;
   protected $arcanistProjectPHID;
+  protected $repositoryPHID;
+  protected $viewPolicy = PhabricatorPolicies::POLICY_USER;
+  protected $editPolicy = PhabricatorPolicies::POLICY_USER;
 
-  private $relationships;
-  private $commits;
-  private $activeDiff = false;
-  private $diffIDs;
-  private $hashes;
+  private $relationships = self::ATTACHABLE;
+  private $commits = self::ATTACHABLE;
+  private $activeDiff = self::ATTACHABLE;
+  private $diffIDs = self::ATTACHABLE;
+  private $hashes = self::ATTACHABLE;
+  private $repository = self::ATTACHABLE;
 
-  private $reviewerStatus;
+  private $reviewerStatus = self::ATTACHABLE;
 
   const RELATIONSHIP_TABLE    = 'differential_relationship';
   const TABLE_COMMIT          = 'differential_commit';
 
   const RELATION_REVIEWER     = 'revw';
   const RELATION_SUBSCRIBED   = 'subd';
+
+  public static function initializeNewRevision(PhabricatorUser $actor) {
+    $app = id(new PhabricatorApplicationQuery())
+      ->setViewer($actor)
+      ->withClasses(array('PhabricatorApplicationDifferential'))
+      ->executeOne();
+
+    $view_policy = $app->getPolicy(
+      DifferentialCapabilityDefaultView::CAPABILITY);
+
+    return id(new DifferentialRevision())
+      ->setViewPolicy($view_policy)
+      ->setAuthorPHID($actor->getPHID())
+      ->attachRelationships(array())
+      ->setStatus(ArcanistDifferentialRevisionStatus::NEEDS_REVIEW);
+  }
 
   public function getConfiguration() {
     return array(
@@ -86,10 +106,7 @@ final class DifferentialRevision extends DifferentialDAO
   }
 
   public function getCommitPHIDs() {
-    if ($this->commits === null) {
-      throw new Exception("Must attach commits first!");
-    }
-    return $this->commits;
+    return $this->assertAttached($this->commits);
   }
 
   public function getActiveDiff() {
@@ -98,10 +115,7 @@ final class DifferentialRevision extends DifferentialDAO
     // It would be good to get rid of this once we make diff-attaching
     // transactional.
 
-    if ($this->activeDiff === false) {
-      throw new Exception("Must attach active diff first!");
-    }
-    return $this->activeDiff;
+    return $this->assertAttached($this->activeDiff);
   }
 
   public function attachActiveDiff($diff) {
@@ -110,10 +124,7 @@ final class DifferentialRevision extends DifferentialDAO
   }
 
   public function getDiffIDs() {
-    if ($this->diffIDs === null) {
-      throw new Exception("Must attach diff IDs first!");
-    }
-    return $this->diffIDs;
+    return $this->assertAttached($this->diffIDs);
   }
 
   public function attachDiffIDs(array $ids) {
@@ -141,15 +152,6 @@ final class DifferentialRevision extends DifferentialDAO
       DifferentialPHIDTypeRevision::TYPECONST);
   }
 
-  public function loadDiffs() {
-    if (!$this->getID()) {
-      return array();
-    }
-    return id(new DifferentialDiff())->loadAllWhere(
-      'revisionID = %d',
-      $this->getID());
-  }
-
   public function loadComments() {
     if (!$this->getID()) {
       return array();
@@ -174,7 +176,10 @@ final class DifferentialRevision extends DifferentialDAO
 
   public function delete() {
     $this->openTransaction();
-      $diffs = $this->loadDiffs();
+    $diffs = id(new DifferentialDiffQuery())
+      ->setViewer(PhabricatorUser::getOmnipotentUser())
+      ->withRevisionIDs(array($this->getID()))
+      ->execute();
       foreach ($diffs as $diff) {
         $diff->delete();
       }
@@ -234,11 +239,30 @@ final class DifferentialRevision extends DifferentialDAO
       return;
     }
 
+    // Read "subscribed" and "unsubscribed" data out of the old relationship
+    // table.
     $data = queryfx_all(
       $this->establishConnection('r'),
-      'SELECT * FROM %T WHERE revisionID = %d ORDER BY sequence',
+      'SELECT * FROM %T WHERE revisionID = %d
+        AND relation != %s ORDER BY sequence',
       self::RELATIONSHIP_TABLE,
-      $this->getID());
+      $this->getID(),
+      self::RELATION_REVIEWER);
+
+    // Read "reviewer" data out of the new table.
+    $reviewer_phids = PhabricatorEdgeQuery::loadDestinationPHIDs(
+      $this->getPHID(),
+      PhabricatorEdgeConfig::TYPE_DREV_HAS_REVIEWER);
+    $reviewer_phids = array_reverse($reviewer_phids);
+
+    foreach ($reviewer_phids as $phid) {
+      $data[] = array(
+        'relation' => self::RELATION_REVIEWER,
+        'objectPHID' => $phid,
+        'reasonPHID' => null,
+      );
+    }
+
     return $this->attachRelationships($data);
   }
 
@@ -256,9 +280,7 @@ final class DifferentialRevision extends DifferentialDAO
   }
 
   private function getRelatedPHIDs($relation) {
-    if ($this->relationships === null) {
-      throw new Exception("Must load relationships!");
-    }
+    $this->assertAttached($this->relationships);
 
     return ipull($this->getRawRelations($relation), 'objectPHID');
   }
@@ -304,10 +326,7 @@ final class DifferentialRevision extends DifferentialDAO
   }
 
   public function getHashes() {
-    if ($this->hashes === null) {
-      throw new Exception("Call attachHashes() before getHashes()!");
-    }
-    return $this->hashes;
+    return $this->assertAttached($this->hashes);
   }
 
   public function attachHashes(array $hashes) {
@@ -323,11 +342,44 @@ final class DifferentialRevision extends DifferentialDAO
   }
 
   public function getPolicy($capability) {
-    return PhabricatorPolicies::POLICY_USER;
+    switch ($capability) {
+      case PhabricatorPolicyCapability::CAN_VIEW:
+        return $this->getViewPolicy();
+      case PhabricatorPolicyCapability::CAN_EDIT:
+        return $this->getEditPolicy();
+    }
   }
 
   public function hasAutomaticCapability($capability, PhabricatorUser $user) {
+
+    // A revision's author (which effectively means "owner" after we added
+    // commandeering) can always view and edit it.
+    $author_phid = $this->getAuthorPHID();
+    if ($author_phid) {
+      if ($user->getPHID() == $author_phid) {
+        return true;
+      }
+    }
+
     return false;
+  }
+
+  public function describeAutomaticCapability($capability) {
+    $description = array(
+      pht('The owner of a revision can always view and edit it.'),
+    );
+
+    switch ($capability) {
+      case PhabricatorPolicyCapability::CAN_VIEW:
+        $description[] = pht(
+          "A revision's reviewers can always view it.");
+        $description[] = pht(
+          'If a revision belongs to a repository, other users must be able '.
+          'to view the repository in order to view the revision.');
+        break;
+    }
+
+    return $description;
   }
 
   public function getUsersToNotifyOfTokenGiven() {
@@ -337,18 +389,22 @@ final class DifferentialRevision extends DifferentialDAO
   }
 
   public function getReviewerStatus() {
-    if ($this->reviewerStatus === null) {
-      throw new Exception(
-        "Call attachReviewerStatus() before getReviewerStatus()!"
-      );
-    }
-    return $this->reviewerStatus;
+    return $this->assertAttached($this->reviewerStatus);
   }
 
   public function attachReviewerStatus(array $reviewers) {
     assert_instances_of($reviewers, 'DifferentialReviewer');
 
     $this->reviewerStatus = $reviewers;
+    return $this;
+  }
+
+  public function getRepository() {
+    return $this->assertAttached($this->repository);
+  }
+
+  public function attachRepository(PhabricatorRepository $repository = null) {
+    $this->repository = $repository;
     return $this;
   }
 }

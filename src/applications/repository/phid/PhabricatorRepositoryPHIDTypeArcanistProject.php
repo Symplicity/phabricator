@@ -20,13 +20,12 @@ final class PhabricatorRepositoryPHIDTypeArcanistProject
     return new PhabricatorRepositoryArcanistProject();
   }
 
-  public function loadObjects(
+  protected function buildQueryForObjects(
     PhabricatorObjectQuery $query,
     array $phids) {
+
     return id(new PhabricatorRepositoryArcanistProjectQuery())
-      ->setViewer($query->getViewer())
-      ->withPHIDs($phids)
-      ->execute();
+      ->withPHIDs($phids);
   }
 
   public function loadHandles(

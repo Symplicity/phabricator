@@ -342,14 +342,23 @@ final class AphrontRequest {
       $expire = time() + (60 * 60 * 24 * 365 * 5);
     }
 
-    setcookie(
-      $name,
-      $value,
-      $expire,
-      $path = '/',
-      $base_domain,
-      $is_secure,
-      $http_only = true);
+
+    if (php_sapi_name() == 'cli') {
+      // Do nothing, to avoid triggering "Cannot modify header information"
+      // warnings.
+
+      // TODO: This is effectively a test for whether we're running in a unit
+      // test or not. Move this actual call to HTTPSink?
+    } else {
+      setcookie(
+        $name,
+        $value,
+        $expire,
+        $path = '/',
+        $base_domain,
+        $is_secure,
+        $http_only = true);
+    }
 
     $_COOKIE[$name] = $value;
 
@@ -457,14 +466,44 @@ final class AphrontRequest {
   }
 
 
-  public static function getHTTPHeader($name, $default = null) {
+  /**
+   * Read the value of an HTTP header from `$_SERVER`, or a similar datasource.
+   *
+   * This function accepts a canonical header name, like `"Accept-Encoding"`,
+   * and looks up the appropriate value in `$_SERVER` (in this case,
+   * `"HTTP_ACCEPT_ENCODING"`).
+   *
+   * @param   string        Canonical header name, like `"Accept-Encoding"`.
+   * @param   wild          Default value to return if header is not present.
+   * @param   array?        Read this instead of `$_SERVER`.
+   * @return  string|wild   Header value if present, or `$default` if not.
+   */
+  public static function getHTTPHeader($name, $default = null, $data = null) {
     // PHP mangles HTTP headers by uppercasing them and replacing hyphens with
     // underscores, then prepending 'HTTP_'.
     $php_index = strtoupper($name);
     $php_index = str_replace('-', '_', $php_index);
-    $php_index = 'HTTP_'.$php_index;
 
-    return idx($_SERVER, $php_index, $default);
+    $try_names = array();
+
+    $try_names[] = 'HTTP_'.$php_index;
+    if ($php_index == 'CONTENT_TYPE' || $php_index == 'CONTENT_LENGTH') {
+      // These headers may be available under alternate names. See
+      // http://www.php.net/manual/en/reserved.variables.server.php#110763
+      $try_names[] = $php_index;
+    }
+
+    if ($data === null) {
+      $data = $_SERVER;
+    }
+
+    foreach ($try_names as $try_name) {
+      if (array_key_exists($try_name, $data)) {
+        return $data[$try_name];
+      }
+    }
+
+    return $default;
   }
 
 }

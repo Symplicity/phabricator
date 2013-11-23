@@ -193,7 +193,7 @@ final class PhabricatorConfigEditController
     $title = pht('Edit %s', $this->key);
     $short = pht('Edit');
 
-    $form_box = id(new PHUIFormBoxView())
+    $form_box = id(new PHUIObjectBoxView())
       ->setHeaderText($title)
       ->setFormError($error_view)
       ->setForm($form);
@@ -282,7 +282,18 @@ final class PhabricatorConfigEditController
           $set_value = (string)$value;
           break;
         case 'list<string>':
-          $set_value = $request->getStrList('value');
+        case 'list<regex>':
+          $set_value = phutil_split_lines(
+            $request->getStr('value'),
+            $retain_endings = false);
+
+          foreach ($set_value as $key => $v) {
+            if (!strlen($v)) {
+              unset($set_value[$key]);
+            }
+          }
+          $set_value = array_values($set_value);
+
           break;
         case 'set':
           $set_value = array_fill_keys($request->getStrList('value'), true);
@@ -364,6 +375,7 @@ final class PhabricatorConfigEditController
         case 'bool':
           return $value ? 'true' : 'false';
         case 'list<string>':
+        case 'list<regex>':
           return implode("\n", nonempty($value, array()));
         case 'set':
           return implode("\n", nonempty(array_keys($value), array()));
@@ -424,6 +436,10 @@ final class PhabricatorConfigEditController
             ->setOptions($names);
           break;
         case 'list<string>':
+        case 'list<regex>':
+          $control = id(new AphrontFormTextAreaControl())
+            ->setCaption(pht('Separate values with newlines.'));
+          break;
         case 'set':
           $control = id(new AphrontFormTextAreaControl())
             ->setCaption(pht('Separate values with newlines or commas.'));
@@ -457,10 +473,10 @@ final class PhabricatorConfigEditController
     }
 
     $table = array();
-    $table[] = hsprintf(
-      '<tr class="column-labels"><th>%s</th><th>%s</th></tr>',
-      pht('Example'),
-      pht('Value'));
+    $table[] = phutil_tag('tr', array('class' => 'column-labels'), array(
+      phutil_tag('th', array(), pht('Example')),
+      phutil_tag('th', array(), pht('Value')),
+    ));
     foreach ($examples as $example) {
       list($value, $description) = $example;
 
@@ -470,13 +486,12 @@ final class PhabricatorConfigEditController
         if (is_array($value)) {
           $value = implode("\n", $value);
         }
-        $value = phutil_escape_html_newlines($value);
       }
 
-      $table[] = hsprintf(
-        '<tr><th>%s</th><td>%s</td></tr>',
-        $description,
-        $value);
+      $table[] = phutil_tag('tr', array(), array(
+        phutil_tag('th', array(), $description),
+        phutil_tag('td', array(), $value),
+      ));
     }
 
     require_celerity_resource('config-options-css');
@@ -494,10 +509,10 @@ final class PhabricatorConfigEditController
     $stack = $stack->getStack();
 
     $table = array();
-    $table[] = hsprintf(
-      '<tr class="column-labels"><th>%s</th><th>%s</th></tr>',
-      pht('Source'),
-      pht('Value'));
+    $table[] = phutil_tag('tr', array('class' => 'column-labels'), array(
+      phutil_tag('th', array(), pht('Source')),
+      phutil_tag('th', array(), pht('Value')),
+    ));
     foreach ($stack as $key => $source) {
       $value = $source->getKeys(
         array(
@@ -511,10 +526,10 @@ final class PhabricatorConfigEditController
           $value[$option->getKey()]);
       }
 
-      $table[] = hsprintf(
-        '<tr><th>%s</th><td>%s</td></tr>',
-        $source->getName(),
-        $value);
+      $table[] = phutil_tag('tr', array('class' => 'column-labels'), array(
+        phutil_tag('th', array(), $source->getName()),
+        phutil_tag('td', array(), $value),
+      ));
     }
 
     require_celerity_resource('config-options-css');

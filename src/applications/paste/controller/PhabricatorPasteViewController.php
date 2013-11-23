@@ -44,9 +44,10 @@ final class PhabricatorPasteViewController extends PhabricatorPasteController {
       return new Aphront404Response();
     }
 
-    $file = id(new PhabricatorFile())->loadOneWhere(
-      'phid = %s',
-      $paste->getFilePHID());
+    $file = id(new PhabricatorFileQuery())
+      ->setViewer($user)
+      ->withPHIDs(array($paste->getFilePHID()))
+      ->executeOne();
     if (!$file) {
       return new Aphront400Response();
     }
@@ -67,11 +68,23 @@ final class PhabricatorPasteViewController extends PhabricatorPasteController {
 
     $header = $this->buildHeaderView($paste);
     $actions = $this->buildActionView($user, $paste, $file);
-    $properties = $this->buildPropertyView($paste, $fork_phids);
+    $properties = $this->buildPropertyView($paste, $fork_phids, $actions);
+
+    $object_box = id(new PHUIObjectBoxView())
+      ->setHeader($header)
+      ->addPropertyList($properties);
+
     $source_code = $this->buildSourceCodeView(
       $paste,
       null,
       $this->highlightMap);
+
+    $source_code = id(new PHUIBoxView())
+      ->appendChild($source_code)
+      ->setBorder(true)
+      ->addMargin(PHUI::MARGIN_LARGE_LEFT)
+      ->addMargin(PHUI::MARGIN_LARGE_RIGHT)
+      ->addMargin(PHUI::MARGIN_LARGE_TOP);
 
     $crumbs = $this->buildApplicationCrumbs($this->buildSideNavView())
       ->setActionList($actions)
@@ -104,11 +117,9 @@ final class PhabricatorPasteViewController extends PhabricatorPasteController {
 
     $is_serious = PhabricatorEnv::getEnvConfig('phabricator.serious-business');
 
-    $add_comment_header = id(new PhabricatorHeaderView())
-      ->setHeader(
-        $is_serious
-          ? pht('Add Comment')
-          : pht('Debate Paste Accuracy'));
+    $add_comment_header = $is_serious
+      ? pht('Add Comment')
+      : pht('Debate Paste Accuracy');
 
     $submit_button_name = $is_serious
       ? pht('Add Comment')
@@ -120,19 +131,17 @@ final class PhabricatorPasteViewController extends PhabricatorPasteController {
       ->setUser($user)
       ->setObjectPHID($paste->getPHID())
       ->setDraft($draft)
+      ->setHeaderText($add_comment_header)
       ->setAction($this->getApplicationURI('/comment/'.$paste->getID().'/'))
       ->setSubmitButtonName($submit_button_name);
 
     return $this->buildApplicationPage(
       array(
         $crumbs,
-        $header,
-        $actions,
-        $properties,
+        $object_box,
         $source_code,
         $timeline,
-        $add_comment_header,
-        $add_comment_form
+        $add_comment_form,
       ),
       array(
         'title' => $paste->getFullName(),
@@ -142,8 +151,14 @@ final class PhabricatorPasteViewController extends PhabricatorPasteController {
   }
 
   private function buildHeaderView(PhabricatorPaste $paste) {
-    return id(new PhabricatorHeaderView())
-      ->setHeader($paste->getTitle());
+    $title = (nonempty($paste->getTitle())) ?
+      $paste->getTitle() : pht('(An Untitled Masterwork)');
+    $header = id(new PHUIHeaderView())
+      ->setHeader($title)
+      ->setUser($this->getRequest()->getUser())
+      ->setPolicyObject($paste);
+
+    return $header;
   }
 
   private function buildActionView(
@@ -186,12 +201,14 @@ final class PhabricatorPasteViewController extends PhabricatorPasteController {
 
   private function buildPropertyView(
     PhabricatorPaste $paste,
-    array $child_phids) {
+    array $child_phids,
+    PhabricatorActionListView $actions) {
 
     $user = $this->getRequest()->getUser();
-    $properties = id(new PhabricatorPropertyListView())
+    $properties = id(new PHUIPropertyListView())
       ->setUser($user)
-      ->setObject($paste);
+      ->setObject($paste)
+      ->setActionList($actions);
 
     $properties->addProperty(
       pht('Author'),
@@ -216,10 +233,6 @@ final class PhabricatorPasteViewController extends PhabricatorPasteController {
     $descriptions = PhabricatorPolicyQuery::renderPolicyDescriptions(
       $user,
       $paste);
-
-    $properties->addProperty(
-      pht('Visible To'),
-      $descriptions[PhabricatorPolicyCapability::CAN_VIEW]);
 
     return $properties;
   }

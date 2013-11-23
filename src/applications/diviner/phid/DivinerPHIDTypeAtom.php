@@ -16,14 +16,12 @@ final class DivinerPHIDTypeAtom extends PhabricatorPHIDType {
     return new DivinerLiveSymbol();
   }
 
-  public function loadObjects(
+  protected function buildQueryForObjects(
     PhabricatorObjectQuery $query,
     array $phids) {
 
     return id(new DivinerAtomQuery())
-      ->setViewer($query->getViewer())
-      ->withPHIDs($phids)
-      ->execute();
+      ->withPHIDs($phids);
   }
 
   public function loadHandles(

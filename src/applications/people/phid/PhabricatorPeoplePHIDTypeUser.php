@@ -16,16 +16,14 @@ final class PhabricatorPeoplePHIDTypeUser extends PhabricatorPHIDType {
     return new PhabricatorUser();
   }
 
-  public function loadObjects(
+  protected function buildQueryForObjects(
     PhabricatorObjectQuery $query,
     array $phids) {
 
     return id(new PhabricatorPeopleQuery())
-      ->needProfileImage(true)
-      ->needStatus(true)
-      ->setViewer($query->getViewer())
       ->withPHIDs($phids)
-      ->execute();
+      ->needProfileImage(true)
+      ->needStatus(true);
   }
 
   public function loadHandles(
@@ -40,7 +38,7 @@ final class PhabricatorPeoplePHIDTypeUser extends PhabricatorPHIDType {
       $handle->setFullName(
         $user->getUsername().' ('.$user->getRealName().')');
       $handle->setImageURI($user->loadProfileImageURI());
-      $handle->setDisabled($user->getIsDisabled());
+      $handle->setDisabled(!$user->isUserActivated());
       if ($user->hasStatus()) {
         $status = $user->getStatus();
         $handle->setStatus($status->getTextStatus());

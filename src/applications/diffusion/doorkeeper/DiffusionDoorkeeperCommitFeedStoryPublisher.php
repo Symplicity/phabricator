@@ -56,9 +56,10 @@ final class DiffusionDoorkeeperCommitFeedStoryPublisher
     // audit) and "passive" (no action necessary) user are.
 
     $auditor_phids = mpull($requests, 'getAuditorPHID');
-    $objects = id(new PhabricatorObjectHandleData($auditor_phids))
+    $objects = id(new PhabricatorObjectQuery())
       ->setViewer($this->getViewer())
-      ->loadObjects();
+      ->withPHIDs($auditor_phids)
+      ->execute();
 
     $active = array();
     $passive = array();
@@ -82,7 +83,12 @@ final class DiffusionDoorkeeperCommitFeedStoryPublisher
         $request_phids = PhabricatorOwnersOwner::loadAffiliatedUserPHIDs(
           array($object->getID()));
       } else if ($object instanceof PhabricatorProject) {
-        $request_phids = $object->loadMemberPHIDs();
+        $project = id(new PhabricatorProjectQuery())
+          ->setViewer($this->getViewer())
+          ->withIDs(array($object->getID()))
+          ->needMembers(true)
+          ->executeOne();
+        $request_phids = $project->getMemberPHIDs();
       } else {
         // Dunno what this is.
         $request_phids = array();
@@ -176,9 +182,11 @@ final class DiffusionDoorkeeperCommitFeedStoryPublisher
   }
 
   public function getStoryText($object) {
+    $implied_context = $this->getRenderWithImpliedContext();
+
     $story = $this->getFeedStory();
     if ($story instanceof PhabricatorFeedStoryAudit) {
-      $text = $story->renderForAsanaBridge();
+      $text = $story->renderForAsanaBridge($implied_context);
     } else {
       $text = $story->renderText();
     }

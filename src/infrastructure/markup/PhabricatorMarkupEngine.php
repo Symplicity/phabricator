@@ -41,7 +41,7 @@ final class PhabricatorMarkupEngine {
 
   private $objects = array();
   private $viewer;
-  private $version = 7;
+  private $version = 8;
 
 
 /* -(  Markup Pipeline  )---------------------------------------------------- */
@@ -201,7 +201,19 @@ final class PhabricatorMarkupEngine {
   private function getMarkupFieldKey(
     PhabricatorMarkupInterface $object,
     $field) {
-    return $object->getMarkupFieldKey($field).'@'.$this->version;
+
+    static $custom;
+    if ($custom === null) {
+      $custom = array_merge(
+        self::loadCustomInlineRules(),
+        self::loadCustomBlockRules());
+
+      $custom = mpull($custom, 'getRuleVersion', null);
+      ksort($custom);
+      $custom = PhabricatorHash::digestForIndex(serialize($custom));
+    }
+
+    return $object->getMarkupFieldKey($field).'@'.$this->version.'@'.$custom;
   }
 
 
@@ -230,7 +242,9 @@ final class PhabricatorMarkupEngine {
     }
 
     foreach ($objects as $key => $info) {
-      if (isset($blocks[$key])) {
+      // False check in case MySQL doesn't support unicode characters
+      // in the string (T1191), resulting in unserialize returning false.
+      if (isset($blocks[$key]) && $blocks[$key]->getCacheData() !== false) {
         // If we already have a preprocessing cache, we don't need to rebuild
         // it.
         continue;
@@ -328,10 +342,6 @@ final class PhabricatorMarkupEngine {
    */
   public static function newDifferentialMarkupEngine(array $options = array()) {
     return self::newMarkupEngine(array(
-      'custom-inline' => PhabricatorEnv::getEnvConfig(
-        'differential.custom-remarkup-rules'),
-      'custom-block'  => PhabricatorEnv::getEnvConfig(
-        'differential.custom-remarkup-block-rules'),
       'differential.diff' => idx($options, 'differential.diff'),
     ));
   }
@@ -359,6 +369,16 @@ final class PhabricatorMarkupEngine {
       case 'default':
         $engine = self::newMarkupEngine(array());
         break;
+      case 'nolinebreaks':
+        $engine = self::newMarkupEngine(array());
+        $engine->setConfig('preserve-linebreaks', false);
+        break;
+      case 'diviner':
+        $engine = self::newMarkupEngine(array());
+        $engine->setConfig('preserve-linebreaks', false);
+  //    $engine->setConfig('diviner.renderer', new DivinerDefaultRenderer());
+        $engine->setConfig('header.generate-toc', true);
+        break;
       default:
         throw new Exception("Unknown engine ruleset: {$ruleset}!");
     }
@@ -375,8 +395,6 @@ final class PhabricatorMarkupEngine {
       'pygments'      => PhabricatorEnv::getEnvConfig('pygments.enabled'),
       'youtube'       => PhabricatorEnv::getEnvConfig(
         'remarkup.enable-embedded-youtube'),
-      'custom-inline' => array(),
-      'custom-block'  => array(),
       'differential.diff' => null,
       'header.generate-toc' => false,
       'macros'        => true,
@@ -413,12 +431,6 @@ final class PhabricatorMarkupEngine {
     $rules[] = new PhutilRemarkupRuleEscapeRemarkup();
     $rules[] = new PhutilRemarkupRuleMonospace();
 
-    $custom_rule_classes = $options['custom-inline'];
-    if ($custom_rule_classes) {
-      foreach ($custom_rule_classes as $custom_rule_class) {
-        $rules[] = newv($custom_rule_class, array());
-      }
-    }
 
     $rules[] = new PhutilRemarkupRuleDocumentLink();
 
@@ -444,6 +456,10 @@ final class PhabricatorMarkupEngine {
     $rules[] = new PhutilRemarkupRuleItalic();
     $rules[] = new PhutilRemarkupRuleDel();
 
+    foreach (self::loadCustomInlineRules() as $rule) {
+      $rules[] = $rule;
+    }
+
     $blocks = array();
     $blocks[] = new PhutilRemarkupEngineRemarkupQuotesBlockRule();
     $blocks[] = new PhutilRemarkupEngineRemarkupLiteralBlockRule();
@@ -454,15 +470,12 @@ final class PhabricatorMarkupEngine {
     $blocks[] = new PhutilRemarkupEngineRemarkupNoteBlockRule();
     $blocks[] = new PhutilRemarkupEngineRemarkupTableBlockRule();
     $blocks[] = new PhutilRemarkupEngineRemarkupSimpleTableBlockRule();
-
-    $custom_block_rule_classes = $options['custom-block'];
-    if ($custom_block_rule_classes) {
-      foreach ($custom_block_rule_classes as $custom_block_rule_class) {
-        $blocks[] = newv($custom_block_rule_class, array());
-      }
-    }
-
+    $blocks[] = new PhutilRemarkupEngineRemarkupInterpreterRule();
     $blocks[] = new PhutilRemarkupEngineRemarkupDefaultBlockRule();
+
+    foreach (self::loadCustomBlockRules() as $rule) {
+      $blocks[] = $rule;
+    }
 
     foreach ($blocks as $block) {
       $block->setMarkupRules($rules);
@@ -555,6 +568,18 @@ final class PhabricatorMarkupEngine {
     }
 
     return $best;
+  }
+
+  private static function loadCustomInlineRules() {
+    return id(new PhutilSymbolLoader())
+      ->setAncestorClass('PhabricatorRemarkupCustomInlineRule')
+      ->loadObjects();
+  }
+
+  private static function loadCustomBlockRules() {
+    return id(new PhutilSymbolLoader())
+      ->setAncestorClass('PhabricatorRemarkupCustomBlockRule')
+      ->loadObjects();
   }
 
 }

@@ -8,8 +8,8 @@
 }
 
 .device-desktop .phui-document-view {
-  border: 1px solid #BFCFDA;
-  border-bottom: 1px solid #95A6C5;
+  border: 1px solid {$lightblueborder};
+  border-bottom: 1px solid {$blueborder};
   max-width: 960px;
   margin: 16px auto;
 }
@@ -47,7 +47,11 @@
   padding: 8px 16px;
   color: #9ca5b5;
   background-color: #fff;
-  border-bottom: 1px solid #BFCFDA;
+  border-bottom: 1px solid {$lightblueborder};
+}
+
+.device-phone .phui-document-bookname {
+  padding: 8px;
 }
 
 .phui-document-bookname .bookname {
@@ -58,22 +62,35 @@
   float: right;
 }
 
-.phui-document-content .phabricator-header-shell {
+.phui-document-content .phui-header-shell {
   border-top: none;
-  border-bottom: 1px solid #BFCFDA;
+  border-bottom: 1px solid {$lightblueborder};
 }
 
-.phui-document-content .phabricator-header-view {
+.phui-document-content
+  .phui-header-shell.phui-header-no-backgound {
+  border-bottom: 1px solid {$thinblueborder};
+  margin: 0 0 16px 0;
+}
+
+.phui-document-content
+  .phui-header-shell.phui-header-no-backgound
+  .phui-header-view {
+ padding: 8px 0 4px;
+ font-size: 14px;
+}
+
+.phui-document-content .phui-header-view {
   padding: 16px;
-  color: #6b748c;
+  color: {$bluetext};
   text-shadow: 0 1px 2px #fff;
 }
 
-.phui-document-content .phabricator-property-list-container {
-  border-color: #BFCFDA;
+.phui-document-content .phui-property-list-container {
+  border-color: #dde8ef;
 }
 
-.phui-document-content .phabricator-property-list-view {
+.phui-document-content .phui-property-list-view {
   border: none;
   box-shadow: none;
   margin: 0;
@@ -92,13 +109,13 @@
 
 .device-desktop .phui-document-content .phabricator-action-list-view {
   margin: 10px 10px 0 0;
-  background: #f7f7f7;
+  background: {$lightgreybackground};
 }
 
 .device-phone .phui-document-content .phabricator-action-list-view {
   margin: 0;
   border-bottom: 1px solid #c0c5d1;
-  background: #f7f7f7;
+  background: {$lightgreybackground};
 }
 
 .phui-document-content .phabricator-remarkup {
@@ -118,9 +135,9 @@
   border-radius: 0;
   box-shadow: none;
   border: none;
-  border-top: 1px solid #e7e7e7;
-  border-bottom: 1px solid #e7e7e7;
-  border-right: 1px solid #e7e7e7;
+  border-top: 1px solid {$thinblueborder};
+  border-bottom: 1px solid {$thinblueborder};
+  border-right: 1px solid {$thinblueborder};
   width: 160px;
 }
 
@@ -135,4 +152,8 @@
 
 .device-desktop .phui-document-offset {
   padding-right: 160px;
+}
+
+.phui-document-view .phui-property-list-view {
+  border-bottom: 1px solid {$thinblueborder};
 }

@@ -35,6 +35,9 @@ final class AphrontFormTokenizerControl extends AphrontFormControl {
     $name = $this->getName();
     $values = nonempty($this->getValue(), array());
 
+    assert_instances_of($values, 'PhabricatorObjectHandle');
+    $values = mpull($values, 'getFullName', 'getPHID');
+
     if ($this->getID()) {
       $id = $this->getID();
     } else {
@@ -93,6 +96,7 @@ final class AphrontFormTokenizerControl extends AphrontFormControl {
       'repositories'    => pht('Type a repository name...'),
       'packages'        => pht('Type a package name...'),
       'arcanistproject' => pht('Type an arc project name...'),
+      'accountsorprojects' => pht('Type a user or project name...'),
     );
 
     return idx($map, $request);

@@ -34,56 +34,22 @@ abstract class PhabricatorAuthProviderOAuth extends PhabricatorAuthProvider {
   }
 
   protected function renderLoginForm(AphrontRequest $request, $mode) {
-    $viewer = $request->getUser();
-
-    if ($mode == 'link') {
-      $button_text = pht('Link External Account');
-    } else if ($mode == 'refresh') {
-      $button_text = pht('Refresh Account Link');
-    } else if ($this->shouldAllowRegistration()) {
-      $button_text = pht('Login or Register');
-    } else {
-      $button_text = pht('Login');
-    }
-
-    $icon = id(new PHUIIconView())
-      ->setSpriteSheet(PHUIIconView::SPRITE_LOGIN)
-      ->setSpriteIcon($this->getLoginIcon());
-
-    $button = id(new PHUIButtonView())
-        ->setSize(PHUIButtonView::BIG)
-        ->setColor(PHUIButtonView::GREY)
-        ->setIcon($icon)
-        ->setText($button_text)
-        ->setSubtext($this->getProviderName());
-
     $adapter = $this->getAdapter();
     $adapter->setState(PhabricatorHash::digest($request->getCookie('phcid')));
 
-    $uri = new PhutilURI($adapter->getAuthenticateURI());
-    $params = $uri->getQueryParams();
-    $uri->setQueryParams(array());
-
-    $content = array($button);
-
-    foreach ($params as $key => $value) {
-      $content[] = phutil_tag(
-        'input',
-        array(
-          'type' => 'hidden',
-          'name' => $key,
-          'value' => $value,
-        ));
+    $scope = $request->getStr("scope");
+    if ($scope) {
+      $adapter->setScope($scope);
     }
 
-    return phabricator_form(
-      $viewer,
-      array(
-        'method' => 'GET',
-        'action' => (string)$uri,
-      ),
-      $content);
+    $attributes = array(
+      'method' => 'GET',
+      'uri' => $adapter->getAuthenticateURI(),
+    );
+
+    return $this->renderStandardLoginButton($request, $mode, $attributes);
   }
+
   public function processLoginRequest(
     PhabricatorAuthLoginController $controller) {
 
@@ -321,9 +287,9 @@ abstract class PhabricatorAuthProviderOAuth extends PhabricatorAuthProvider {
       // Don't return a token with fewer than this many seconds remaining until
       // it expires.
       $shortest_token = 60;
-
       if ($access_token) {
-        if ($access_expires > (time() + $shortest_token)) {
+        if ($access_expires === null ||
+            $access_expires > (time() + $shortest_token)) {
           return $access_token;
         }
       }
@@ -349,7 +315,7 @@ abstract class PhabricatorAuthProviderOAuth extends PhabricatorAuthProvider {
 
   public function willRenderLinkedAccount(
     PhabricatorUser $viewer,
-    PhabricatorObjectItemView $item,
+    PHUIObjectItemView $item,
     PhabricatorExternalAccount $account) {
 
     // Get a valid token, possibly refreshing it.

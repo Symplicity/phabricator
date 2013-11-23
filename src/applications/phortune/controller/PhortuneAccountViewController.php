@@ -29,7 +29,7 @@ final class PhortuneAccountViewController extends PhortuneController {
         ->setName(pht('Account'))
         ->setHref($request->getRequestURI()));
 
-    $header = id(new PhabricatorHeaderView())
+    $header = id(new PHUIHeaderView())
       ->setHeader($title);
 
     $actions = id(new PhabricatorActionListView())
@@ -50,22 +50,25 @@ final class PhortuneAccountViewController extends PhortuneController {
 
     $crumbs->setActionList($actions);
 
-    $properties = id(new PhabricatorPropertyListView())
+    $properties = id(new PHUIPropertyListView())
       ->setObject($account)
       ->setUser($user);
 
     $properties->addProperty(pht('Balance'), $account->getBalanceInCents());
+    $properties->setActionList($actions);
 
     $payment_methods = $this->buildPaymentMethodsSection($account);
     $purchase_history = $this->buildPurchaseHistorySection($account);
     $account_history = $this->buildAccountHistorySection($account);
 
+    $object_box = id(new PHUIObjectBoxView())
+      ->setHeader($header)
+      ->addPropertyList($properties);
+
     return $this->buildApplicationPage(
       array(
         $crumbs,
-        $header,
-        $actions,
-        $properties,
+        $object_box,
         $payment_methods,
         $purchase_history,
         $account_history,
@@ -80,7 +83,7 @@ final class PhortuneAccountViewController extends PhortuneController {
     $request = $this->getRequest();
     $user = $request->getUser();
 
-    $header = id(new PhabricatorHeaderView())
+    $header = id(new PHUIHeaderView())
       ->setHeader(pht('Payment Methods'));
 
     $id = $account->getID();
@@ -95,7 +98,7 @@ final class PhortuneAccountViewController extends PhortuneController {
           ->setIcon('new')
           ->setHref($add_uri));
 
-    $list = id(new PhabricatorObjectItemListView())
+    $list = id(new PHUIObjectItemListView())
       ->setUser($user)
       ->setNoDataString(
         pht('No payment methods associated with this account.'));
@@ -111,7 +114,7 @@ final class PhortuneAccountViewController extends PhortuneController {
     }
 
     foreach ($methods as $method) {
-      $item = new PhabricatorObjectItemView();
+      $item = new PHUIObjectItemView();
       $item->setHeader($method->getBrand().' / '.$method->getLastFourDigits());
 
       switch ($method->getStatus()) {
@@ -141,7 +144,7 @@ final class PhortuneAccountViewController extends PhortuneController {
     $request = $this->getRequest();
     $user = $request->getUser();
 
-    $header = id(new PhabricatorHeaderView())
+    $header = id(new PHUIHeaderView())
       ->setHeader(pht('Purchase History'));
 
     return array(
@@ -154,7 +157,7 @@ final class PhortuneAccountViewController extends PhortuneController {
     $request = $this->getRequest();
     $user = $request->getUser();
 
-    $header = id(new PhabricatorHeaderView())
+    $header = id(new PHUIHeaderView())
       ->setHeader(pht('Account History'));
 
     $xactions = id(new PhortuneAccountTransactionQuery())

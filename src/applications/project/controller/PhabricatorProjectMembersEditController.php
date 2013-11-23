@@ -16,6 +16,7 @@ final class PhabricatorProjectMembersEditController
     $project = id(new PhabricatorProjectQuery())
       ->setViewer($user)
       ->withIDs(array($this->id))
+      ->needMembers(true)
       ->requireCapabilities(
         array(
           PhabricatorPolicyCapability::CAN_VIEW,
@@ -25,12 +26,8 @@ final class PhabricatorProjectMembersEditController
     if (!$project) {
       return new Aphront404Response();
     }
-    $profile = $project->loadProfile();
-    if (empty($profile)) {
-      $profile = new PhabricatorProjectProfile();
-    }
 
-    $member_phids = $project->loadMemberPHIDs();
+    $member_phids = $project->getMemberPHIDs();
 
     $errors = array();
     if ($request->isFormPost()) {
@@ -57,7 +54,7 @@ final class PhabricatorProjectMembersEditController
       if ($changed_something) {
         $xaction = new PhabricatorProjectTransaction();
         $xaction->setTransactionType(
-          PhabricatorProjectTransactionType::TYPE_MEMBERS);
+          PhabricatorProjectTransaction::TYPE_MEMBERS);
         $xaction->setNewValue(array_keys($member_map));
         $xactions[] = $xaction;
       }
@@ -95,7 +92,7 @@ final class PhabricatorProjectMembersEditController
         id(new AphrontFormTokenizerControl())
           ->setName('phids')
           ->setLabel(pht('Add Members'))
-          ->setDatasource('/typeahead/common/users/'))
+          ->setDatasource('/typeahead/common/accounts/'))
       ->appendChild(
         id(new AphrontFormSubmitControl())
           ->addCancelButton('/project/view/'.$project->getID().'/')
@@ -106,11 +103,11 @@ final class PhabricatorProjectMembersEditController
         id(new AphrontFormInsetView())
           ->appendChild($list));
 
-    $box = id(new PHUIFormBoxView())
+    $box = id(new PHUIObjectBoxView())
       ->setHeaderText(pht('Current Members (%d)', count($handles)))
       ->setForm($faux_form);
 
-    $form_box = id(new PHUIFormBoxView())
+    $form_box = id(new PHUIObjectBoxView())
       ->setHeaderText($title)
       ->setForm($form);
 

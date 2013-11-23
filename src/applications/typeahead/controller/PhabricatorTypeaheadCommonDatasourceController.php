@@ -5,6 +5,10 @@ final class PhabricatorTypeaheadCommonDatasourceController
 
   private $type;
 
+  public function shouldAllowPublic() {
+    return true;
+  }
+
   public function willProcessRequest(array $data) {
     $this->type = $data['type'];
   }
@@ -31,6 +35,7 @@ final class PhabricatorTypeaheadCommonDatasourceController
     $need_noproject = false;
     $need_symbols = false;
     $need_jump_objects = false;
+    $need_build_plans = false;
     switch ($this->type) {
       case 'mainsearch':
         $need_users = true;
@@ -81,8 +86,16 @@ final class PhabricatorTypeaheadCommonDatasourceController
         $need_users = true;
         $need_all_users = true;
         break;
+      case 'accountsorprojects':
+        $need_users = true;
+        $need_all_users = true;
+        $need_projs = true;
+        break;
       case 'arcanistprojects':
         $need_arcanist_projects = true;
+        break;
+      case 'buildplans':
+        $need_build_plans = true;
         break;
     }
 
@@ -210,10 +223,22 @@ final class PhabricatorTypeaheadCommonDatasourceController
       }
     }
 
+    if ($need_build_plans) {
+      $plans = id(new HarbormasterBuildPlanQuery())
+        ->setViewer($viewer)
+        ->execute();
+      foreach ($plans as $plan) {
+        $results[] = id(new PhabricatorTypeaheadResult())
+          ->setName($plan->getName())
+          ->setPHID($plan->getPHID());
+      }
+    }
+
     if ($need_projs) {
       $projs = id(new PhabricatorProjectQuery())
         ->setViewer($viewer)
         ->withStatus(PhabricatorProjectQuery::STATUS_OPEN)
+        ->needProfiles(true)
         ->execute();
       foreach ($projs as $proj) {
         $proj_result = id(new PhabricatorTypeaheadResult())
@@ -221,16 +246,18 @@ final class PhabricatorTypeaheadCommonDatasourceController
           ->setDisplayType("Project")
           ->setURI('/project/view/'.$proj->getID().'/')
           ->setPHID($proj->getPHID());
-        $prof = $proj->loadProfile();
-        if ($prof) {
-          $proj_result->setImageURI($prof->loadProfileImageURI());
-        }
+
+        $prof = $proj->getProfile();
+        $proj_result->setImageURI($prof->getProfileImageURI());
+
         $results[] = $proj_result;
       }
     }
 
     if ($need_repos) {
-      $repos = id(new PhabricatorRepository())->loadAll();
+      $repos = id(new PhabricatorRepositoryQuery())
+        ->setViewer($viewer)
+        ->execute();
       foreach ($repos as $repo) {
         $results[] = id(new PhabricatorTypeaheadResult())
           ->setName('r'.$repo->getCallsign().' ('.$repo->getName().')')

@@ -106,6 +106,26 @@ final class PholioMockEditor extends PhabricatorApplicationTransactionEditor {
     }
   }
 
+  protected function extractFilePHIDsFromCustomTransaction(
+    PhabricatorLiskDAO $object,
+    PhabricatorApplicationTransaction $xaction) {
+
+    switch ($xaction->getTransactionType()) {
+      case PholioTransactionType::TYPE_IMAGE_FILE:
+        $new = $xaction->getNewValue();
+        $phids = array();
+        foreach ($new as $key => $images) {
+          $phids[] = mpull($images, 'getFilePHID');
+        }
+        return array_mergev($phids);
+      case PholioTransactionType::TYPE_IMAGE_REPLACE:
+        return array($xaction->getNewValue()->getFilePHID());
+    }
+
+    return array();
+  }
+
+
   protected function transactionHasEffect(
     PhabricatorLiskDAO $object,
     PhabricatorApplicationTransaction $xaction) {
@@ -267,9 +287,12 @@ final class PholioMockEditor extends PhabricatorApplicationTransactionEditor {
       case PholioTransactionType::TYPE_DESCRIPTION:
         return $v;
       case PholioTransactionType::TYPE_IMAGE_REPLACE:
-        if ($u->getNewValue() == $v->getOldValue()) {
+        $u_img = $u->getNewValue();
+        $v_img = $v->getNewValue();
+        if ($u_img->getReplacesImagePHID() == $v_img->getReplacesImagePHID()) {
           return $v;
         }
+        break;
       case PholioTransactionType::TYPE_IMAGE_FILE:
         return $this->mergePHIDOrEdgeTransactions($u, $v);
       case PholioTransactionType::TYPE_IMAGE_NAME:
@@ -288,7 +311,9 @@ final class PholioMockEditor extends PhabricatorApplicationTransactionEditor {
     return parent::mergeTransactions($u, $v);
   }
 
-  protected function supportsMail() {
+  protected function shouldSendMail(
+    PhabricatorLiskDAO $object,
+    array $xactions) {
     return true;
   }
 

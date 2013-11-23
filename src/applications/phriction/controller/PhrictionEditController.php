@@ -51,9 +51,11 @@ final class PhrictionEditController
         $content = id(new PhrictionContent())->load($document->getContentID());
       } else {
         if (PhrictionDocument::isProjectSlug($slug)) {
-          $project = id(new PhabricatorProject())->loadOneWhere(
-            'phrictionSlug = %s',
-            PhrictionDocument::getProjectSlugIdentifier($slug));
+          $project = id(new PhabricatorProjectQuery())
+            ->setViewer($user)
+            ->withPhrictionSlugs(array(
+              PhrictionDocument::getProjectSlugIdentifier($slug)))
+            ->executeOne();
           if (!$project) {
             return new Aphront404Response();
           }
@@ -226,7 +228,7 @@ final class PhrictionEditController
           ->addCancelButton($cancel_uri)
           ->setValue($submit_button));
 
-    $form_box = id(new PHUIFormBoxView())
+    $form_box = id(new PHUIObjectBoxView())
       ->setHeaderText(pht('Edit Document'))
       ->setFormError($error_view)
       ->setForm($form);

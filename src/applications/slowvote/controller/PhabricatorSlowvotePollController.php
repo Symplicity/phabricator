@@ -41,14 +41,13 @@ final class PhabricatorSlowvotePollController
           ));
     }
 
-    $header = id(new PhabricatorHeaderView())
-      ->setHeader($poll->getQuestion());
-
-    $xaction_header = id(new PhabricatorHeaderView())
-      ->setHeader(pht('Ongoing Deliberations'));
+    $header = id(new PHUIHeaderView())
+      ->setHeader($poll->getQuestion())
+      ->setUser($user)
+      ->setPolicyObject($poll);
 
     $actions = $this->buildActionView($poll);
-    $properties = $this->buildPropertyView($poll);
+    $properties = $this->buildPropertyView($poll, $actions);
 
     $crumbs = $this->buildApplicationCrumbs();
     $crumbs->addCrumb(
@@ -58,19 +57,20 @@ final class PhabricatorSlowvotePollController
     $xactions = $this->buildTransactions($poll);
     $add_comment = $this->buildCommentForm($poll);
 
+    $object_box = id(new PHUIObjectBoxView())
+      ->setHeader($header)
+      ->addPropertyList($properties);
+
     return $this->buildApplicationPage(
       array(
         $crumbs,
-        $header,
-        $actions,
-        $properties,
+        $object_box,
         phutil_tag(
           'div',
           array(
-            'class' => 'ml',
+            'class' => 'mlt mml mmr',
           ),
           $poll_view),
-        $xaction_header,
         $xactions,
         $add_comment,
       ),
@@ -104,20 +104,16 @@ final class PhabricatorSlowvotePollController
     return $view;
   }
 
-  private function buildPropertyView(PhabricatorSlowvotePoll $poll) {
+  private function buildPropertyView(
+    PhabricatorSlowvotePoll $poll,
+    PhabricatorActionListView $actions) {
+
     $viewer = $this->getRequest()->getUser();
 
-    $view = id(new PhabricatorPropertyListView())
+    $view = id(new PHUIPropertyListView())
       ->setUser($viewer)
-      ->setObject($poll);
-
-    $descriptions = PhabricatorPolicyQuery::renderPolicyDescriptions(
-      $viewer,
-      $poll);
-
-    $view->addProperty(
-      pht('Visible To'),
-      $descriptions[PhabricatorPolicyCapability::CAN_VIEW]);
+      ->setObject($poll)
+      ->setActionList($actions);
 
     $view->invokeWillRenderEvent();
 
@@ -166,11 +162,9 @@ final class PhabricatorSlowvotePollController
 
     $is_serious = PhabricatorEnv::getEnvConfig('phabricator.serious-business');
 
-    $add_comment_header = id(new PhabricatorHeaderView())
-      ->setHeader(
-        $is_serious
-          ? pht('Add Comment')
-          : pht('Enter Deliberations'));
+    $add_comment_header = $is_serious
+      ? pht('Add Comment')
+      : pht('Enter Deliberations');
 
     $submit_button_name = $is_serious
       ? pht('Add Comment')
@@ -178,18 +172,14 @@ final class PhabricatorSlowvotePollController
 
     $draft = PhabricatorDraft::newFromUserAndKey($viewer, $poll->getPHID());
 
-    $add_comment_form = id(new PhabricatorApplicationTransactionCommentView())
+    return id(new PhabricatorApplicationTransactionCommentView())
       ->setUser($viewer)
       ->setObjectPHID($poll->getPHID())
       ->setDraft($draft)
+      ->setHeaderText($add_comment_header)
       ->setAction($this->getApplicationURI('/comment/'.$poll->getID().'/'))
       ->setSubmitButtonName($submit_button_name);
 
-    return array(
-      $add_comment_header,
-      $add_comment_form,
-    );
   }
-
 
 }

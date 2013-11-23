@@ -16,14 +16,12 @@ final class PonderPHIDTypeQuestion extends PhabricatorPHIDType {
     return new PonderQuestion();
   }
 
-  public function loadObjects(
+  protected function buildQueryForObjects(
     PhabricatorObjectQuery $query,
     array $phids) {
 
     return id(new PonderQuestionQuery())
-      ->setViewer($query->getViewer())
-      ->withPHIDs($phids)
-      ->execute();
+      ->withPHIDs($phids);
   }
 
   public function loadHandles(
@@ -35,11 +33,10 @@ final class PonderPHIDTypeQuestion extends PhabricatorPHIDType {
       $question = $objects[$phid];
 
       $id = $question->getID();
-      $title = $question->getTitle();
 
       $handle->setName("Q{$id}");
       $handle->setURI("/Q{$id}");
-      $handle->setFullName("Q{$id}: {$title}");
+      $handle->setFullName($question->getFullTitle());
     }
   }
 

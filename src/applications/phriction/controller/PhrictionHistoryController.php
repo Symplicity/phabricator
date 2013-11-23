@@ -41,7 +41,7 @@ final class PhrictionHistoryController
     $author_phids = mpull($history, 'getAuthorPHID');
     $handles = $this->loadViewerHandles($author_phids);
 
-    $list = new PhabricatorObjectItemListView();
+    $list = new PHUIObjectItemListView();
 
     foreach ($history as $content) {
 
@@ -88,7 +88,7 @@ final class PhrictionHistoryController
           break;
       }
 
-      $item = id(new PhabricatorObjectItemView())
+      $item = id(new PHUIObjectItemView())
         ->setHeader(pht('%s by %s', $change_type, $author))
         ->setBarColor($color)
         ->addAttribute(
@@ -144,19 +144,22 @@ final class PhrictionHistoryController
         ->setHref(
           PhrictionDocument::getSlugURI($document->getSlug(), 'history')));
 
-    $header = new PhabricatorHeaderView();
+    $header = new PHUIHeaderView();
     $header->setHeader(pht('Document History for %s',
       phutil_tag(
         'a',
         array('href' => PhrictionDocument::getSlugURI($document->getSlug())),
         head($history)->getTitle())));
 
+    $obj_box = id(new PHUIObjectBoxView())
+      ->setHeader($header)
+      ->appendChild($list)
+      ->appendChild($pager);
+
     return $this->buildApplicationPage(
       array(
         $crumbs,
-        $header,
-        $list,
-        $pager,
+        $obj_box,
       ),
       array(
         'title'     => pht('Document History'),

@@ -56,7 +56,7 @@ final class ReleephProjectViewController extends ReleephProjectController
       $requests = mgroup($requests, 'getBranchID');
     }
 
-    $list = id(new PhabricatorObjectItemListView())
+    $list = id(new PHUIObjectItemListView())
       ->setUser($viewer);
     foreach ($branches as $branch) {
       $diffusion_href = null;
@@ -85,7 +85,7 @@ final class ReleephProjectViewController extends ReleephProjectController
           $branch_link);
       }
 
-      $item = id(new PhabricatorObjectItemView())
+      $item = id(new PHUIObjectItemView())
         ->setHeader($branch->getDisplayName())
         ->setHref($branch->getURI())
         ->addAttribute($branch_link);
@@ -155,7 +155,7 @@ final class ReleephProjectViewController extends ReleephProjectController
 
     $id = $project->getID();
 
-    $header = id(new PhabricatorHeaderView())
+    $header = id(new PHUIHeaderView())
       ->setHeader($project->getName());
 
     if (!$project->getIsActive()) {
@@ -220,13 +220,15 @@ final class ReleephProjectViewController extends ReleephProjectController
         ->setHref($history_uri)
         ->setIcon('transcript'));
 
-    $properties = id(new PhabricatorPropertyListView())
+    $properties = id(new PHUIPropertyListView())
       ->setUser($viewer)
       ->setObject($project);
 
     $properties->addProperty(
       pht('Repository'),
       $project->getRepository()->getName());
+
+    $properties->setActionList($actions);
 
     $pushers = $project->getPushers();
     if ($pushers) {
@@ -236,12 +238,9 @@ final class ReleephProjectViewController extends ReleephProjectController
         $this->renderHandlesForPHIDs($pushers));
     }
 
-    return array(
-      $header,
-      $actions,
-      $properties,
-    );
-
+    return id(new PHUIObjectBoxView())
+      ->setHeader($header)
+      ->addPropertyList($properties);
   }
 
 }

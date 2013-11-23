@@ -71,9 +71,10 @@ abstract class PhabricatorFeedStory implements PhabricatorPolicyInterface {
       $object_phids += $phids;
     }
 
-    $objects = id(new PhabricatorObjectHandleData(array_keys($object_phids)))
+    $objects = id(new PhabricatorObjectQuery())
       ->setViewer($viewer)
-      ->loadObjects();
+      ->withPHIDs(array_keys($object_phids))
+      ->execute();
 
     foreach ($key_phids as $key => $phids) {
       if (!$phids) {
@@ -102,9 +103,10 @@ abstract class PhabricatorFeedStory implements PhabricatorPolicyInterface {
       $handle_phids += $key_phids[$key];
     }
 
-    $handles = id(new PhabricatorObjectHandleData(array_keys($handle_phids)))
+    $handles = id(new PhabricatorHandleQuery())
       ->setViewer($viewer)
-      ->loadHandles();
+      ->withPHIDs(array_keys($handle_phids))
+      ->execute();
 
     foreach ($key_phids as $key => $phids) {
       if (!$phids) {
@@ -281,6 +283,9 @@ abstract class PhabricatorFeedStory implements PhabricatorPolicyInterface {
 
 /* -(  PhabricatorPolicyInterface Implementation  )-------------------------- */
 
+  public function getPHID() {
+    return null;
+  }
 
   /**
    * @task policy
@@ -320,6 +325,10 @@ abstract class PhabricatorFeedStory implements PhabricatorPolicyInterface {
    */
   public function hasAutomaticCapability($capability, PhabricatorUser $viewer) {
     return false;
+  }
+
+  public function describeAutomaticCapability($capability) {
+    return null;
   }
 
 }

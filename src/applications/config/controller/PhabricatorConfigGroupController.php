@@ -21,7 +21,7 @@ final class PhabricatorConfigGroupController
 
     $title = pht('%s Configuration', $options->getName());
 
-    $header = id(new PhabricatorHeaderView())
+    $header = id(new PHUIHeaderView())
       ->setHeader($title);
 
     $list = $this->buildOptionList($options->getOptions());
@@ -70,12 +70,12 @@ final class PhabricatorConfigGroupController
     }
     $engine->process();
 
-    $list = new PhabricatorObjectItemListView();
+    $list = new PHUIObjectItemListView();
     $list->setStackable(true);
     foreach ($options as $option) {
       $summary = $engine->getOutput($option, 'summary');
 
-      $item = id(new PhabricatorObjectItemView())
+      $item = id(new PHUIObjectItemView())
         ->setHeader($option->getKey())
         ->setHref('/config/edit/'.$option->getKey().'/')
         ->addAttribute($summary);

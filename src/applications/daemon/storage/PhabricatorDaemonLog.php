@@ -26,6 +26,9 @@ final class PhabricatorDaemonLog extends PhabricatorDaemonDAO
 
 /* -(  PhabricatorPolicyInterface  )----------------------------------------- */
 
+  public function getPHID() {
+    return null;
+  }
 
   public function getCapabilities() {
     return array(
@@ -39,6 +42,10 @@ final class PhabricatorDaemonLog extends PhabricatorDaemonDAO
 
   public function hasAutomaticCapability($capability, PhabricatorUser $viewer) {
     return false;
+  }
+
+  public function describeAutomaticCapability($capability) {
+    return null;
   }
 
 }

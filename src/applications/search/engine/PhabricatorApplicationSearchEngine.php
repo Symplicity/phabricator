@@ -15,6 +15,7 @@ abstract class PhabricatorApplicationSearchEngine {
 
   private $viewer;
   private $errors = array();
+  private $customFields = false;
 
   public function setViewer(PhabricatorUser $viewer) {
     $this->viewer = $viewer;
@@ -253,11 +254,15 @@ abstract class PhabricatorApplicationSearchEngine {
    *
    * @param AphrontRequest  Request to read user PHIDs from.
    * @param string          Key to read in the request.
+   * @param list<const>     Other permitted PHID types.
    * @return list<phid>     List of user PHIDs.
    *
    * @task read
    */
-  protected function readUsersFromRequest(AphrontRequest $request, $key) {
+  protected function readUsersFromRequest(
+    AphrontRequest $request,
+    $key,
+    array $allow_types = array()) {
     $list = $request->getArr($key, null);
     if ($list === null) {
       $list = $request->getStrList($key);
@@ -265,9 +270,14 @@ abstract class PhabricatorApplicationSearchEngine {
 
     $phids = array();
     $names = array();
+    $allow_types = array_fuse($allow_types);
     $user_type = PhabricatorPHIDConstants::PHID_TYPE_USER;
     foreach ($list as $item) {
-      if (phid_get_type($item) == $user_type) {
+      $type = phid_get_type($item);
+      phlog($type);
+      if ($type == $user_type) {
+        $phids[] = $item;
+      } else if (isset($allow_types[$type])) {
         $phids[] = $item;
       } else {
         $names[] = $item;
@@ -286,6 +296,25 @@ abstract class PhabricatorApplicationSearchEngine {
     }
 
     return $phids;
+  }
+
+
+  protected function readBoolFromRequest(
+    AphrontRequest $request,
+    $key) {
+    if (!strlen($request->getStr($key))) {
+      return null;
+    }
+    return $request->getBool($key);
+  }
+
+
+  protected function getBoolFromQuery(PhabricatorSavedQuery $query, $key) {
+    $value = $query->getParameter($key);
+    if ($value === null) {
+      return $value;
+    }
+    return $value ? 'true' : 'false';
   }
 
 
@@ -369,5 +398,154 @@ abstract class PhabricatorApplicationSearchEngine {
     return $saved->getParameter('limit', 100);
   }
 
+
+/* -(  Application Search  )------------------------------------------------- */
+
+
+  /**
+   * Retrieve an object to use to define custom fields for this search.
+   *
+   * To integrate with custom fields, subclasses should override this method
+   * and return an instance of the application object which implements
+   * @{interface:PhabricatorCustomFieldInterface}.
+   *
+   * @return PhabricatorCustomFieldInterface|null Object with custom fields.
+   * @task appsearch
+   */
+  public function getCustomFieldObject() {
+    return null;
+  }
+
+
+  /**
+   * Get the custom fields for this search.
+   *
+   * @return PhabricatorCustomFieldList|null Custom fields, if this search
+   *   supports custom fields.
+   * @task appsearch
+   */
+  public function getCustomFieldList() {
+    if ($this->customFields === false) {
+      $object = $this->getCustomFieldObject();
+      if ($object) {
+        $fields = PhabricatorCustomField::getObjectFields(
+          $object,
+          PhabricatorCustomField::ROLE_APPLICATIONSEARCH);
+      } else {
+        $fields = null;
+      }
+      $this->customFields = $fields;
+    }
+    return $this->customFields;
+  }
+
+
+  /**
+   * Moves data from the request into a saved query.
+   *
+   * @param AphrontRequest Request to read.
+   * @param PhabricatorSavedQuery Query to write to.
+   * @return void
+   * @task appsearch
+   */
+  protected function readCustomFieldsFromRequest(
+    AphrontRequest $request,
+    PhabricatorSavedQuery $saved) {
+
+    $list = $this->getCustomFieldList();
+    if (!$list) {
+      return;
+    }
+
+    foreach ($list->getFields() as $field) {
+      $key = $this->getKeyForCustomField($field);
+      $value = $field->readApplicationSearchValueFromRequest(
+        $this,
+        $request);
+      $saved->setParameter($key, $value);
+    }
+  }
+
+
+  /**
+   * Applies data from a saved query to an executable query.
+   *
+   * @param PhabricatorCursorPagedPolicyAwareQuery Query to constrain.
+   * @param PhabricatorSavedQuery Saved query to read.
+   * @return void
+   */
+  protected function applyCustomFieldsToQuery(
+    PhabricatorCursorPagedPolicyAwareQuery $query,
+    PhabricatorSavedQuery $saved) {
+
+    $list = $this->getCustomFieldList();
+    if (!$list) {
+      return;
+    }
+
+    foreach ($list->getFields() as $field) {
+      $key = $this->getKeyForCustomField($field);
+      $value = $field->applyApplicationSearchConstraintToQuery(
+        $this,
+        $query,
+        $saved->getParameter($key));
+    }
+  }
+
+
+  /**
+   * Get a unique key identifying a field.
+   *
+   * @param PhabricatorCustomField Field to identify.
+   * @return string Unique identifier, suitable for use as an input name.
+   */
+  public function getKeyForCustomField(PhabricatorCustomField $field) {
+    return 'custom:'.$field->getFieldIndex();
+  }
+
+
+  /**
+   * Add inputs to an application search form so the user can query on custom
+   * fields.
+   *
+   * @param AphrontFormView Form to update.
+   * @param PhabricatorSavedQuery Values to prefill.
+   * @return void
+   */
+  protected function appendCustomFieldsToForm(
+    AphrontFormView $form,
+    PhabricatorSavedQuery $saved) {
+
+    $list = $this->getCustomFieldList();
+    if (!$list) {
+      return;
+    }
+
+    $phids = array();
+    foreach ($list->getFields() as $field) {
+      $key = $this->getKeyForCustomField($field);
+      $value = $saved->getParameter($key);
+      $phids[$key] = $field->getRequiredHandlePHIDsForApplicationSearch($value);
+    }
+    $all_phids = array_mergev($phids);
+
+    $handles = array();
+    if ($all_phids) {
+      $handles = id(new PhabricatorHandleQuery())
+        ->setViewer($this->requireViewer())
+        ->withPHIDs($all_phids)
+        ->execute();
+    }
+
+    foreach ($list->getFields() as $field) {
+      $key = $this->getKeyForCustomField($field);
+      $value = $saved->getParameter($key);
+      $field->appendToApplicationSearchForm(
+        $this,
+        $form,
+        $value,
+        array_select_keys($handles, $phids[$key]));
+    }
+  }
 
 }

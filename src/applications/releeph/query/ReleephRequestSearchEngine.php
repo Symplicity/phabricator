@@ -60,10 +60,10 @@ final class ReleephRequestSearchEngine
     PhabricatorSavedQuery $saved_query) {
 
     $phids = $saved_query->getParameter('requestorPHIDs', array());
-    $handles = id(new PhabricatorObjectHandleData($phids))
+    $requestor_handles = id(new PhabricatorHandleQuery())
       ->setViewer($this->requireViewer())
-      ->loadHandles();
-    $requestor_tokens = mpull($handles, 'getFullName', 'getPHID');
+      ->withPHIDs($phids)
+      ->execute();
 
     $form
       ->appendChild(
@@ -83,7 +83,7 @@ final class ReleephRequestSearchEngine
           ->setDatasource('/typeahead/common/users/')
           ->setName('requestors')
           ->setLabel(pht('Requestors'))
-          ->setValue($requestor_tokens));
+          ->setValue($requestor_handles));
   }
 
   protected function getURI($path) {

@@ -14,7 +14,7 @@ final class HeraldRuleController extends HeraldController {
     $request = $this->getRequest();
     $user = $request->getUser();
 
-    $content_type_map = HeraldAdapter::getEnabledAdapterMap();
+    $content_type_map = HeraldAdapter::getEnabledAdapterMap($user);
     $rule_type_map = HeraldRuleTypeConfig::getRuleTypeMap();
 
     if ($this->id) {
@@ -35,18 +35,23 @@ final class HeraldRuleController extends HeraldController {
     } else {
       $rule = new HeraldRule();
       $rule->setAuthorPHID($user->getPHID());
-      $rule->setMustMatchAll(true);
+      $rule->setMustMatchAll(1);
 
       $content_type = $request->getStr('content_type');
       $rule->setContentType($content_type);
 
       $rule_type = $request->getStr('rule_type');
       if (!isset($rule_type_map[$rule_type])) {
-        $rule_type = HeraldRuleTypeConfig::RULE_TYPE_GLOBAL;
+        $rule_type = HeraldRuleTypeConfig::RULE_TYPE_PERSONAL;
       }
       $rule->setRuleType($rule_type);
 
       $cancel_uri = $this->getApplicationURI();
+    }
+
+    if ($rule->getRuleType() == HeraldRuleTypeConfig::RULE_TYPE_GLOBAL) {
+      $this->requireApplicationCapability(
+        HeraldCapabilityManageGlobalRules::CAPABILITY);
     }
 
     $adapter = HeraldAdapter::getAdapterForContentType($rule->getContentType());
@@ -182,7 +187,7 @@ final class HeraldRuleController extends HeraldController {
         ? pht('Edit Herald Rule')
         : pht('Create Herald Rule');
 
-    $form_box = id(new PHUIFormBoxView())
+    $form_box = id(new PHUIObjectBoxView())
       ->setHeaderText($title)
       ->setFormError($error_view)
       ->setForm($form);
@@ -206,7 +211,8 @@ final class HeraldRuleController extends HeraldController {
 
   private function saveRule(HeraldAdapter $adapter, $rule, $request) {
     $rule->setName($request->getStr('name'));
-    $rule->setMustMatchAll(($request->getStr('must_match') == 'all'));
+    $match_all = ($request->getStr('must_match') == 'all');
+    $rule->setMustMatchAll((int)$match_all);
 
     $repetition_policy_param = $request->getStr('repetition_policy');
     $rule->setRepetitionPolicy(
@@ -412,6 +418,8 @@ final class HeraldRuleController extends HeraldController {
           'rules' => $all_rules,
           'colors' => PhabricatorFlagColor::getColorNameMap(),
           'defaultColor' => PhabricatorFlagColor::COLOR_BLUE,
+          'contentSources' => PhabricatorContentSource::getSourceNameMap(),
+          'defaultSource' => PhabricatorContentSource::SOURCE_WEB
         ),
         'author' => array($rule->getAuthorPHID() =>
                           $handles[$rule->getAuthorPHID()]->getName()),
@@ -498,10 +506,12 @@ final class HeraldRuleController extends HeraldController {
     return array(
       'source' => array(
         'email'       => '/typeahead/common/mailable/',
-        'user'        => '/typeahead/common/users/',
+        'user'        => '/typeahead/common/accounts/',
         'repository'  => '/typeahead/common/repositories/',
         'package'     => '/typeahead/common/packages/',
         'project'     => '/typeahead/common/projects/',
+        'userorproject' => '/typeahead/common/accountsorprojects/',
+        'buildplan'   => '/typeahead/common/buildplans/',
       ),
       'markup' => $template,
     );

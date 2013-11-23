@@ -16,14 +16,12 @@ final class PhabricatorCountdownPHIDTypeCountdown extends PhabricatorPHIDType {
     return new PhabricatorCountdown();
   }
 
-  public function loadObjects(
+  protected function buildQueryForObjects(
     PhabricatorObjectQuery $query,
     array $phids) {
 
     return id(new PhabricatorCountdownQuery())
-      ->setViewer($query->getViewer())
-      ->withPHIDs($phids)
-      ->execute();
+      ->withPHIDs($phids);
   }
 
   public function loadHandles(

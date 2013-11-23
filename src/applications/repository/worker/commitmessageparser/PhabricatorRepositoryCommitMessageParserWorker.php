@@ -54,7 +54,7 @@ abstract class PhabricatorRepositoryCommitMessageParserWorker
         'corpus' => $message,
         'partial' => true,
       ));
-    $call->setUser($user);
+    $call->setUser(PhabricatorUser::getOmnipotentUser());
     $result = $call->execute();
 
     $field_values = $result['fields'];
@@ -220,15 +220,20 @@ abstract class PhabricatorRepositoryCommitMessageParserWorker
     }
 
     $data->save();
+
+    $commit->writeImportStatusFlag(
+      PhabricatorRepositoryCommit::IMPORTED_MESSAGE);
   }
 
   private function loadUserName($user_phid, $default, PhabricatorUser $actor) {
     if (!$user_phid) {
       return $default;
     }
-    $handle = PhabricatorObjectHandleData::loadOneHandle(
-      $user_phid,
-      $actor);
+    $handle = id(new PhabricatorHandleQuery())
+      ->setViewer($actor)
+      ->withPHIDs(array($user_phid))
+      ->executeOne();
+
     return '@'.$handle->getName();
   }
 
@@ -247,7 +252,17 @@ abstract class PhabricatorRepositoryCommitMessageParserWorker
       ->loadRawDiff();
 
     // TODO: Support adds, deletes and moves under SVN.
-    $changes = id(new ArcanistDiffParser())->parseDiff($raw_diff);
+    if (strlen($raw_diff)) {
+      $changes = id(new ArcanistDiffParser())->parseDiff($raw_diff);
+    } else {
+      // This is an empty diff, maybe made with `git commit --allow-empty`.
+      // NOTE: These diffs have the same tree hash as their ancestors, so
+      // they may attach to revisions in an unexpected way. Just let this
+      // happen for now, although it might make sense to special case it
+      // eventually.
+      $changes = array();
+    }
+
     $diff = DifferentialDiff::newFromRawChanges($changes)
       ->setRevisionID($revision->getID())
       ->setAuthorPHID($actor_phid)
@@ -327,9 +342,10 @@ abstract class PhabricatorRepositoryCommitMessageParserWorker
 
     $files = array();
     if ($file_phids) {
-      $files = id(new PhabricatorFile())->loadAllWhere(
-        'phid IN (%Ls)',
-        $file_phids);
+      $files = id(new PhabricatorFileQuery())
+        ->setViewer(PhabricatorUser::getOmnipotentUser())
+        ->withPHIDs($file_phids)
+        ->execute();
       $files = mpull($files, null, 'getPHID');
     }
 

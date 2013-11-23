@@ -151,7 +151,8 @@ final class PonderQuestionQuery
       $answers = mgroup($answers, 'getQuestionID');
 
       foreach ($questions as $question) {
-        $question->attachAnswers(idx($answers, $question->getID(), array()));
+        $question_answers = idx($answers, $question->getID(), array());
+        $question->attachAnswers(mpull($question_answers, null, 'getPHID'));
       }
     }
 
@@ -191,6 +192,11 @@ final class PonderQuestionQuery
     }
 
     return implode(' ', $joins);
+  }
+
+
+  public function getQueryApplicationClass() {
+    return 'PhabricatorApplicationPonder';
   }
 
 }

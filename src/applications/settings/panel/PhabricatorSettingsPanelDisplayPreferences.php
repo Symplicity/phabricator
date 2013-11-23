@@ -73,7 +73,7 @@ EXAMPLE;
     $editor_instructions = pht('Link to edit files in external editor. '.
       '%%f is replaced by filename, %%l by line number, %%r by repository '.
       'callsign, %%%% by literal %%. For documentation, see: %s',
-      hsprintf('%s', $editor_doc_link));
+      $editor_doc_link);
 
     $form = id(new AphrontFormView())
       ->setUser($user)
@@ -145,7 +145,7 @@ EXAMPLE;
         ->setErrors(array(pht('Your preferences have been saved.')));
     }
 
-    $form_box = id(new PHUIFormBoxView())
+    $form_box = id(new PHUIObjectBoxView())
       ->setHeaderText(pht('Display Preferences'))
       ->setFormError($error_view)
       ->setForm($form);

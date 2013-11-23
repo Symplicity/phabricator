@@ -12,6 +12,25 @@ final class PhabricatorRepositoryCommitHeraldWorker
     PhabricatorRepository $repository,
     PhabricatorRepositoryCommit $commit) {
 
+    $result = $this->applyHeraldRules($repository, $commit);
+
+    $commit->writeImportStatusFlag(
+      PhabricatorRepositoryCommit::IMPORTED_HERALD);
+
+    return $result;
+  }
+
+  private function applyHeraldRules(
+    PhabricatorRepository $repository,
+    PhabricatorRepositoryCommit $commit) {
+
+    // Don't take any actions on an importing repository. Principally, this
+    // avoids generating thousands of audits or emails when you import an
+    // established repository on an existing install.
+    if ($repository->isImporting()) {
+      return;
+    }
+
     $data = id(new PhabricatorRepositoryCommitData())->loadOneWhere(
       'commitID = %d',
       $commit->getID());
@@ -29,6 +48,7 @@ final class PhabricatorRepositoryCommitHeraldWorker
     $rules = id(new HeraldRuleQuery())
       ->setViewer(PhabricatorUser::getOmnipotentUser())
       ->withContentTypes(array($adapter->getAdapterContentType()))
+      ->withDisabled(false)
       ->needConditionsAndActions(true)
       ->needAppliedToPHIDs(array($adapter->getPHID()))
       ->needValidateAuthors(true)
@@ -45,6 +65,11 @@ final class PhabricatorRepositoryCommitHeraldWorker
     if ($audit_phids || $cc_phids) {
       $this->createAudits($commit, $audit_phids, $cc_phids, $rules);
     }
+
+    HarbormasterBuildable::applyBuildPlans(
+      $commit->getPHID(),
+      $repository->getPHID(),
+      $adapter->getBuildPlans());
 
     $explicit_auditors = $this->createAuditsFromCommitMessage($commit, $data);
 
@@ -83,9 +108,10 @@ final class PhabricatorRepositoryCommitHeraldWorker
         $commit->getPHID(),
       ));
 
-    $handles = id(new PhabricatorObjectHandleData($phids))
+    $handles = id(new PhabricatorHandleQuery())
       ->setViewer(PhabricatorUser::getOmnipotentUser())
-      ->loadHandles();
+      ->withPHIDs($phids)
+      ->execute();
 
     $commit_handle = $handles[$commit->getPHID()];
     $commit_name = $commit_handle->getName();
@@ -117,7 +143,6 @@ final class PhabricatorRepositoryCommitHeraldWorker
 
     $xscript_id = $xscript->getID();
 
-    $manage_uri = '/herald/view/commits/';
     $why_uri = '/herald/transcript/'.$xscript_id.'/';
 
     $reply_handler = PhabricatorAuditCommentEditor::newReplyHandlerForCommit(
@@ -133,7 +158,7 @@ final class PhabricatorRepositoryCommitHeraldWorker
     $body->addTextSection(pht('DIFFERENTIAL REVISION'), $differential);
     $body->addTextSection(pht('AFFECTED FILES'), $files);
     $body->addReplySection($reply_handler->getReplyHandlerInstructions());
-    $body->addHeraldSection($manage_uri, $why_uri);
+    $body->addHeraldSection($why_uri);
     $body->addRawSection($inline_patch_text);
     $body = $body->render();
 
@@ -163,9 +188,10 @@ final class PhabricatorRepositoryCommitHeraldWorker
 
     $mails = $reply_handler->multiplexMail(
       $template,
-      id(new PhabricatorObjectHandleData($email_phids))
-        ->setViewer(PhabricatorUser::getOmnipotentUser())
-        ->loadHandles(),
+      id(new PhabricatorHandleQuery())
+      ->setViewer(PhabricatorUser::getOmnipotentUser())
+      ->withPHIDs($email_phids)
+      ->execute(),
       array());
 
     foreach ($mails as $mail) {
