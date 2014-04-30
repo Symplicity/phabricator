@@ -5,6 +5,10 @@ final class PhabricatorChatLogChannelLogController
 
   private $channelID;
 
+  public function shouldAllowPublic() {
+    return true;
+  }
+
   public function willProcessRequest(array $data) {
     $this->channelID = $data['channelID'];
   }
@@ -183,10 +187,7 @@ final class PhabricatorChatLogChannelLogController
 
     $crumbs = $this
       ->buildApplicationCrumbs()
-      ->addCrumb(
-        id(new PhabricatorCrumbView())
-          ->setName($channel->getChannelName())
-          ->setHref($uri));
+      ->addTextCrumb($channel->getChannelName(), $uri);
 
     $form = id(new AphrontFormView())
       ->setUser($user)

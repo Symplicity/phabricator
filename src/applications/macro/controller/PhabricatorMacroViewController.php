@@ -30,10 +30,9 @@ final class PhabricatorMacroViewController
 
     $crumbs = $this->buildApplicationCrumbs();
     $crumbs->setActionList($actions);
-    $crumbs->addCrumb(
-      id(new PhabricatorCrumbView())
-        ->setHref($this->getApplicationURI('/view/'.$macro->getID().'/'))
-        ->setName($title_short));
+    $crumbs->addTextCrumb(
+      $title_short,
+      $this->getApplicationURI('/view/'.$macro->getID().'/'));
 
     $properties = $this->buildPropertyView($macro, $actions);
     if ($file) {
@@ -76,10 +75,10 @@ final class PhabricatorMacroViewController
 
     if ($macro->getIsDisabled()) {
       $header->addTag(
-        id(new PhabricatorTagView())
-          ->setType(PhabricatorTagView::TYPE_STATE)
+        id(new PHUITagView())
+          ->setType(PHUITagView::TYPE_STATE)
           ->setName(pht('Macro Disabled'))
-          ->setBackgroundColor(PhabricatorTagView::COLOR_BLACK));
+          ->setBackgroundColor(PHUITagView::COLOR_BLACK));
     }
 
     $is_serious = PhabricatorEnv::getEnvConfig('phabricator.serious-business');
@@ -87,10 +86,6 @@ final class PhabricatorMacroViewController
     $comment_header = $is_serious
       ? pht('Add Comment')
       : pht('Grovel in Awe');
-
-    $submit_button_name = $is_serious
-      ? pht('Add Comment')
-      : pht('Lavish Praise');
 
     $draft = PhabricatorDraft::newFromUserAndKey($user, $macro->getPHID());
 
@@ -100,7 +95,7 @@ final class PhabricatorMacroViewController
       ->setDraft($draft)
       ->setHeaderText($comment_header)
       ->setAction($this->getApplicationURI('/comment/'.$macro->getID().'/'))
-      ->setSubmitButtonName($submit_button_name);
+      ->setSubmitButtonName(pht('Add Comment'));
 
     $object_box = id(new PHUIObjectBoxView())
       ->setHeader($header)

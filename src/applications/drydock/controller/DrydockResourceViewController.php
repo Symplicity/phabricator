@@ -1,6 +1,6 @@
 <?php
 
-final class DrydockResourceViewController extends DrydockController {
+final class DrydockResourceViewController extends DrydockResourceController {
 
   private $id;
 
@@ -10,9 +10,12 @@ final class DrydockResourceViewController extends DrydockController {
 
   public function processRequest() {
     $request = $this->getRequest();
-    $user = $request->getUser();
+    $viewer = $request->getUser();
 
-    $resource = id(new DrydockResource())->load($this->id);
+    $resource = id(new DrydockResourceQuery())
+      ->setViewer($viewer)
+      ->withIDs(array($this->id))
+      ->executeOne();
     if (!$resource) {
       return new Aphront404Response();
     }
@@ -29,12 +32,9 @@ final class DrydockResourceViewController extends DrydockController {
     $resource_uri = $this->getApplicationURI($resource_uri);
 
     $leases = id(new DrydockLeaseQuery())
+      ->setViewer($viewer)
       ->withResourceIDs(array($resource->getID()))
-      ->needResources(true)
       ->execute();
-
-    $lease_header = id(new PHUIHeaderView())
-      ->setHeader(pht('Leases'));
 
     $lease_list = $this->buildLeaseListView($leases);
     $lease_list->setNoDataString(pht('This resource has no leases.'));
@@ -44,6 +44,7 @@ final class DrydockResourceViewController extends DrydockController {
     $pager->setOffset($request->getInt('offset'));
 
     $logs = id(new DrydockLogQuery())
+      ->setViewer($viewer)
       ->withResourceIDs(array($resource->getID()))
       ->executeWithOffsetPager($pager);
 
@@ -52,9 +53,7 @@ final class DrydockResourceViewController extends DrydockController {
 
     $crumbs = $this->buildApplicationCrumbs();
     $crumbs->setActionList($actions);
-    $crumbs->addCrumb(
-      id(new PhabricatorCrumbView())
-        ->setName(pht('Resource %d', $resource->getID())));
+    $crumbs->addTextCrumb(pht('Resource %d', $resource->getID()));
 
     $object_box = id(new PHUIObjectBoxView())
       ->setHeader($header)
@@ -64,7 +63,6 @@ final class DrydockResourceViewController extends DrydockController {
       array(
         $crumbs,
         $object_box,
-        $lease_header,
         $lease_list,
         $log_table,
       ),
@@ -113,6 +111,11 @@ final class DrydockResourceViewController extends DrydockController {
     $view->addProperty(
       pht('Resource Type'),
       $resource->getType());
+
+    // TODO: Load handle.
+    $view->addProperty(
+      pht('Blueprint'),
+      $resource->getBlueprintPHID());
 
     $attributes = $resource->getAttributes();
     if ($attributes) {

@@ -94,7 +94,14 @@ final class PhabricatorConfigEditController
         }
       }
     } else {
-      $display_value = $this->getDisplayValue($option, $config_entry);
+      if ($config_entry->getIsDeleted()) {
+        $display_value = null;
+      } else {
+        $display_value = $this->getDisplayValue(
+          $option,
+          $config_entry,
+          $config_entry->getValue());
+      }
     }
 
     $form = new AphrontFormView();
@@ -102,7 +109,6 @@ final class PhabricatorConfigEditController
     $error_view = null;
     if ($errors) {
       $error_view = id(new AphrontErrorView())
-        ->setTitle(pht('You broke everything!'))
         ->setErrors($errors);
     } else if ($option->getHidden()) {
       $msg = pht(
@@ -187,7 +193,7 @@ final class PhabricatorConfigEditController
       $form->appendChild(
         id(new AphrontFormMarkupControl())
           ->setLabel(pht('Default'))
-          ->setValue($this->renderDefaults($option)));
+          ->setValue($this->renderDefaults($option, $config_entry)));
     }
 
     $title = pht('Edit %s', $this->key);
@@ -195,26 +201,20 @@ final class PhabricatorConfigEditController
 
     $form_box = id(new PHUIObjectBoxView())
       ->setHeaderText($title)
-      ->setFormError($error_view)
       ->setForm($form);
 
-    $crumbs = $this->buildApplicationCrumbs();
-    $crumbs->addCrumb(
-      id(new PhabricatorCrumbView())
-        ->setName(pht('Config'))
-        ->setHref($this->getApplicationURI()));
-
-    if ($group) {
-      $crumbs->addCrumb(
-        id(new PhabricatorCrumbView())
-          ->setName($group->getName())
-          ->setHref($group_uri));
+    if ($error_view) {
+       $form_box->setErrorView($error_view);
     }
 
-    $crumbs->addCrumb(
-      id(new PhabricatorCrumbView())
-        ->setName($this->key)
-        ->setHref('/config/edit/'.$this->key));
+    $crumbs = $this->buildApplicationCrumbs();
+    $crumbs->addTextCrumb(pht('Config'), $this->getApplicationURI());
+
+    if ($group) {
+      $crumbs->addTextCrumb($group->getName(), $group_uri);
+    }
+
+    $crumbs->addTextCrumb($this->key, '/config/edit/'.$this->key);
 
     $xactions = id(new PhabricatorConfigTransactionQuery())
       ->withObjectPHIDs(array($config_entry->getPHID()))
@@ -355,17 +355,16 @@ final class PhabricatorConfigEditController
 
   private function getDisplayValue(
     PhabricatorConfigOption $option,
-    PhabricatorConfigEntry $entry) {
-
-    if ($entry->getIsDeleted()) {
-      return null;
-    }
+    PhabricatorConfigEntry $entry,
+    $value) {
 
     if ($option->isCustomType()) {
-      return $option->getCustomObject()->getDisplayValue($option, $entry);
+      return $option->getCustomObject()->getDisplayValue(
+        $option,
+        $entry,
+        $value);
     } else {
       $type = $option->getType();
-      $value = $entry->getValue();
       switch ($type) {
         case 'int':
         case 'string':
@@ -504,7 +503,10 @@ final class PhabricatorConfigEditController
       $table);
   }
 
-  private function renderDefaults(PhabricatorConfigOption $option) {
+  private function renderDefaults(
+    PhabricatorConfigOption $option,
+    PhabricatorConfigEntry $entry) {
+
     $stack = PhabricatorEnv::getConfigSourceStack();
     $stack = $stack->getStack();
 
@@ -522,7 +524,9 @@ final class PhabricatorConfigEditController
       if (!array_key_exists($option->getKey(), $value)) {
         $value = phutil_tag('em', array(), pht('(empty)'));
       } else {
-        $value = PhabricatorConfigJSON::prettyPrintJSON(
+        $value = $this->getDisplayValue(
+          $option,
+          $entry,
           $value[$option->getKey()]);
       }
 

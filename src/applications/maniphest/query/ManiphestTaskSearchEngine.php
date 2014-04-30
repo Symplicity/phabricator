@@ -22,10 +22,16 @@ final class ManiphestTaskSearchEngine
 
     $saved->setParameter(
       'subscriberPHIDs',
-      $this->readUsersFromRequest($request, 'subscribers'));
+      $this->readPHIDsFromRequest($request, 'subscribers'));
 
-    $saved->setParameter('statuses', $request->getArr('statuses'));
-    $saved->setParameter('priorities', $request->getArr('priorities'));
+    $saved->setParameter(
+      'statuses',
+      $this->readListFromRequest($request, 'statuses'));
+
+    $saved->setParameter(
+      'priorities',
+      $this->readListFromRequest($request, 'priorities'));
+
     $saved->setParameter('group', $request->getStr('group'));
     $saved->setParameter('order', $request->getStr('order'));
 
@@ -64,6 +70,8 @@ final class ManiphestTaskSearchEngine
 
     $saved->setParameter('createdStart', $request->getStr('createdStart'));
     $saved->setParameter('createdEnd', $request->getStr('createdEnd'));
+    $saved->setParameter('modifiedStart', $request->getStr('modifiedStart'));
+    $saved->setParameter('modifiedEnd', $request->getStr('modifiedEnd'));
 
     $limit = $request->getInt('limit');
     if ($limit > 0) {
@@ -168,6 +176,17 @@ final class ManiphestTaskSearchEngine
 
     if ($end) {
       $query->withDateCreatedBefore($end);
+    }
+
+    $mod_start = $this->parseDateTime($saved->getParameter('modifiedStart'));
+    $mod_end = $this->parseDateTime($saved->getParameter('modifiedEnd'));
+
+    if ($mod_start) {
+      $query->withDateModifiedAfter($mod_start);
+    }
+
+    if ($mod_end) {
+      $query->withDateModifiedBefore($mod_end);
     }
 
     $this->applyCustomFieldsToQuery($query, $saved);
@@ -305,7 +324,7 @@ final class ManiphestTaskSearchEngine
           ->setValue($author_handles))
       ->appendChild(
         id(new AphrontFormTokenizerControl())
-          ->setDatasource('/typeahead/common/accounts/')
+          ->setDatasource('/typeahead/common/mailable/')
           ->setName('subscribers')
           ->setLabel(pht('Subscribers'))
           ->setValue($subscriber_handles))
@@ -343,6 +362,14 @@ final class ManiphestTaskSearchEngine
       pht('Created After'),
       'createdEnd',
       pht('Created Before'));
+
+    $this->buildDateRange(
+      $form,
+      $saved,
+      'modifiedStart',
+      pht('Updated After'),
+      'modifiedEnd',
+      pht('Updated Before'));
 
     $form
       ->appendChild(
@@ -384,14 +411,20 @@ final class ManiphestTaskSearchEngine
       case 'assigned':
         return $query
           ->setParameter('assignedPHIDs', array($viewer_phid))
-          ->setParameter('statuses', array(ManiphestTaskStatus::STATUS_OPEN));
+          ->setParameter(
+            'statuses',
+            ManiphestTaskStatus::getOpenStatusConstants());
       case 'subscribed':
         return $query
           ->setParameter('subscriberPHIDs', array($viewer_phid))
-          ->setParameter('statuses', array(ManiphestTaskStatus::STATUS_OPEN));
+          ->setParameter(
+            'statuses',
+            ManiphestTaskStatus::getOpenStatusConstants());
       case 'open':
         return $query
-          ->setParameter('statuses', array(ManiphestTaskStatus::STATUS_OPEN));
+          ->setParameter(
+            'statuses',
+            ManiphestTaskStatus::getOpenStatusConstants());
       case 'authored':
         return $query
           ->setParameter('authorPHIDs', array($viewer_phid))

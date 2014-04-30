@@ -5,6 +5,7 @@
  *           javelin-workflow
  *           javelin-dom
  *           javelin-fx
+ *           javelin-util
  */
 
 JX.behavior('phabricator-transaction-list', function(config) {
@@ -62,27 +63,49 @@ JX.behavior('phabricator-transaction-list', function(config) {
     }
   }
 
+  function edittransaction(transaction, response) {
+    // NOTE: this is for 1 transaction only
+    for (var phid in response.xactions) {
+      var new_node = JX.$H(response.xactions[phid]).getFragment().firstChild;
+      var new_comment = JX.DOM.find(new_node, 'span', 'transaction-comment');
+      var old_comments = JX.DOM.scry(
+        transaction,
+        'span',
+        'transaction-comment');
+      var old_comment = old_comments[0];
+      JX.DOM.replace(old_comment, new_comment);
+      var edit_history = JX.DOM.scry(
+          transaction,
+          'a',
+          'transaction-edit-history');
+      if (!edit_history.length) {
+        var transaction_phid = JX.Stratcom.getData(new_comment).phid;
+        var history_link = JX.$N(
+          'a',
+          { sigil : 'transaction-edit-history',
+            href  : config.historyLink + transaction_phid + '/' },
+          config.historyLinkText);
+        JX.Stratcom.addSigil(history_link, 'workflow');
+        var timeline_extra = JX.DOM.find(transaction, 'span', 'timeline-extra');
+        var old_content = JX.$H(timeline_extra.innerHTML);
+        JX.DOM.setContent(
+          timeline_extra,
+          [history_link, config.linkDelimiter, old_content]);
+      }
+      new JX.FX(transaction).setDuration(500).start({opacity: [0, 1]});
+    }
+  }
+
   JX.DOM.listen(list, 'click', 'transaction-edit', function(e) {
     if (!e.isNormalClick()) {
       return;
     }
 
+    var transaction = e.getNode('transaction');
+
     JX.Workflow.newFromLink(e.getTarget())
       .setData({anchor: e.getNodeData('transaction').anchor})
-      .setHandler(ontransactions)
-      .start();
-
-    e.kill();
-  });
-
-  JX.DOM.listen(list, 'click', 'transaction-detail', function(e) {
-    if (!e.isNormalClick()) {
-      return;
-    }
-
-    JX.Workflow.newFromLink(e.getTarget())
-      .setData({anchor: e.getData('anchor')})
-      .setHandler(ontransactions)
+      .setHandler(JX.bind(null, edittransaction, transaction))
       .start();
 
     e.kill();
@@ -109,11 +132,40 @@ JX.behavior('phabricator-transaction-list', function(config) {
 
           var e = JX.DOM.invoke(form, 'willClear');
           if (!e.getPrevented()) {
-            form.reset();
+            var ii;
+            var textareas = JX.DOM.scry(form, 'textarea');
+            for (ii = 0; ii < textareas.length; ii++) {
+              textareas[ii].value = '';
+            }
+
+            var inputs = JX.DOM.scry(form, 'input');
+            for (ii = 0; ii < inputs.length; ii++) {
+            switch (inputs[ii].type) {
+              case 'password':
+              case 'text':
+                inputs[ii].value = '';
+                break;
+              case 'checkbox':
+              case 'radio':
+                inputs[ii].checked = false;
+                break;
+              }
+            }
+
+            var selects = JX.DOM.scry(form, 'select');
+            var jj;
+            for (ii = 0; ii < selects.length; ii++) {
+              if (selects[ii].type == 'select-one') {
+                selects[ii].selectedIndex = 0;
+              } else {
+               for (jj = 0; jj < selects[ii].options.length; jj++) {
+                 selects[ii].options[jj].selected = false;
+               }
+              }
+            }
           }
         })
         .start();
 
     });
-
 });

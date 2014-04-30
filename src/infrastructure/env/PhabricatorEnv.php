@@ -108,6 +108,10 @@ final class PhabricatorEnv {
     }
     putenv('PATH='.$env_path);
 
+    // Write this back into $_ENV, too, so ExecFuture picks it up when creating
+    // subprocess environments.
+    $_ENV['PATH'] = $env_path;
+
     PhabricatorEventEngine::initialize();
 
     $translation = PhabricatorEnv::newObjectFromConfig('translation.provider');
@@ -332,8 +336,12 @@ final class PhabricatorEnv {
    *
    * @task read
    */
-  public static function getDoclink($resource) {
-    return 'http://www.phabricator.com/docs/phabricator/'.$resource;
+  public static function getDoclink($resource, $type = 'article') {
+    $uri = new PhutilURI('https://secure.phabricator.com/diviner/find/');
+    $uri->setQueryParam('name', $resource);
+    $uri->setQueryParam('type', $type);
+    $uri->setQueryParam('jump', true);
+    return (string)$uri;
   }
 
 

@@ -24,9 +24,13 @@ abstract class PhabricatorController extends AphrontController {
     return PhabricatorUserEmail::isEmailVerificationRequired();
   }
 
-  public function willBeginExecution() {
+  public function shouldAllowRestrictedParameter($parameter_name) {
+    return false;
+  }
 
+  public function willBeginExecution() {
     $request = $this->getRequest();
+
     if ($request->getUser()) {
       // NOTE: Unit tests can set a user explicitly. Normal requests are not
       // permitted to do this.
@@ -34,22 +38,33 @@ abstract class PhabricatorController extends AphrontController {
       $user = $request->getUser();
     } else {
       $user = new PhabricatorUser();
+      $session_engine = new PhabricatorAuthSessionEngine();
 
-      $phusr = $request->getCookie('phusr');
-      $phsid = $request->getCookie('phsid');
-
-      if (strlen($phusr) && $phsid) {
-        $info = queryfx_one(
-          $user->establishConnection('r'),
-          'SELECT u.* FROM %T u JOIN %T s ON u.phid = s.userPHID
-            AND s.type LIKE %> AND s.sessionKey = %s',
-          $user->getTableName(),
-          'phabricator_session',
-          'web-',
-          PhabricatorHash::digest($phsid));
-        if ($info) {
-          $user->loadFromArray($info);
+      $phsid = $request->getCookie(PhabricatorCookies::COOKIE_SESSION);
+      if (strlen($phsid)) {
+        $session_user = $session_engine->loadUserForSession(
+          PhabricatorAuthSession::TYPE_WEB,
+          $phsid);
+        if ($session_user) {
+          $user = $session_user;
         }
+      } else {
+        // If the client doesn't have a session token, generate an anonymous
+        // session. This is used to provide CSRF protection to logged-out users.
+        $phsid = $session_engine->establishSession(
+          PhabricatorAuthSession::TYPE_WEB,
+          null);
+
+        // This may be a resource request, in which case we just don't set
+        // the cookie.
+        if ($request->canSetCookies()) {
+          $request->setCookie(PhabricatorCookies::COOKIE_SESSION, $phsid);
+        }
+      }
+
+
+      if (!$user->isLoggedIn()) {
+        $user->attachAlternateCSRFString(PhabricatorHash::digest($phsid));
       }
 
       $request->setUser($user);
@@ -71,6 +86,26 @@ abstract class PhabricatorController extends AphrontController {
          PhabricatorEnv::getEnvConfig('darkconsole.always-on')) {
         $console = new DarkConsoleCore();
         $request->getApplicationConfiguration()->setConsole($console);
+      }
+    }
+
+    // NOTE: We want to set up the user first so we can render a real page
+    // here, but fire this before any real logic.
+    $restricted = array(
+      'code',
+    );
+    foreach ($restricted as $parameter) {
+      if ($request->getExists($parameter)) {
+        if (!$this->shouldAllowRestrictedParameter($parameter)) {
+          throw new Exception(
+            pht(
+              'Request includes restricted parameter "%s", but this '.
+              'controller ("%s") does not whitelist it. Refusing to '.
+              'serve this request because it might be part of a redirection '.
+              'attack.',
+              $parameter,
+              get_class($this)));
+        }
       }
     }
 
@@ -223,6 +258,11 @@ abstract class PhabricatorController extends AphrontController {
   }
 
   public function didProcessRequest($response) {
+    // If a bare DialogView is returned, wrap it in a DialogResponse.
+    if ($response instanceof AphrontDialogView) {
+      $response = id(new AphrontDialogResponse())->setDialog($response);
+    }
+
     $request = $this->getRequest();
     $response->setRequest($request);
 
@@ -243,17 +283,28 @@ abstract class PhabricatorController extends AphrontController {
 
     if ($response instanceof AphrontDialogResponse) {
       if (!$request->isAjax()) {
-        $view = new PhabricatorStandardPageView();
-        $view->setRequest($request);
-        $view->setController($this);
-        $view->appendChild(phutil_tag(
-          'div',
-          array('style' => 'padding: 2em 0;'),
-          $response->buildResponseString()));
-        $page_response = new AphrontWebpageResponse();
-        $page_response->setContent($view->render());
-        $page_response->setHTTPResponseCode($response->getHTTPResponseCode());
-        return $page_response;
+        $dialog = $response->getDialog();
+
+        $title = $dialog->getTitle();
+        $short = $dialog->getShortTitle();
+
+        $crumbs = $this->buildApplicationCrumbs();
+        $crumbs->addTextCrumb(coalesce($short, $title));
+
+        $page_content = array(
+          $crumbs,
+          $response->buildResponseString(),
+        );
+
+        $view = id(new PhabricatorStandardPageView())
+          ->setRequest($request)
+          ->setController($this)
+          ->setTitle($title)
+          ->appendChild($page_content);
+
+        $response = id(new AphrontWebpageResponse())
+          ->setContent($view->render())
+          ->setHTTPResponseCode($response->getHTTPResponseCode());
       } else {
         $response->getDialog()->setIsStandalone(true);
 
@@ -271,6 +322,7 @@ abstract class PhabricatorController extends AphrontController {
             ));
       }
     }
+
     return $response;
   }
 
@@ -406,6 +458,25 @@ abstract class PhabricatorController extends AphrontController {
       ));
 
     return array($can_act, $message);
+  }
+
+  public function getDefaultResourceSource() {
+    return 'phabricator';
+  }
+
+
+  /**
+   * Create a new @{class:AphrontDialogView} with defaults filled in.
+   *
+   * @return AphrontDialogView New dialog.
+   */
+  protected function newDialog() {
+    $submit_uri = new PhutilURI($this->getRequest()->getRequestURI());
+    $submit_uri = $submit_uri->getPath();
+
+    return id(new AphrontDialogView())
+      ->setUser($this->getRequest()->getUser())
+      ->setSubmitURI($submit_uri);
   }
 
 }

@@ -16,30 +16,38 @@ final class ReleephDiffChurnFieldSpecification
     return 'Churn';
   }
 
-  public function renderValueForHeaderView() {
-    $diff_rev = $this->getReleephRequest()->loadDifferentialRevision();
-    if (!$diff_rev) {
+  public function renderPropertyViewValue(array $handles) {
+    $requested_object = $this->getObject()->getRequestedObject();
+    if (!($requested_object instanceof DifferentialRevision)) {
       return null;
     }
+    $diff_rev = $requested_object;
 
-    $diff_rev = $this->getReleephRequest()->loadDifferentialRevision();
-    $comments = id(new DifferentialCommentQuery())
-      ->withRevisionIDs(array($diff_rev->getID()))
+    $xactions = id(new DifferentialTransactionQuery())
+      ->setViewer($this->getViewer())
+      ->withObjectPHIDs(array($diff_rev->getPHID()))
       ->execute();
 
-    $counts = array();
-    foreach ($comments as $comment) {
-      $action = $comment->getAction();
-      if (!isset($counts[$action])) {
-        $counts[$action] = 0;
+    $rejections = 0;
+    $comments = 0;
+    $updates = 0;
+    foreach ($xactions as $xaction) {
+      switch ($xaction->getTransactionType()) {
+        case PhabricatorTransactions::TYPE_COMMENT:
+          $comments++;
+          break;
+        case DifferentialTransaction::TYPE_UPDATE:
+          $updates++;
+          break;
+        case DifferentialTransaction::TYPE_ACTION:
+          switch ($xaction->getNewValue()) {
+            case DifferentialAction::ACTION_REJECT:
+              $rejections++;
+              break;
+          }
+          break;
       }
-      $counts[$action] += 1;
     }
-
-    // 'none' action just means a plain comment
-    $comments   = idx($counts, 'none',     0);
-    $rejections = idx($counts, 'reject',   0);
-    $updates    = idx($counts, 'update',   0);
 
     $points =
       self::REJECTIONS_WEIGHT * $rejections +

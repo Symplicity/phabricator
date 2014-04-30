@@ -3,6 +3,10 @@
 final class PhabricatorChatLogChannelListController
   extends PhabricatorChatLogController {
 
+  public function shouldAllowPublic() {
+    return true;
+  }
+
   public function processRequest() {
     $request = $this->getRequest();
     $user = $request->getUser();
@@ -23,10 +27,7 @@ final class PhabricatorChatLogChannelListController
 
     $crumbs = $this
       ->buildApplicationCrumbs()
-      ->addCrumb(
-        id(new PhabricatorCrumbView())
-          ->setName(pht('Channel List'))
-          ->setHref($this->getApplicationURI()));
+      ->addTextCrumb(pht('Channel List'), $this->getApplicationURI());
 
     return $this->buildApplicationPage(
       array(

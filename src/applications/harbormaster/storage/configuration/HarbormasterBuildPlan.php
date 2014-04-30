@@ -8,11 +8,14 @@ final class HarbormasterBuildPlan extends HarbormasterDAO
   protected $name;
   protected $planStatus;
 
+  const STATUS_ACTIVE   = 'active';
+  const STATUS_DISABLED = 'disabled';
+
   private $buildSteps = self::ATTACHABLE;
 
   public static function initializeNewBuildPlan(PhabricatorUser $actor) {
     return id(new HarbormasterBuildPlan())
-      ->setPlanStatus('active'); // TODO: Figure this out.
+      ->setPlanStatus(self::STATUS_ACTIVE);
   }
 
   public function getConfiguration() {
@@ -36,12 +39,37 @@ final class HarbormasterBuildPlan extends HarbormasterDAO
     return $this->assertAttached($this->buildSteps);
   }
 
+  /**
+   * Returns a standard, ordered list of build steps for this build plan.
+   *
+   * This method should be used to load build steps for a given build plan
+   * so that the ordering is consistent.
+   */
+  public function loadOrderedBuildSteps() {
+    return id(new HarbormasterBuildStepQuery())
+      ->setViewer(PhabricatorUser::getOmnipotentUser())
+      ->withBuildPlanPHIDs(array($this->getPHID()))
+      ->execute();
+  }
+
+  public function isDisabled() {
+    return ($this->getPlanStatus() == self::STATUS_DISABLED);
+  }
+
 
 /* -(  PhabricatorSubscribableInterface  )----------------------------------- */
 
 
   public function isAutomaticallySubscribed($phid) {
     return false;
+  }
+
+  public function shouldShowSubscribersProperty() {
+    return true;
+  }
+
+  public function shouldAllowSubscription($phid) {
+    return true;
   }
 
 

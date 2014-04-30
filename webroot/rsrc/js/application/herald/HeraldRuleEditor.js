@@ -1,11 +1,8 @@
 /**
  * @requires multirow-row-manager
  *           javelin-install
- *           javelin-typeahead
  *           javelin-util
  *           javelin-dom
- *           javelin-tokenizer
- *           javelin-typeahead-preloaded-source
  *           javelin-stratcom
  *           javelin-json
  *           phabricator-prefab
@@ -222,6 +219,8 @@ JX.install('HeraldRuleEditor', {
         case 'project':
         case 'userorproject':
         case 'buildplan':
+        case 'taskpriority':
+        case 'arcanistprojects':
           var tokenizer = this._newTokenizer(type);
           input = tokenizer[0];
           get_fn = tokenizer[1];
@@ -233,16 +232,13 @@ JX.install('HeraldRuleEditor', {
           set_fn = JX.bag;
           break;
         case 'contentsource':
-          input = this._renderSelect(this._config.template.contentSources);
-          get_fn = function() { return input.value; };
-          set_fn = function(v) { input.value = v; };
-          set_fn(this._config.template.defaultSource);
-          break;
         case 'flagcolor':
-          input = this._renderSelect(this._config.template.colors);
+        case 'value-ref-type':
+        case 'value-ref-change':
+          input = this._renderSelect(this._config.select[type].options);
           get_fn = function() { return input.value; };
           set_fn = function(v) { input.value = v; };
-          set_fn(this._config.template.defaultColor);
+          set_fn(this._config.select[type]['default']);
           break;
         default:
           input = JX.$N('input', {type: 'text'});
@@ -285,25 +281,24 @@ JX.install('HeraldRuleEditor', {
       template = template.firstChild;
       template.id = '';
 
-      var datasource = new JX.TypeaheadPreloadedSource(
-        this._config.template.source[type]);
+      var tokenizerConfig = {
+        root : template,
+        src : this._config.template.source[type],
+        icons : this._config.template.icons,
+        username : this._config.username
+      };
 
-      var typeahead = new JX.Typeahead(template);
-      typeahead.setDatasource(datasource);
-
-      var tokenizer = new JX.Tokenizer(template);
-      tokenizer.setLimit(limit);
-      tokenizer.setTypeahead(typeahead);
-      tokenizer.start();
+      var build = JX.Prefab.buildTokenizer(tokenizerConfig);
+      build.tokenizer.start();
 
       return [
         template,
         function() {
-          return tokenizer.getTokens();
+          return build.tokenizer.getTokens();
         },
         function(map) {
           for (var k in map) {
-            tokenizer.addToken(k, map[k]);
+            build.tokenizer.addToken(k, map[k]);
           }
         }];
     },

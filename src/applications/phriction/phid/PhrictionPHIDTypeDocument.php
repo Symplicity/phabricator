@@ -12,6 +12,10 @@ final class PhrictionPHIDTypeDocument extends PhabricatorPHIDType {
     return pht('Wiki Document');
   }
 
+  public function getPHIDTypeApplicationClass() {
+    return 'PhabricatorApplicationPhriction';
+  }
+
   public function newObject() {
     return new PhrictionDocument();
   }
@@ -44,10 +48,6 @@ final class PhrictionPHIDTypeDocument extends PhabricatorPHIDType {
         $handle->setStatus(PhabricatorObjectHandleStatus::STATUS_CLOSED);
       }
     }
-  }
-
-  public function canLoadNamedObject($name) {
-    return false;
   }
 
 }

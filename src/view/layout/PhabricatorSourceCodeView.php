@@ -61,6 +61,7 @@ final class PhabricatorSourceCodeView extends AphrontView {
           pht('...'));
       } else {
         $content_number = $line_number;
+        // NOTE: See phabricator-oncopy behavior.
         $content_line = hsprintf("\xE2\x80\x8B%s", $line);
       }
 

@@ -59,8 +59,8 @@ final class PhabricatorCoreConfigOptions
               "won't work. The major use case for this is moving installs ".
               "across domains."))
         ->addExample(
-          '["http://phabricator2.example.com/", '.
-            '"http://phabricator3.example.com/"]',
+          "http://phabricator2.example.com/\n".
+          "http://phabricator3.example.com/",
           pht('Valid Setting')),
       $this->newOption('phabricator.timezone', 'string', null)
         ->setSummary(
@@ -76,6 +76,16 @@ final class PhabricatorCoreConfigOptions
         ->addExample('America/Chicago', pht('US Central (CDT)'))
         ->addExample('America/Boise', pht('US Mountain (MDT)'))
         ->addExample('America/Los_Angeles', pht('US West (PDT)')),
+      $this->newOption('phabricator.cookie-prefix', 'string', null)
+        ->setSummary(
+          pht("Set a string Phabricator should use to prefix ".
+              "cookie names"))
+        ->setDescription(
+          pht(
+            "Cookies set for x.com are also sent for y.x.com. Assuming ".
+            "Phabricator instances are running on both domains, this will ".
+            "create a collision preventing you from logging in."))
+        ->addExample('dev', pht('Prefix cookie with "dev"')),
       $this->newOption('phabricator.show-beta-applications', 'bool', false)
         ->setBoolOptions(
           array(
@@ -102,11 +112,11 @@ final class PhabricatorCoreConfigOptions
           pht("Should Phabricator be serious?"))
         ->setDescription(
           pht(
-            "By default, Phabricator includes some silly nonsense in the UI, ".
-            "such as a submit button called 'Clowncopterize' in Differential ".
-            "and a call to 'Leap Into Action'. If you'd prefer more ".
-            "traditional UI strings like 'Submit', you can set this flag to ".
-            "disable most of the jokes and easter eggs.")),
+            'By default, Phabricator includes some flavor text in the UI, '.
+            'like a prompt to "Weigh In" rather than "Add Comment" in '.
+            'Maniphest. If you\'d prefer more traditional UI strings like '.
+            '"Add Comment", you can set this flag to disable most of the '.
+            'extra flavor.')),
        $this->newOption('environment.append-paths', 'list<string>', $paths)
         ->setSummary(
           pht("These paths get appended to your \$PATH envrionment variable."))
@@ -127,32 +137,6 @@ final class PhabricatorCoreConfigOptions
             "  %s", $path))
         ->addExample('/usr/local/bin', pht('Add One Path'))
         ->addExample("/usr/bin\n/usr/local/bin", pht('Add Multiple Paths')),
-       $this->newOption('tokenizer.ondemand', 'bool', false)
-        ->setBoolOptions(
-          array(
-            pht("Query on demand"),
-            pht("Query on page load"),
-          ))
-        ->setSummary(
-          pht("Query for tokenizer fields on demand."))
-        ->setDescription(
-          pht(
-            "Tokenizers are UI controls which let the user select other ".
-            "users, email addresses, project names, etc., by typing the ".
-            "first few letters and having the control autocomplete from a ".
-            "list. They can load their data in two ways: either in a big ".
-            "chunk up front, or as the user types. By default, the data is ".
-            "loaded in a big chunk. This is simpler and performs better for ".
-            "small datasets. However, if you have a very large number of ".
-            "users or projects, (in the ballpark of more than a thousand), ".
-            "loading all that data may become slow enough that it's ".
-            "worthwhile to query on demand instead. This makes the typeahead ".
-            "slightly less responsive but overall performance will be much ".
-            "better if you have a ton of stuff. You can figure out which ".
-            "setting is best for your install by changing this setting and ".
-            "then playing with a user tokenizer (like the user selectors in ".
-            "Maniphest or Differential) and seeing which setting loads ".
-            "faster and feels better.")),
       $this->newOption('config.lock', 'set', array())
         ->setLocked(true)
         ->setDescription(pht('Additional configuration options to lock.')),

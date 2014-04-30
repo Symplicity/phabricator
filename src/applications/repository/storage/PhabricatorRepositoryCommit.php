@@ -5,7 +5,9 @@ final class PhabricatorRepositoryCommit
   implements
     PhabricatorPolicyInterface,
     PhabricatorFlaggableInterface,
-    PhabricatorTokenReceiverInterface {
+    PhabricatorTokenReceiverInterface,
+    HarbormasterBuildableInterface,
+    PhabricatorCustomFieldInterface {
 
   protected $repositoryID;
   protected $phid;
@@ -23,9 +25,12 @@ final class PhabricatorRepositoryCommit
   const IMPORTED_HERALD = 8;
   const IMPORTED_ALL = 15;
 
+  const IMPORTED_CLOSEABLE = 1024;
+
   private $commitData = self::ATTACHABLE;
-  private $audits;
+  private $audits = self::ATTACHABLE;
   private $repository = self::ATTACHABLE;
+  private $customFields = self::ATTACHABLE;
 
   public function attachRepository(PhabricatorRepository $repository) {
     $this->repository = $repository;
@@ -41,7 +46,7 @@ final class PhabricatorRepositoryCommit
   }
 
   public function isImported() {
-    return ($this->getImportStatus() == self::IMPORTED_ALL);
+    return $this->isPartiallyImported(self::IMPORTED_ALL);
   }
 
   public function writeImportStatusFlag($flag) {
@@ -86,13 +91,39 @@ final class PhabricatorRepositoryCommit
   }
 
   public function attachAudits(array $audits) {
-    assert_instances_of($audits, 'PhabricatorAuditComment');
+    assert_instances_of($audits, 'PhabricatorRepositoryAuditRequest');
     $this->audits = $audits;
     return $this;
   }
 
   public function getAudits() {
-    return $this->audits;
+    return $this->assertAttached($this->audits);
+  }
+
+  public function getAuthorityAudits(
+    PhabricatorUser $user,
+    array $authority_phids) {
+
+    $authority = array_fill_keys($authority_phids, true);
+    $audits = $this->getAudits();
+    $authority_audits = array();
+    foreach ($audits as $audit) {
+      $has_authority = !empty($authority[$audit->getAuditorPHID()]);
+      if ($has_authority) {
+        $commit_author = $this->getAuthorPHID();
+
+        // You don't have authority over package and project audits on your
+        // own commits.
+
+        $auditor_is_user = ($audit->getAuditorPHID() == $user->getPHID());
+        $user_is_author = ($commit_author == $user->getPHID());
+
+        if ($auditor_is_user || !$user_is_author) {
+          $authority_audits[$audit->getID()] = $audit;
+        }
+      }
+    }
+    return $authority_audits;
   }
 
   public function save() {
@@ -123,6 +154,13 @@ final class PhabricatorRepositoryCommit
   public function getDateCreated() {
     // This is primarily to make analysis of commits with the Fact engine work.
     return $this->getEpoch();
+  }
+
+  public function getURI() {
+    $repository = $this->getRepository();
+    $callsign = $repository->getCallsign();
+    $commit_identifier = $this->getCommitIdentifier();
+    return '/r'.$callsign.$commit_identifier;
   }
 
   /**
@@ -231,4 +269,40 @@ final class PhabricatorRepositoryCommit
     return id(new PhabricatorRepositoryCommit())
       ->loadFromArray($dict);
   }
+
+
+/* -(  HarbormasterBuildableInterface  )------------------------------------- */
+
+
+  public function getHarbormasterBuildablePHID() {
+    return $this->getPHID();
+  }
+
+  public function getHarbormasterContainerPHID() {
+    return $this->getRepository()->getPHID();
+  }
+
+
+/* -(  PhabricatorCustomFieldInterface  )------------------------------------ */
+
+
+  public function getCustomFieldSpecificationForRole($role) {
+    // TODO: We could make this configurable eventually, but just use the
+    // defaults for now.
+    return array();
+  }
+
+  public function getCustomFieldBaseClass() {
+    return 'PhabricatorCommitCustomField';
+  }
+
+  public function getCustomFields() {
+    return $this->assertAttached($this->customFields);
+  }
+
+  public function attachCustomFields(PhabricatorCustomFieldAttachment $fields) {
+    $this->customFields = $fields;
+    return $this;
+  }
+
 }

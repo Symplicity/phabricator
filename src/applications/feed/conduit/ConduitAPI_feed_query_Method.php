@@ -95,7 +95,14 @@ final class ConduitAPI_feed_query_Method
 
         $data = null;
 
-        $view = $story->renderView();
+        try {
+          $view = $story->renderView();
+        } catch (Exception $ex) {
+          // When stories fail to render, just fail that story.
+          phlog($ex);
+          continue;
+        }
+
         $view->setEpoch($story->getEpoch());
         $view->setUser($user);
 
@@ -121,6 +128,7 @@ final class ConduitAPI_feed_query_Method
               'epoch' => $story_data->getEpoch(),
               'authorPHID' => $story_data->getAuthorPHID(),
               'chronologicalKey' => $story_data->getChronologicalKey(),
+              'objectPHID' => $story->getPrimaryObjectPHID(),
               'text' => $story->renderText()
             );
           break;

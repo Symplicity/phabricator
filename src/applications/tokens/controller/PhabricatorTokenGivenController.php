@@ -2,6 +2,10 @@
 
 final class PhabricatorTokenGivenController extends PhabricatorTokenController {
 
+  public function shouldAllowPublic() {
+    return true;
+  }
+
   public function processRequest() {
     $request = $this->getRequest();
     $user = $request->getUser();
@@ -60,9 +64,7 @@ final class PhabricatorTokenGivenController extends PhabricatorTokenController {
     $nav = $this->buildSideNav();
     $nav->setCrumbs(
       $this->buildApplicationCrumbs()
-        ->addCrumb(
-          id(new PhabricatorCrumbView())
-            ->setName($title)));
+        ->addTextCrumb($title));
     $nav->selectFilter('given/');
 
     $nav->appendChild($list);

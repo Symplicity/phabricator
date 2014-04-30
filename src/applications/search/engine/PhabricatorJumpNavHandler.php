@@ -4,7 +4,7 @@ final class PhabricatorJumpNavHandler {
 
   public static function getJumpResponse(PhabricatorUser $viewer, $jump) {
     $jump = trim($jump);
-    $help_href = PhabricatorEnv::getDocLink('article/Jump_Nav_User_Guide.html');
+    $help_href = PhabricatorEnv::getDocLink('Jump Nav User Guide');
 
     $patterns = array(
       '/^help/i'                  => 'uri:'.$help_href,
@@ -16,11 +16,10 @@ final class PhabricatorJumpNavHandler {
       '/^p$/i'                    => 'uri:/project/',
       '/^u$/i'                    => 'uri:/people/',
       '/^p\s+(.+)$/i'             => 'project',
-      '/^#(.+)$/i'                => 'project',
       '/^u\s+(\S+)$/i'            => 'user',
-      '/^@(.+)$/i'                => 'user',
       '/^task:\s*(.+)/i'          => 'create-task',
       '/^(?:s|symbol)\s+(\S+)/i'  => 'find-symbol',
+      '/^r\s+(.+)$/i'             => 'find-repository',
     );
 
     foreach ($patterns as $pattern => $effect) {
@@ -53,6 +52,20 @@ final class PhabricatorJumpNavHandler {
               }
               return id(new AphrontRedirectResponse())
                 ->setURI("/diffusion/symbol/$symbol/?jump=true$context");
+            case 'find-repository':
+              $name = $matches[1];
+              $repositories = id(new PhabricatorRepositoryQuery())
+                ->setViewer($viewer)
+                ->withNameContains($name)
+                ->execute();
+              if (count($repositories) == 1) {
+                // Just one match, jump to repository.
+                $uri = '/diffusion/'.head($repositories)->getCallsign().'/';
+              } else {
+                // More than one match, jump to search.
+                $uri = urisprintf('/diffusion/?order=name&name=%s', $name);
+              }
+              return id(new AphrontRedirectResponse())->setURI($uri);
             case 'create-task':
               return id(new AphrontRedirectResponse())
                 ->setURI('/maniphest/task/create/?title='

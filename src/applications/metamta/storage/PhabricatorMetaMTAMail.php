@@ -1,8 +1,6 @@
 <?php
 
 /**
- * See #394445 for an explanation of why this thing even exists.
- *
  * @task recipients   Managing Recipients
  */
 final class PhabricatorMetaMTAMail extends PhabricatorMetaMTADAO {
@@ -12,24 +10,20 @@ final class PhabricatorMetaMTAMail extends PhabricatorMetaMTADAO {
   const STATUS_FAIL  = 'fail';
   const STATUS_VOID  = 'void';
 
-  const MAX_RETRIES   = 250;
   const RETRY_DELAY   = 5;
 
   protected $parameters;
   protected $status;
   protected $message;
-  protected $retryCount;
-  protected $nextRetry;
   protected $relatedPHID;
 
   private $excludePHIDs = array();
   private $overrideNoSelfMail = false;
+  private $recipientExpansionMap;
 
   public function __construct() {
 
     $this->status     = self::STATUS_QUEUE;
-    $this->retryCount = 0;
-    $this->nextRetry  = time();
     $this->parameters = array();
 
     parent::__construct();
@@ -228,22 +222,13 @@ final class PhabricatorMetaMTAMail extends PhabricatorMetaMTADAO {
     return $this;
   }
 
-  public function getSimulatedFailureCount() {
-    return nonempty($this->getParam('simulated-failures'), 0);
-  }
-
-  public function setSimulatedFailureCount($count) {
-    $this->setParam('simulated-failures', $count);
+  public function setIsErrorEmail($is_error) {
+    $this->setParam('is-error', $is_error);
     return $this;
   }
 
-  public function getWorkerTaskID() {
-    return $this->getParam('worker-task');
-  }
-
-  public function setWorkerTaskID($id) {
-    $this->setParam('worker-task', $id);
-    return $this;
+  public function getIsErrorEmail() {
+    return $this->getParam('is-error', false);
   }
 
   public function getToPHIDs() {
@@ -289,40 +274,38 @@ final class PhabricatorMetaMTAMail extends PhabricatorMetaMTADAO {
   }
 
   /**
-   * Save a newly created mail to the database and attempt to send it
-   * immediately if the server is configured for immediate sends. When
-   * applications generate new mail they should generally use this method to
-   * deliver it. If the server doesn't use immediate sends, this has the same
-   * effect as calling save(): the mail will eventually be delivered by the
-   * MetaMTA daemon.
+   * Save a newly created mail to the database. The mail will eventually be
+   * delivered by the MetaMTA daemon.
    *
    * @return this
    */
   public function saveAndSend() {
-    $ret = null;
-
-    if (PhabricatorEnv::getEnvConfig('metamta.send-immediately')) {
-      $ret = $this->sendNow();
-    } else {
-      $ret = $this->save();
-    }
-
-    return $ret;
+    return $this->save();
   }
 
-  protected function didWriteData() {
-    parent::didWriteData();
+  public function save() {
+    if ($this->getID()) {
+      return parent::save();
+    }
 
-    if (!$this->getWorkerTaskID()) {
+    // NOTE: When mail is sent from CLI scripts that run tasks in-process, we
+    // may re-enter this method from within scheduleTask(). The implementation
+    // is intended to avoid anything awkward if we end up reentering this
+    // method.
+
+    $this->openTransaction();
+      // Save to generate a task ID.
+      $result = parent::save();
+
+      // Queue a task to send this mail.
       $mailer_task = PhabricatorWorker::scheduleTask(
         'PhabricatorMetaMTAWorker',
         $this->getID());
 
-      $this->setWorkerTaskID($mailer_task->getID());
-      $this->save();
-    }
-  }
+    $this->saveTransaction();
 
+    return $result;
+  }
 
   public function buildDefaultMailer() {
     return PhabricatorEnv::newObjectFromConfig('metamta.mail-adapter');
@@ -350,10 +333,6 @@ final class PhabricatorMetaMTAMail extends PhabricatorMetaMTADAO {
     if (!$force_send) {
       if ($this->getStatus() != self::STATUS_QUEUE) {
         throw new Exception("Trying to send an already-sent mail!");
-      }
-
-      if (time() < $this->getNextRetry()) {
-        throw new Exception("Trying to send an email before next retry!");
       }
     }
 
@@ -394,7 +373,7 @@ final class PhabricatorMetaMTAMail extends PhabricatorMetaMTADAO {
               PhabricatorEnv::getEnvConfig('metamta.can-send-as-user');
 
             if ($can_send_as_user) {
-              $mailer->setFrom($actor_email);
+              $mailer->setFrom($actor_email, $actor_name);
             } else {
               $from_email = coalesce($actor_email, $default_from);
               $from_name = coalesce($actor_name, pht('Phabricator'));
@@ -411,7 +390,8 @@ final class PhabricatorMetaMTAMail extends PhabricatorMetaMTADAO {
             $mailer->addReplyTo($value, $reply_to_name);
             break;
           case 'to':
-            $to_actors = array_select_keys($deliverable_actors, $value);
+            $to_phids = $this->expandRecipients($value);
+            $to_actors = array_select_keys($deliverable_actors, $to_phids);
             $add_to = array_merge(
               $add_to,
               mpull($to_actors, 'getEmailAddress'));
@@ -420,7 +400,8 @@ final class PhabricatorMetaMTAMail extends PhabricatorMetaMTADAO {
             $add_to = array_merge($add_to, $value);
             break;
           case 'cc':
-            $cc_actors = array_select_keys($deliverable_actors, $value);
+            $cc_phids = $this->expandRecipients($value);
+            $cc_actors = array_select_keys($deliverable_actors, $cc_phids);
             $add_cc = array_merge(
               $add_cc,
               mpull($cc_actors, 'getEmailAddress'));
@@ -578,6 +559,19 @@ final class PhabricatorMetaMTAMail extends PhabricatorMetaMTADAO {
         return $this->save();
       }
 
+      if ($this->getIsErrorEmail()) {
+        $all_recipients = array_merge($add_to, $add_cc);
+        if ($this->shouldRateLimitMail($all_recipients)) {
+          $this->setStatus(self::STATUS_VOID);
+          $this->setMessage(
+            pht(
+              'This is an error email, but one or more recipients have '.
+              'exceeded the error email rate limit. Declining to deliver '.
+              'message.'));
+          return $this->save();
+        }
+      }
+
       $mailer->addHeader('X-Phabricator-Sent-This-Message', 'Yes');
       $mailer->addHeader('X-Mail-Transport-Agent', 'MetaMTA');
 
@@ -618,42 +612,41 @@ final class PhabricatorMetaMTAMail extends PhabricatorMetaMTADAO {
         $mailer->addCCs($add_cc);
       }
     } catch (Exception $ex) {
-      $this->setStatus(self::STATUS_FAIL);
-      $this->setMessage($ex->getMessage());
-      return $this->save();
+      $this
+        ->setStatus(self::STATUS_FAIL)
+        ->setMessage($ex->getMessage())
+        ->save();
+
+      throw $ex;
     }
 
-    if ($this->getRetryCount() < $this->getSimulatedFailureCount()) {
-      $ok = false;
-      $error = 'Simulated failure.';
-    } else {
-      try {
-        $ok = $mailer->send();
-        $error = null;
-      } catch (PhabricatorMetaMTAPermanentFailureException $ex) {
-        $this->setStatus(self::STATUS_FAIL);
-        $this->setMessage($ex->getMessage());
-        return $this->save();
-      } catch (Exception $ex) {
-        $ok = false;
-        $error = $ex->getMessage()."\n".$ex->getTraceAsString();
+    try {
+      $ok = $mailer->send();
+      if (!$ok) {
+        // TODO: At some point, we should clean this up and make all mailers
+        // throw.
+        throw new Exception(
+          pht('Mail adapter encountered an unexpected, unspecified failure.'));
       }
-    }
 
-    if (!$ok) {
-      $this->setMessage($error);
-      if ($this->getRetryCount() > self::MAX_RETRIES) {
-        $this->setStatus(self::STATUS_FAIL);
-      } else {
-        $this->setRetryCount($this->getRetryCount() + 1);
-        $next_retry = time() + ($this->getRetryCount() * self::RETRY_DELAY);
-        $this->setNextRetry($next_retry);
-      }
-    } else {
       $this->setStatus(self::STATUS_SENT);
-    }
+      $this->save();
 
-    return $this->save();
+      return $this;
+    } catch (PhabricatorMetaMTAPermanentFailureException $ex) {
+      $this
+        ->setStatus(self::STATUS_FAIL)
+        ->setMessage($ex->getMessage())
+        ->save();
+
+      throw $ex;
+    } catch (Exception $ex) {
+      $this
+        ->setMessage($ex->getMessage()."\n".$ex->getTraceAsString())
+        ->save();
+
+      throw $ex;
+    }
   }
 
   public static function getReadableStatus($status_code) {
@@ -729,7 +722,52 @@ final class PhabricatorMetaMTAMail extends PhabricatorMetaMTADAO {
       $this->getToPHIDs(),
       $this->getCcPHIDs());
 
+    $this->loadRecipientExpansions($actor_phids);
+    $actor_phids = $this->expandRecipients($actor_phids);
+
     return $this->loadActors($actor_phids);
+  }
+
+  private function loadRecipientExpansions(array $phids) {
+    $expansions = id(new PhabricatorMetaMTAMemberQuery())
+      ->setViewer(PhabricatorUser::getOmnipotentUser())
+      ->withPHIDs($phids)
+      ->execute();
+
+    $this->recipientExpansionMap = $expansions;
+
+    return $this;
+  }
+
+  /**
+   * Expand a list of recipient PHIDs (possibly including aggregate recipients
+   * like projects) into a deaggregated list of individual recipient PHIDs.
+   * For example, this will expand project PHIDs into a list of the project's
+   * members.
+   *
+   * @param list<phid>  List of recipient PHIDs, possibly including aggregate
+   *                    recipients.
+   * @return list<phid> Deaggregated list of mailable recipients.
+   */
+  private function expandRecipients(array $phids) {
+    if ($this->recipientExpansionMap === null) {
+      throw new Exception(
+        pht(
+          'Call loadRecipientExpansions() before expandRecipients()!'));
+    }
+
+    $results = array();
+    foreach ($phids as $phid) {
+      if (!isset($this->recipientExpansionMap[$phid])) {
+        $results[$phid] = $phid;
+      } else {
+        foreach ($this->recipientExpansionMap[$phid] as $recipient_phid) {
+          $results[$recipient_phid] = $recipient_phid;
+        }
+      }
+    }
+
+    return array_keys($results);
   }
 
   private function filterDeliverableActors(array $actors) {
@@ -833,6 +871,18 @@ final class PhabricatorMetaMTAMail extends PhabricatorMetaMTADAO {
     }
 
     return $actors;
+  }
+
+  private function shouldRateLimitMail(array $all_recipients) {
+    try {
+      PhabricatorSystemActionEngine::willTakeAction(
+        $all_recipients,
+        new PhabricatorMetaMTAErrorMailAction(),
+        1);
+      return false;
+    } catch (PhabricatorSystemActionRateLimitException $ex) {
+      return true;
+    }
   }
 
 

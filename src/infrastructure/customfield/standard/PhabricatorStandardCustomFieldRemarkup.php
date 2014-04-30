@@ -7,7 +7,7 @@ final class PhabricatorStandardCustomFieldRemarkup
     return 'remarkup';
   }
 
-  public function renderEditControl() {
+  public function renderEditControl(array $handles) {
     return id(new PhabricatorRemarkupControl())
       ->setLabel($this->getFieldName())
       ->setName($this->getFieldKey())
@@ -19,7 +19,7 @@ final class PhabricatorStandardCustomFieldRemarkup
     return 'block';
   }
 
-  public function renderPropertyViewValue() {
+  public function renderPropertyViewValue(array $handles) {
     $value = $this->getFieldValue();
 
     if (!strlen($value)) {
@@ -47,6 +47,20 @@ final class PhabricatorStandardCustomFieldRemarkup
       '%s edited %s.',
       $xaction->renderHandleLink($author_phid),
       $this->getFieldName());
+  }
+
+  public function shouldAppearInHerald() {
+    return true;
+  }
+
+  public function getHeraldFieldConditions() {
+    return array(
+      HeraldAdapter::CONDITION_CONTAINS,
+      HeraldAdapter::CONDITION_NOT_CONTAINS,
+      HeraldAdapter::CONDITION_IS,
+      HeraldAdapter::CONDITION_IS_NOT,
+      HeraldAdapter::CONDITION_REGEXP,
+    );
   }
 
 

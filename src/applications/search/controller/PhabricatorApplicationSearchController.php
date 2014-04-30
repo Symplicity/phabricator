@@ -7,6 +7,16 @@ final class PhabricatorApplicationSearchController
   private $navigation;
   private $queryKey;
   private $preface;
+  private $useOffsetPaging;
+
+  public function setUseOffsetPaging($use_offset_paging) {
+    $this->useOffsetPaging = $use_offset_paging;
+    return $this;
+  }
+
+  public function getUseOffsetPaging() {
+    return $this->useOffsetPaging;
+  }
 
   public function setPreface($preface) {
     $this->preface = $preface;
@@ -107,11 +117,24 @@ final class PhabricatorApplicationSearchController
       $run_query = false;
       $query_key = $request->getStr('query');
     } else if (!strlen($this->queryKey)) {
-      if ($request->isHTTPGet() && $request->getPassthroughRequestData()) {
+      $found_query_data = false;
+
+      if ($request->isHTTPGet()) {
         // If this is a GET request and it has some query data, don't
-        // do anything. We'll build and execute a query from it below.
-        // This allows external tools to build URIs like "/query/?users=a,b".
-      } else {
+        // do anything unless it's only before= or after=. We'll build and
+        // execute a query from it below. This allows external tools to build
+        // URIs like "/query/?users=a,b".
+        $pt_data = $request->getPassthroughRequestData();
+
+        foreach ($pt_data as $pt_key => $pt_value) {
+          if ($pt_key != 'before' && $pt_key != 'after') {
+            $found_query_data = true;
+            break;
+          }
+        }
+      }
+
+      if (!$found_query_data) {
         // Otherwise, there's no query data so just run the user's default
         // query for this application.
         $query_key = head_key($engine->loadEnabledNamedQueries());
@@ -134,6 +157,10 @@ final class PhabricatorApplicationSearchController
       $named_query = idx($engine->loadEnabledNamedQueries(), $query_key);
     } else {
       $saved_query = $engine->buildSavedQueryFromRequest($request);
+
+      // Save the query to generate a query key, so "Save Custom Query..." and
+      // other features like Maniphest's "Export..." work correctly.
+      $this->saveQuery($saved_query);
     }
 
     $nav->selectFilter(
@@ -196,7 +223,12 @@ final class PhabricatorApplicationSearchController
 
       $query = $engine->buildQueryFromSavedQuery($saved_query);
 
-      $pager = new AphrontCursorPagerView();
+      $use_offset_paging = $this->getUseOffsetPaging();
+      if ($use_offset_paging) {
+        $pager = new AphrontPagerView();
+      } else {
+        $pager = new AphrontCursorPagerView();
+      }
       $pager->readFromRequest($request);
       $page_size = $engine->getPageSize($saved_query);
       if (is_finite($page_size)) {
@@ -208,8 +240,14 @@ final class PhabricatorApplicationSearchController
         // with INF seems to vary across PHP versions, systems, and runtimes.
         $pager->setPageSize(0xFFFF);
       }
-      $objects = $query->setViewer($request->getUser())
-        ->executeWithCursorPager($pager);
+
+      $query->setViewer($request->getUser());
+
+      if ($use_offset_paging) {
+        $objects = $query->executeWithOffsetPager($pager);
+      } else {
+        $objects = $query->executeWithCursorPager($pager);
+      }
 
       $list = $parent->renderResultsList($objects, $saved_query);
 
@@ -224,7 +262,7 @@ final class PhabricatorApplicationSearchController
           $pager_box = id(new PHUIBoxView())
             ->addPadding(PHUI::PADDING_MEDIUM)
             ->addMargin(PHUI::MARGIN_LARGE)
-            ->setShadow(true)
+            ->setBorder(true)
             ->appendChild($pager);
           $nav->appendChild($pager_box);
         }
@@ -243,9 +281,7 @@ final class PhabricatorApplicationSearchController
 
     $crumbs = $parent
       ->buildApplicationCrumbs()
-      ->addCrumb(
-        id(new PhabricatorCrumbView())
-          ->setName(pht("Search")));
+      ->addTextCrumb($title);
 
     $nav->setCrumbs($crumbs);
 
@@ -327,10 +363,7 @@ final class PhabricatorApplicationSearchController
 
     $crumbs = $parent
       ->buildApplicationCrumbs()
-      ->addCrumb(
-        id(new PhabricatorCrumbView())
-          ->setName(pht("Saved Queries"))
-          ->setHref($engine->getQueryManagementURI()));
+      ->addTextCrumb(pht("Saved Queries"), $engine->getQueryManagementURI());
 
     $nav->selectFilter('query/edit');
     $nav->setCrumbs($crumbs);

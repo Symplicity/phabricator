@@ -32,6 +32,11 @@ final class PassphraseCredentialEditController extends PassphraseController {
         throw new Exception(pht('Credential has invalid type "%s"!', $type));
       }
 
+      if (!$type->isCreateable()) {
+        throw new Exception(
+          pht('Credential has noncreateable type "%s"!', $type));
+      }
+
       $is_new = false;
     } else {
       $type_const = $request->getStr('type');
@@ -48,6 +53,10 @@ final class PassphraseCredentialEditController extends PassphraseController {
 
       // Prefill username if provided.
       $credential->setUsername($request->getStr('username'));
+
+      if (!$request->getStr('isInitialized')) {
+        $type->didInitializeNewCredential($viewer, $credential);
+      }
     }
 
     $errors = array();
@@ -63,95 +72,135 @@ final class PassphraseCredentialEditController extends PassphraseController {
     $bullet = "\xE2\x80\xA2";
 
     $v_secret = $credential->getSecretID() ? str_repeat($bullet, 32) : null;
+    if ($is_new && ($v_secret === null)) {
+      // If we're creating a new credential, the credential type may have
+      // populated the secret for us (for example, generated an SSH key). In
+      // this case,
+      try {
+        $v_secret = $credential->getSecret()->openEnvelope();
+      } catch (Exception $ex) {
+        // Ignore this.
+      }
+    }
 
     $validation_exception = null;
+    $errors = array();
+    $e_password = null;
     if ($request->isFormPost()) {
+
       $v_name = $request->getStr('name');
       $v_desc = $request->getStr('description');
       $v_username = $request->getStr('username');
-      $v_secret = $request->getStr('secret');
       $v_view_policy = $request->getStr('viewPolicy');
       $v_edit_policy = $request->getStr('editPolicy');
 
-      $type_name = PassphraseCredentialTransaction::TYPE_NAME;
-      $type_desc = PassphraseCredentialTransaction::TYPE_DESCRIPTION;
-      $type_username = PassphraseCredentialTransaction::TYPE_USERNAME;
-      $type_destroy = PassphraseCredentialTransaction::TYPE_DESTROY;
-      $type_secret_id = PassphraseCredentialTransaction::TYPE_SECRET_ID;
-      $type_view_policy = PhabricatorTransactions::TYPE_VIEW_POLICY;
-      $type_edit_policy = PhabricatorTransactions::TYPE_EDIT_POLICY;
+      $v_secret = $request->getStr('secret');
+      $v_password = $request->getStr('password');
+      $v_decrypt = $v_secret;
 
-      $xactions = array();
+      $env_secret = new PhutilOpaqueEnvelope($v_secret);
+      $env_password = new PhutilOpaqueEnvelope($v_password);
 
-      $xactions[] = id(new PassphraseCredentialTransaction())
-        ->setTransactionType($type_name)
-        ->setNewValue($v_name);
-
-      $xactions[] = id(new PassphraseCredentialTransaction())
-        ->setTransactionType($type_desc)
-        ->setNewValue($v_desc);
-
-      $xactions[] = id(new PassphraseCredentialTransaction())
-        ->setTransactionType($type_username)
-        ->setNewValue($v_username);
-
-      $xactions[] = id(new PassphraseCredentialTransaction())
-        ->setTransactionType($type_view_policy)
-        ->setNewValue($v_view_policy);
-
-      $xactions[] = id(new PassphraseCredentialTransaction())
-        ->setTransactionType($type_edit_policy)
-        ->setNewValue($v_edit_policy);
-
-      // Open a transaction in case we're writing a new secret; this limits
-      // the amount of code which handles secret plaintexts.
-      $credential->openTransaction();
-
-      $min_secret = str_replace($bullet, '', trim($v_secret));
-      if (strlen($min_secret)) {
-        // If the credential was previously destroyed, restore it when it is
-        // edited if a secret is provided.
-        $xactions[] = id(new PassphraseCredentialTransaction())
-          ->setTransactionType($type_destroy)
-          ->setNewValue(0);
-
-        $new_secret = id(new PassphraseSecret())
-          ->setSecretData($v_secret)
-          ->save();
-        $xactions[] = id(new PassphraseCredentialTransaction())
-          ->setTransactionType($type_secret_id)
-          ->setNewValue($new_secret->getID());
+      if ($type->requiresPassword($env_secret)) {
+        if (strlen($v_password)) {
+          $v_decrypt = $type->decryptSecret($env_secret, $env_password);
+          if ($v_decrypt === null) {
+            $e_password = pht('Incorrect');
+            $errors[] = pht(
+              'This key requires a password, but the password you provided '.
+              'is incorrect.');
+          } else {
+            $v_decrypt = $v_decrypt->openEnvelope();
+          }
+        } else {
+          $e_password = pht('Required');
+          $errors[] = pht(
+            'This key requires a password. You must provide the password '.
+            'for the key.');
+        }
       }
 
-      try {
-        $editor = id(new PassphraseCredentialTransactionEditor())
-          ->setActor($viewer)
-          ->setContinueOnNoEffect(true)
-          ->setContentSourceFromRequest($request)
-          ->applyTransactions($credential, $xactions);
+      if (!$errors) {
+        $type_name = PassphraseCredentialTransaction::TYPE_NAME;
+        $type_desc = PassphraseCredentialTransaction::TYPE_DESCRIPTION;
+        $type_username = PassphraseCredentialTransaction::TYPE_USERNAME;
+        $type_destroy = PassphraseCredentialTransaction::TYPE_DESTROY;
+        $type_secret_id = PassphraseCredentialTransaction::TYPE_SECRET_ID;
+        $type_view_policy = PhabricatorTransactions::TYPE_VIEW_POLICY;
+        $type_edit_policy = PhabricatorTransactions::TYPE_EDIT_POLICY;
 
-        $credential->saveTransaction();
+        $xactions = array();
 
-        if ($request->isAjax()) {
-          return id(new AphrontAjaxResponse())->setContent(
-            array(
-              'phid' => $credential->getPHID(),
-              'name' => 'K'.$credential->getID().' '.$credential->getName(),
-            ));
-        } else {
-          return id(new AphrontRedirectResponse())
-            ->setURI('/K'.$credential->getID());
+        $xactions[] = id(new PassphraseCredentialTransaction())
+          ->setTransactionType($type_name)
+          ->setNewValue($v_name);
+
+        $xactions[] = id(new PassphraseCredentialTransaction())
+          ->setTransactionType($type_desc)
+          ->setNewValue($v_desc);
+
+        $xactions[] = id(new PassphraseCredentialTransaction())
+          ->setTransactionType($type_username)
+          ->setNewValue($v_username);
+
+        $xactions[] = id(new PassphraseCredentialTransaction())
+          ->setTransactionType($type_view_policy)
+          ->setNewValue($v_view_policy);
+
+        $xactions[] = id(new PassphraseCredentialTransaction())
+          ->setTransactionType($type_edit_policy)
+          ->setNewValue($v_edit_policy);
+
+        // Open a transaction in case we're writing a new secret; this limits
+        // the amount of code which handles secret plaintexts.
+        $credential->openTransaction();
+
+        $min_secret = str_replace($bullet, '', trim($v_decrypt));
+        if (strlen($min_secret)) {
+          // If the credential was previously destroyed, restore it when it is
+          // edited if a secret is provided.
+          $xactions[] = id(new PassphraseCredentialTransaction())
+            ->setTransactionType($type_destroy)
+            ->setNewValue(0);
+
+          $new_secret = id(new PassphraseSecret())
+            ->setSecretData($v_decrypt)
+            ->save();
+          $xactions[] = id(new PassphraseCredentialTransaction())
+            ->setTransactionType($type_secret_id)
+            ->setNewValue($new_secret->getID());
         }
-      } catch (PhabricatorApplicationTransactionValidationException $ex) {
-        $credential->killTransaction();
 
-        $validation_exception = $ex;
+        try {
+          $editor = id(new PassphraseCredentialTransactionEditor())
+            ->setActor($viewer)
+            ->setContinueOnNoEffect(true)
+            ->setContentSourceFromRequest($request)
+            ->applyTransactions($credential, $xactions);
 
-        $e_name = $ex->getShortMessage($type_name);
-        $e_username = $ex->getShortMessage($type_username);
+          $credential->saveTransaction();
 
-        $credential->setViewPolicy($v_view_policy);
-        $credential->setEditPolicy($v_edit_policy);
+          if ($request->isAjax()) {
+            return id(new AphrontAjaxResponse())->setContent(
+              array(
+                'phid' => $credential->getPHID(),
+                'name' => 'K'.$credential->getID().' '.$credential->getName(),
+              ));
+          } else {
+            return id(new AphrontRedirectResponse())
+              ->setURI('/K'.$credential->getID());
+          }
+        } catch (PhabricatorApplicationTransactionValidationException $ex) {
+          $credential->killTransaction();
+
+          $validation_exception = $ex;
+
+          $e_name = $ex->getShortMessage($type_name);
+          $e_username = $ex->getShortMessage($type_username);
+
+          $credential->setViewPolicy($v_view_policy);
+          $credential->setEditPolicy($v_edit_policy);
+        }
       }
     }
 
@@ -162,14 +211,9 @@ final class PassphraseCredentialEditController extends PassphraseController {
 
     $secret_control = $type->newSecretControl();
 
-    if ($request->isAjax()) {
-      $form = new PHUIFormLayoutView();
-    } else {
-      $form = id(new AphrontFormView())
-        ->setUser($viewer);
-    }
-
-    $form
+    $form = id(new AphrontFormView())
+      ->setUser($viewer)
+      ->addHiddenInput('isInitialized', true)
       ->appendChild(
         id(new AphrontFormTextControl())
           ->setName('name')
@@ -214,34 +258,44 @@ final class PassphraseCredentialEditController extends PassphraseController {
           ->setLabel($type->getSecretLabel())
           ->setValue($v_secret));
 
+    if ($type->shouldShowPasswordField()) {
+      $form->appendChild(
+        id(new AphrontFormPasswordControl())
+          ->setName('password')
+          ->setLabel($type->getPasswordLabel())
+          ->setError($e_password));
+    }
+
     $crumbs = $this->buildApplicationCrumbs();
 
     if ($is_new) {
       $title = pht('Create Credential');
       $header = pht('Create New Credential');
-      $crumbs->addCrumb(
-        id(new PhabricatorCrumbView())
-          ->setName(pht('Create')));
+      $crumbs->addTextCrumb(pht('Create'));
+      $cancel_uri = $this->getApplicationURI();
     } else {
       $title = pht('Edit Credential');
       $header = pht('Edit Credential %s', 'K'.$credential->getID());
-      $crumbs->addCrumb(
-        id(new PhabricatorCrumbView())
-          ->setName('K'.$credential->getID())
-          ->setHref('/K'.$credential->getID()));
-      $crumbs->addCrumb(
-        id(new PhabricatorCrumbView())
-          ->setName(pht('Edit')));
+      $crumbs->addTextCrumb(
+        'K'.$credential->getID(),
+        '/K'.$credential->getID());
+      $crumbs->addTextCrumb(pht('Edit'));
+      $cancel_uri = '/K'.$credential->getID();
     }
 
     if ($request->isAjax()) {
+      if ($errors) {
+        $errors = id(new AphrontErrorView())->setErrors($errors);
+      }
+
       $dialog = id(new AphrontDialogView())
         ->setUser($viewer)
         ->setWidth(AphrontDialogView::WIDTH_FORM)
         ->setTitle($title)
-        ->appendChild($form)
+        ->appendChild($errors)
+        ->appendChild($form->buildLayoutView())
         ->addSubmitButton(pht('Create Credential'))
-        ->addCancelButton($this->getApplicationURI());
+        ->addCancelButton($cancel_uri);
 
       return id(new AphrontDialogResponse())->setDialog($dialog);
     }
@@ -249,10 +303,11 @@ final class PassphraseCredentialEditController extends PassphraseController {
     $form->appendChild(
       id(new AphrontFormSubmitControl())
         ->setValue(pht('Save'))
-        ->addCancelButton($this->getApplicationURI()));
+        ->addCancelButton($cancel_uri));
 
     $box = id(new PHUIObjectBoxView())
       ->setHeaderText($header)
+      ->setFormErrors($errors)
       ->setValidationException($validation_exception)
       ->setForm($form);
 

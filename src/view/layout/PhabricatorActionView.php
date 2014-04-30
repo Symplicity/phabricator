@@ -11,6 +11,7 @@ final class PhabricatorActionView extends AphrontView {
   private $renderAsForm;
   private $download;
   private $objectURI;
+  private $sigils = array();
 
   public function setObjectURI($object_uri) {
     $this->objectURI = $object_uri;
@@ -34,13 +35,18 @@ final class PhabricatorActionView extends AphrontView {
     return $this;
   }
 
+  public function addSigil($sigil) {
+    $this->sigils[] = $sigil;
+    return $this;
+  }
+
   /**
    * If the user is not logged in and the action is relatively complicated,
    * give them a generic login link that will re-direct to the page they're
    * viewing.
    */
   public function getHref() {
-    if ($this->workflow || $this->renderAsForm) {
+    if (($this->workflow || $this->renderAsForm) && !$this->download) {
       if (!$this->user || !$this->user->isLoggedIn()) {
         return id(new PhutilURI('/auth/start/'))
           ->setQueryParam('next', (string)$this->getObjectURI());
@@ -98,6 +104,21 @@ final class PhabricatorActionView extends AphrontView {
     }
 
     if ($this->href) {
+
+      $sigils = array();
+      if ($this->workflow) {
+        $sigils[] = 'workflow';
+      }
+      if ($this->download) {
+        $sigils[] = 'download';
+      }
+
+      if ($this->sigils) {
+        $sigils = array_merge($sigils, $this->sigils);
+      }
+
+      $sigils = $sigils ? implode(' ', $sigils) : null;
+
       if ($this->renderAsForm) {
         if (!$this->user) {
           throw new Exception(
@@ -111,20 +132,12 @@ final class PhabricatorActionView extends AphrontView {
           ),
           $this->name);
 
-        $sigils = array();
-        if ($this->workflow) {
-          $sigils[] = 'workflow';
-        }
-        if ($this->download) {
-          $sigils[] = 'download';
-        }
-
         $item = phabricator_form(
           $this->user,
           array(
             'action'    => $this->getHref(),
             'method'    => 'POST',
-            'sigil'     => implode(' ', $sigils),
+            'sigil'     => $sigils,
           ),
           $item);
       } else {
@@ -133,7 +146,7 @@ final class PhabricatorActionView extends AphrontView {
           array(
             'href'  => $this->getHref(),
             'class' => 'phabricator-action-view-item',
-            'sigil' => $this->workflow ? 'workflow' : null,
+            'sigil' => $sigils,
           ),
           $this->name);
       }

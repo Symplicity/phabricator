@@ -7,6 +7,28 @@ final class PhabricatorRepositoryCommitOwnersWorker
     PhabricatorRepository $repository,
     PhabricatorRepositoryCommit $commit) {
 
+    $this->triggerOwnerAudits($repository, $commit);
+
+    $commit->writeImportStatusFlag(
+      PhabricatorRepositoryCommit::IMPORTED_OWNERS);
+
+    if ($this->shouldQueueFollowupTasks()) {
+      $this->queueTask(
+        'PhabricatorRepositoryCommitHeraldWorker',
+        array(
+          'commitID' => $commit->getID(),
+        ));
+    }
+  }
+
+  private function triggerOwnerAudits(
+    PhabricatorRepository $repository,
+    PhabricatorRepositoryCommit $commit) {
+
+    if ($repository->getDetail('herald-disabled')) {
+      return;
+    }
+
     $affected_paths = PhabricatorOwnerPathQuery::loadAffectedPaths(
       $repository,
       $commit,
@@ -57,17 +79,6 @@ final class PhabricatorRepositoryCommitOwnersWorker
       $commit->updateAuditStatus($requests);
       $commit->save();
     }
-
-    $commit->writeImportStatusFlag(
-      PhabricatorRepositoryCommit::IMPORTED_OWNERS);
-
-    if ($this->shouldQueueFollowupTasks()) {
-      PhabricatorWorker::scheduleTask(
-        'PhabricatorRepositoryCommitHeraldWorker',
-        array(
-          'commitID' => $commit->getID(),
-        ));
-    }
   }
 
   private function checkAuditReasons(
@@ -100,15 +111,10 @@ final class PhabricatorRepositoryCommitOwnersWorker
       $revision = id(new DifferentialRevision())->load($revision_id);
       if ($revision) {
         $revision_author_phid = $revision->getAuthorPHID();
-        $revision_reviewedby_phid = $revision->loadReviewedBy();
         $commit_reviewedby_phid = $data->getCommitDetail('reviewerPHID');
         if ($revision_author_phid !== $commit_author_phid) {
           $reasons[] = "Author Not Matching with Revision";
         }
-        if ($revision_reviewedby_phid !== $commit_reviewedby_phid) {
-          $reasons[] = "ReviewedBy Not Matching with Revision";
-        }
-
       } else {
         $reasons[] = "Revision Not Found";
       }

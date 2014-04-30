@@ -1,30 +1,34 @@
 <?php
 
 final class PhabricatorAuthProviderOAuthGoogle
-  extends PhabricatorAuthProviderOAuth {
+  extends PhabricatorAuthProviderOAuth2 {
 
   public function getProviderName() {
     return pht('Google');
   }
 
-  public function getConfigurationHelp() {
-    $login_uri = $this->getLoginURI();
+  protected function getProviderConfigurationHelp() {
+    $login_uri = PhabricatorEnv::getURI($this->getLoginURI());
 
     return pht(
       "To configure Google OAuth, create a new 'API Project' here:".
       "\n\n".
-      "https://code.google.com/apis/console/".
+      "https://console.developers.google.com/".
       "\n\n".
-      "You don't need to enable any Services, just go to **API Access**, ".
-      "click **Create an OAuth 2.0 client ID...**, and configure these ".
-      "settings:".
+      "Adjust these configuration settings for your project:".
       "\n\n".
-      "  - During initial setup click **More Options** (or after creating ".
-      "    the client ID, click **Edit Settings...**), then add this to ".
-      "    **Authorized Redirect URIs**: `%s`\n".
+      "  - Under **APIs & auth > APIs**, scroll down the list and enable ".
+      "    the **Google+ API**.\n".
+      "     - You will need to consent to the **Google+ API** terms if you ".
+      " have not before.\n".
+      "  - Under **APIs & auth > Credentials**, click **Create New Client".
+      "    ID** in the **OAuth** section. Then use these settings:\n".
+      "     - **Application Type**: Web Application\n".
+      "     - **Authorized Javascript origins**: Leave this empty.\n".
+      "     - **Authorized redirect URI**: Set this to `%s`.\n".
       "\n\n".
       "After completing configuration, copy the **Client ID** and ".
-      "**Client Secret** to the fields above.",
+      "**Client Secret** from the Google console to the fields above.",
       $login_uri);
   }
 
@@ -38,7 +42,7 @@ final class PhabricatorAuthProviderOAuthGoogle
 
   public function getLoginURI() {
     // TODO: Clean this up. See PhabricatorAuthOldOAuthRedirectController.
-    return PhabricatorEnv::getURI('/oauth/google/login/');
+    return '/oauth/google/login/';
   }
 
 }

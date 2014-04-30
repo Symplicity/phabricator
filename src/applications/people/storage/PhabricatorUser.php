@@ -32,12 +32,17 @@ final class PhabricatorUser
   protected $isEmailVerified = 0;
   protected $isApproved = 0;
 
-  private $profileImage = null;
+  protected $accountSecret;
+
+  private $profileImage = self::ATTACHABLE;
   private $profile = null;
   private $status = self::ATTACHABLE;
   private $preferences = null;
   private $omnipotent = false;
   private $customFields = self::ATTACHABLE;
+
+  private $alternateCSRFString = self::ATTACHABLE;
+  private $session = self::ATTACHABLE;
 
   protected function readField($field) {
     switch ($field) {
@@ -88,6 +93,18 @@ final class PhabricatorUser
     return true;
   }
 
+  /**
+   * Returns `true` if this is a standard user who is logged in. Returns `false`
+   * for logged out, anonymous, or external users.
+   *
+   * @return bool `true` if the user is a standard user who is logged in with
+   *              a normal session.
+   */
+  public function getIsStandardUser() {
+    $type_user = PhabricatorPeoplePHIDTypeUser::TYPECONST;
+    return $this->getPHID() && (phid_get_type($this->getPHID()) == $type_user);
+  }
+
   public function getConfiguration() {
     return array(
       self::CONFIG_AUX_PHID => true,
@@ -110,9 +127,9 @@ final class PhabricatorUser
     if (!strlen($envelope->openEnvelope())) {
       $this->setPasswordHash('');
     } else {
-      $this->setPasswordSalt(md5(mt_rand()));
+      $this->setPasswordSalt(md5(Filesystem::readRandomBytes(32)));
       $hash = $this->hashPassword($envelope);
-      $this->setPasswordHash($hash);
+      $this->setPasswordHash($hash->openEnvelope());
     }
     return $this;
   }
@@ -143,6 +160,11 @@ final class PhabricatorUser
     if (!$this->getConduitCertificate()) {
       $this->setConduitCertificate($this->generateConduitCertificate());
     }
+
+    if (!strlen($this->getAccountSecret())) {
+      $this->setAccountSecret(Filesystem::readRandomCharacters(64));
+    }
+
     $result = parent::save();
 
     if ($this->profile) {
@@ -152,9 +174,22 @@ final class PhabricatorUser
     $this->updateNameTokens();
 
     id(new PhabricatorSearchIndexer())
-      ->indexDocumentByPHID($this->getPHID());
+      ->queueDocumentForIndexing($this->getPHID());
 
     return $result;
+  }
+
+  public function attachSession(PhabricatorAuthSession $session) {
+    $this->session = $session;
+    return $this;
+  }
+
+  public function getSession() {
+    return $this->assertAttached($this->session);
+  }
+
+  public function hasSession() {
+    return ($this->session !== self::ATTACHABLE);
   }
 
   private function generateConduitCertificate() {
@@ -168,19 +203,27 @@ final class PhabricatorUser
     if (!strlen($this->getPasswordHash())) {
       return false;
     }
-    $password_hash = $this->hashPassword($envelope);
-    return ($password_hash === $this->getPasswordHash());
+
+    return PhabricatorPasswordHasher::comparePassword(
+      $this->getPasswordHashInput($envelope),
+      new PhutilOpaqueEnvelope($this->getPasswordHash()));
   }
 
-  private function hashPassword(PhutilOpaqueEnvelope $envelope) {
-    $hash = $this->getUsername().
-            $envelope->openEnvelope().
-            $this->getPHID().
-            $this->getPasswordSalt();
-    for ($ii = 0; $ii < 1000; $ii++) {
-      $hash = md5($hash);
-    }
-    return $hash;
+  private function getPasswordHashInput(PhutilOpaqueEnvelope $password) {
+    $input =
+      $this->getUsername().
+      $password->openEnvelope().
+      $this->getPHID().
+      $this->getPasswordSalt();
+
+    return new PhutilOpaqueEnvelope($input);
+  }
+
+  private function hashPassword(PhutilOpaqueEnvelope $password) {
+    $hasher = PhabricatorPasswordHasher::getBestHasher();
+
+    $input_envelope = $this->getPasswordHashInput($password);
+    return $hasher->getPasswordHashForStorage($input_envelope);
   }
 
   const CSRF_CYCLE_FREQUENCY  = 3600;
@@ -217,12 +260,7 @@ final class PhabricatorUser
   }
 
   public function validateCSRFToken($token) {
-    if (!$this->getPHID()) {
-      return true;
-    }
-
     $salt = null;
-
     $version = 'plain';
 
     // This is a BREACH-mitigating token. See T3684.
@@ -287,173 +325,16 @@ final class PhabricatorUser
   }
 
   private function generateToken($epoch, $frequency, $key, $len) {
+    if ($this->getPHID()) {
+      $vec = $this->getPHID().$this->getAccountSecret();
+    } else {
+      $vec = $this->getAlternateCSRFString();
+    }
+
     $time_block = floor($epoch / $frequency);
-    $vec = $this->getPHID().$this->getPasswordHash().$key.$time_block;
+    $vec = $vec.$key.$time_block;
+
     return substr(PhabricatorHash::digest($vec), 0, $len);
-  }
-
-  /**
-   * Issue a new session key to this user. Phabricator supports different
-   * types of sessions (like "web" and "conduit") and each session type may
-   * have multiple concurrent sessions (this allows a user to be logged in on
-   * multiple browsers at the same time, for instance).
-   *
-   * Note that this method is transport-agnostic and does not set cookies or
-   * issue other types of tokens, it ONLY generates a new session key.
-   *
-   * You can configure the maximum number of concurrent sessions for various
-   * session types in the Phabricator configuration.
-   *
-   * @param   string  Session type, like "web".
-   * @return  string  Newly generated session key.
-   */
-  public function establishSession($session_type) {
-    $conn_w = $this->establishConnection('w');
-
-    if (strpos($session_type, '-') !== false) {
-      throw new Exception("Session type must not contain hyphen ('-')!");
-    }
-
-    // We allow multiple sessions of the same type, so when a caller requests
-    // a new session of type "web", we give them the first available session in
-    // "web-1", "web-2", ..., "web-N", up to some configurable limit. If none
-    // of these sessions is available, we overwrite the oldest session and
-    // reissue a new one in its place.
-
-    $session_limit = 1;
-    switch ($session_type) {
-      case 'web':
-        $session_limit = PhabricatorEnv::getEnvConfig('auth.sessions.web');
-        break;
-      case 'conduit':
-        $session_limit = PhabricatorEnv::getEnvConfig('auth.sessions.conduit');
-        break;
-      default:
-        throw new Exception("Unknown session type '{$session_type}'!");
-    }
-
-    $session_limit = (int)$session_limit;
-    if ($session_limit <= 0) {
-      throw new Exception(
-        "Session limit for '{$session_type}' must be at least 1!");
-    }
-
-    // NOTE: Session establishment is sensitive to race conditions, as when
-    // piping `arc` to `arc`:
-    //
-    //   arc export ... | arc paste ...
-    //
-    // To avoid this, we overwrite an old session only if it hasn't been
-    // re-established since we read it.
-
-    // Consume entropy to generate a new session key, forestalling the eventual
-    // heat death of the universe.
-    $session_key = Filesystem::readRandomCharacters(40);
-
-    // Load all the currently active sessions.
-    $sessions = queryfx_all(
-      $conn_w,
-      'SELECT type, sessionKey, sessionStart FROM %T
-        WHERE userPHID = %s AND type LIKE %>',
-      PhabricatorUser::SESSION_TABLE,
-      $this->getPHID(),
-      $session_type.'-');
-    $sessions = ipull($sessions, null, 'type');
-    $sessions = isort($sessions, 'sessionStart');
-
-    $existing_sessions = array_keys($sessions);
-
-    // UNGUARDED WRITES: Logging-in users don't have CSRF stuff yet.
-    $unguarded = AphrontWriteGuard::beginScopedUnguardedWrites();
-
-    $retries = 0;
-    while (true) {
-
-
-      // Choose which 'type' we'll actually establish, i.e. what number we're
-      // going to append to the basic session type. To do this, just check all
-      // the numbers sequentially until we find an available session.
-      $establish_type = null;
-      for ($ii = 1; $ii <= $session_limit; $ii++) {
-        $try_type = $session_type.'-'.$ii;
-        if (!in_array($try_type, $existing_sessions)) {
-          $establish_type = $try_type;
-          $expect_key = PhabricatorHash::digest($session_key);
-          $existing_sessions[] = $try_type;
-
-          // Ensure the row exists so we can issue an update below. We don't
-          // care if we race here or not.
-          queryfx(
-            $conn_w,
-            'INSERT IGNORE INTO %T (userPHID, type, sessionKey, sessionStart)
-              VALUES (%s, %s, %s, 0)',
-            self::SESSION_TABLE,
-            $this->getPHID(),
-            $establish_type,
-            PhabricatorHash::digest($session_key));
-          break;
-        }
-      }
-
-      // If we didn't find an available session, choose the oldest session and
-      // overwrite it.
-      if (!$establish_type) {
-        $oldest = reset($sessions);
-        $establish_type = $oldest['type'];
-        $expect_key = $oldest['sessionKey'];
-      }
-
-      // This is so that we'll only overwrite the session if it hasn't been
-      // refreshed since we read it. If it has, the session key will be
-      // different and we know we're racing other processes. Whichever one
-      // won gets the session, we go back and try again.
-
-      queryfx(
-        $conn_w,
-        'UPDATE %T SET sessionKey = %s, sessionStart = UNIX_TIMESTAMP()
-          WHERE userPHID = %s AND type = %s AND sessionKey = %s',
-        self::SESSION_TABLE,
-        PhabricatorHash::digest($session_key),
-        $this->getPHID(),
-        $establish_type,
-        $expect_key);
-
-      if ($conn_w->getAffectedRows()) {
-        // The update worked, so the session is valid.
-        break;
-      } else {
-        // We know this just got grabbed, so don't try it again.
-        unset($sessions[$establish_type]);
-      }
-
-      if (++$retries > $session_limit) {
-        throw new Exception("Failed to establish a session!");
-      }
-    }
-
-    $log = PhabricatorUserLog::newLog(
-      $this,
-      $this,
-      PhabricatorUserLog::ACTION_LOGIN);
-    $log->setDetails(
-      array(
-        'session_type' => $session_type,
-        'session_issued' => $establish_type,
-      ));
-    $log->setSession($session_key);
-    $log->save();
-
-    return $session_key;
-  }
-
-  public function destroySession($session_key) {
-    $conn_w = $this->establishConnection('w');
-    queryfx(
-      $conn_w,
-      'DELETE FROM %T WHERE userPHID = %s AND sessionKey = %s',
-      self::SESSION_TABLE,
-      $this->getPHID(),
-      PhabricatorHash::digest($session_key));
   }
 
   private function generateEmailToken(
@@ -593,14 +474,35 @@ final class PhabricatorUser
       }
     }
 
-    if ($editor) {
-      return strtr($editor, array(
-        '%%' => '%',
-        '%f' => phutil_escape_uri($path),
-        '%l' => phutil_escape_uri($line),
-        '%r' => phutil_escape_uri($callsign),
-      ));
+    if (!strlen($editor)) {
+      return null;
     }
+
+    $uri = strtr($editor, array(
+      '%%' => '%',
+      '%f' => phutil_escape_uri($path),
+      '%l' => phutil_escape_uri($line),
+      '%r' => phutil_escape_uri($callsign),
+    ));
+
+    // The resulting URI must have an allowed protocol. Otherwise, we'll return
+    // a link to an error page explaining the misconfiguration.
+
+    $ok = PhabricatorHelpEditorProtocolController::hasAllowedProtocol($uri);
+    if (!$ok) {
+      return '/help/editorprotocol/';
+    }
+
+    return (string)$uri;
+  }
+
+  public function getAlternateCSRFString() {
+    return $this->assertAttached($this->alternateCSRFString);
+  }
+
+  public function attachAlternateCSRFString($string) {
+    $this->alternateCSRFString = $string;
+    return $this;
   }
 
   private static function tokenizeName($name) {
@@ -753,21 +655,20 @@ EOBODY;
       return false;
     }
 
-    return (bool)preg_match('/^[a-zA-Z0-9._-]*[a-zA-Z0-9_-]$/', $username);
+    return (bool)preg_match('/^[a-zA-Z0-9._-]*[a-zA-Z0-9_-]\z/', $username);
   }
 
   public static function getDefaultProfileImageURI() {
     return celerity_get_resource_uri('/rsrc/image/avatar.png');
   }
 
-  public function attachStatus(PhabricatorUserStatus $status) {
+  public function attachStatus(PhabricatorCalendarEvent $status) {
     $this->status = $status;
     return $this;
   }
 
   public function getStatus() {
-    $this->assertAttached($this->status);
-    return $this->status;
+    return $this->assertAttached($this->status);
   }
 
   public function hasStatus() {
@@ -779,8 +680,12 @@ EOBODY;
     return $this;
   }
 
+  public function getProfileImageURI() {
+    return $this->assertAttached($this->profileImage);
+  }
+
   public function loadProfileImageURI() {
-    if ($this->profileImage) {
+    if ($this->profileImage && ($this->profileImage !== self::ATTACHABLE)) {
       return $this->profileImage;
     }
 
@@ -792,13 +697,11 @@ EOBODY;
       $file = id(new PhabricatorFile())->loadOneWhere('phid = %s', $src_phid);
       if ($file) {
         $this->profileImage = $file->getBestURI();
+        return $this->profileImage;
       }
     }
 
-    if (!$this->profileImage) {
-      $this->profileImage = self::getDefaultProfileImageURI();
-    }
-
+    $this->profileImage = self::getDefaultProfileImageURI();
     return $this->profileImage;
   }
 
@@ -869,7 +772,11 @@ EOBODY;
       case PhabricatorPolicyCapability::CAN_VIEW:
         return PhabricatorPolicies::POLICY_PUBLIC;
       case PhabricatorPolicyCapability::CAN_EDIT:
-        return PhabricatorPolicies::POLICY_NOONE;
+        if ($this->getIsSystemAgent()) {
+          return PhabricatorPolicies::POLICY_ADMIN;
+        } else {
+          return PhabricatorPolicies::POLICY_NOONE;
+        }
     }
   }
 

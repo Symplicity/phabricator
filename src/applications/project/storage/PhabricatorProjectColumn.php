@@ -4,11 +4,21 @@ final class PhabricatorProjectColumn
   extends PhabricatorProjectDAO
   implements PhabricatorPolicyInterface {
 
+  const STATUS_ACTIVE = 0;
+  const STATUS_DELETED = 1;
+
   protected $name;
+  protected $status;
   protected $projectPHID;
   protected $sequence;
 
   private $project = self::ATTACHABLE;
+
+  public static function initializeNewColumn(PhabricatorUser $user) {
+    return id(new PhabricatorProjectColumn())
+      ->setName('')
+      ->setStatus(self::STATUS_ACTIVE);
+  }
 
   public function getConfiguration() {
     return array(
@@ -28,6 +38,28 @@ final class PhabricatorProjectColumn
 
   public function getProject() {
     return $this->assertAttached($this->project);
+  }
+
+  public function isDefaultColumn() {
+    return ($this->getSequence() == 0);
+  }
+
+  public function isDeleted() {
+    return ($this->getStatus() == self::STATUS_DELETED);
+  }
+
+  public function getDisplayName() {
+    if ($this->isDefaultColumn()) {
+      return pht('Backlog');
+    }
+    return $this->getName();
+  }
+
+  public function getHeaderColor() {
+    if ($this->isDefaultColumn()) {
+      return PhabricatorActionHeaderView::HEADER_DARK_GREY;
+    }
+    return PhabricatorActionHeaderView::HEADER_GREY;
   }
 
 

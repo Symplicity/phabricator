@@ -1,16 +1,20 @@
 <?php
 
 /**
- * @task apps       Building Applications with Custom Fields
- * @task core       Core Properties and Field Identity
- * @task proxy      Field Proxies
- * @task context    Contextual Data
- * @task storage    Field Storage
- * @task appsearch  Integration with ApplicationSearch
- * @task appxaction Integration with ApplicationTransactions
- * @task edit       Integration with edit views
- * @task view       Integration with property views
- * @task list       Integration with list views
+ * @task apps         Building Applications with Custom Fields
+ * @task core         Core Properties and Field Identity
+ * @task proxy        Field Proxies
+ * @task context      Contextual Data
+ * @task render       Rendering Utilities
+ * @task storage      Field Storage
+ * @task edit         Integration with Edit Views
+ * @task view         Integration with Property Views
+ * @task list         Integration with List views
+ * @task appsearch    Integration with ApplicationSearch
+ * @task appxaction   Integration with ApplicationTransactions
+ * @task xactionmail  Integration with Transaction Mail
+ * @task globalsearch Integration with Global Search
+ * @task herald       Integration with Herald
  */
 abstract class PhabricatorCustomField {
 
@@ -19,12 +23,16 @@ abstract class PhabricatorCustomField {
   private $proxy;
 
   const ROLE_APPLICATIONTRANSACTIONS  = 'ApplicationTransactions';
+  const ROLE_TRANSACTIONMAIL          = 'ApplicationTransactions.mail';
   const ROLE_APPLICATIONSEARCH        = 'ApplicationSearch';
   const ROLE_STORAGE                  = 'storage';
   const ROLE_DEFAULT                  = 'default';
   const ROLE_EDIT                     = 'edit';
   const ROLE_VIEW                     = 'view';
   const ROLE_LIST                     = 'list';
+  const ROLE_GLOBALSEARCH             = 'GlobalSearch';
+  const ROLE_CONDUIT                  = 'conduit';
+  const ROLE_HERALD                   = 'herald';
 
 
 /* -(  Building Applications with Custom Fields  )--------------------------- */
@@ -57,7 +65,10 @@ abstract class PhabricatorCustomField {
           "object of class '{$obj_class}'.");
       }
 
-      $fields = PhabricatorCustomField::buildFieldList($base_class, $spec);
+      $fields = PhabricatorCustomField::buildFieldList(
+        $base_class,
+        $spec,
+        $object);
 
       foreach ($fields as $key => $field) {
         if (!$field->shouldEnableForRole($role)) {
@@ -94,7 +105,7 @@ abstract class PhabricatorCustomField {
   /**
    * @task apps
    */
-  public static function buildFieldList($base_class, array $spec) {
+  public static function buildFieldList($base_class, array $spec, $object) {
     $field_objects = id(new PhutilSymbolLoader())
       ->setAncestorClass($base_class)
       ->loadObjects();
@@ -103,7 +114,7 @@ abstract class PhabricatorCustomField {
     $from_map = array();
     foreach ($field_objects as $field_object) {
       $current_class = get_class($field_object);
-      foreach ($field_object->createFields() as $field) {
+      foreach ($field_object->createFields($object) as $field) {
         $key = $field->getFieldKey();
         if (isset($fields[$key])) {
           $original_class = $from_map[$key];
@@ -197,10 +208,11 @@ abstract class PhabricatorCustomField {
    * For general implementations, the general field implementation can return
    * multiple field instances here.
    *
+   * @param object The object to create fields for.
    * @return list<PhabricatorCustomField> List of fields.
    * @task core
    */
-  public function createFields() {
+  public function createFields($object) {
     return array($this);
   }
 
@@ -236,9 +248,9 @@ abstract class PhabricatorCustomField {
    * @task core
    */
   public function shouldEnableForRole($role) {
-    if ($this->proxy) {
-      return $this->proxy->shouldEnableForRole($role);
-    }
+
+    // NOTE: All of these calls proxy individually, so we don't need to
+    // proxy this call as a whole.
 
     switch ($role) {
       case self::ROLE_APPLICATIONTRANSACTIONS:
@@ -253,6 +265,14 @@ abstract class PhabricatorCustomField {
         return $this->shouldAppearInPropertyView();
       case self::ROLE_LIST:
         return $this->shouldAppearInListView();
+      case self::ROLE_GLOBALSEARCH:
+        return $this->shouldAppearInGlobalSearch();
+      case self::ROLE_CONDUIT:
+        return $this->shouldAppearInConduitDictionary();
+      case self::ROLE_TRANSACTIONMAIL:
+        return $this->shouldAppearInTransactionMail();
+      case self::ROLE_HERALD:
+        return $this->shouldAppearInHerald();
       case self::ROLE_DEFAULT:
         return true;
       default:
@@ -272,6 +292,10 @@ abstract class PhabricatorCustomField {
    */
   public function canDisableField() {
     return true;
+  }
+
+  public function shouldDisableByDefault() {
+    return false;
   }
 
 
@@ -347,6 +371,7 @@ abstract class PhabricatorCustomField {
    * Sets the object this field belongs to.
    *
    * @param PhabricatorCustomFieldInterface The object this field belongs to.
+   * @return this
    * @task context
    */
   final public function setObject(PhabricatorCustomFieldInterface $object) {
@@ -357,6 +382,21 @@ abstract class PhabricatorCustomField {
 
     $this->object = $object;
     $this->didSetObject($object);
+    return $this;
+  }
+
+
+  /**
+   * Read object data into local field storage, if applicable.
+   *
+   * @param PhabricatorCustomFieldInterface The object this field belongs to.
+   * @return this
+   * @task context
+   */
+  public function readValueFromObject(PhabricatorCustomFieldInterface $object) {
+    if ($this->proxy) {
+      $this->proxy->readValueFromObject($object);
+    }
     return $this;
   }
 
@@ -425,6 +465,26 @@ abstract class PhabricatorCustomField {
       throw new PhabricatorCustomFieldDataNotAvailableException($this);
     }
     return $this->viewer;
+  }
+
+
+/* -(  Rendering Utilities  )------------------------------------------------ */
+
+
+  /**
+   * @task render
+   */
+  protected function renderHandleList(array $handles) {
+    if (!$handles) {
+      return null;
+    }
+
+    $out = array();
+    foreach ($handles as $handle) {
+      $out[] = $handle->renderLink();
+    }
+
+    return phutil_implode_html(phutil_tag('br'), $out);
   }
 
 
@@ -736,6 +796,28 @@ abstract class PhabricatorCustomField {
   /**
    * @task appxaction
    */
+  public function getApplicationTransactionType() {
+    if ($this->proxy) {
+      return $this->proxy->getApplicationTransactionType();
+    }
+    return PhabricatorTransactions::TYPE_CUSTOMFIELD;
+  }
+
+
+  /**
+   * @task appxaction
+   */
+  public function getApplicationTransactionMetadata() {
+    if ($this->proxy) {
+      return $this->proxy->getApplicationTransactionMetadata();
+    }
+    return array();
+  }
+
+
+  /**
+   * @task appxaction
+   */
   public function getOldValueForApplicationTransactions() {
     if ($this->proxy) {
       return $this->proxy->getOldValueForApplicationTransactions();
@@ -799,6 +881,18 @@ abstract class PhabricatorCustomField {
       return $this->proxy->applyApplicationTransactionInternalEffects($xaction);
     }
     return;
+  }
+
+
+  /**
+   * @task appxaction
+   */
+  public function getApplicationTransactionRemarkupBlocks(
+    PhabricatorApplicationTransaction $xaction) {
+    if ($this->proxy) {
+      return $this->proxy->getApplicationTransactionRemarkupBlocks($xaction);
+    }
+    return array();
   }
 
 
@@ -904,6 +998,88 @@ abstract class PhabricatorCustomField {
   }
 
 
+  public function getApplicationTransactionHasChangeDetails(
+    PhabricatorApplicationTransaction $xaction) {
+    if ($this->proxy) {
+      return $this->proxy->getApplicationTransactionHasChangeDetails(
+        $xaction);
+    }
+    return false;
+  }
+
+  public function getApplicationTransactionChangeDetails(
+    PhabricatorApplicationTransaction $xaction,
+    PhabricatorUser $viewer) {
+    if ($this->proxy) {
+      return $this->proxy->getApplicationTransactionChangeDetails(
+        $xaction,
+        $viewer);
+    }
+    return null;
+  }
+
+  public function getApplicationTransactionRequiredHandlePHIDs(
+    PhabricatorApplicationTransaction $xaction) {
+    if ($this->proxy) {
+      return $this->proxy->getApplicationTransactionRequiredHandlePHIDs(
+        $xaction);
+    }
+    return array();
+  }
+
+  public function shouldHideInApplicationTransactions(
+    PhabricatorApplicationTransaction $xaction) {
+    if ($this->proxy) {
+      return $this->proxy->shouldHideInApplicationTransactions($xaction);
+    }
+    return false;
+  }
+
+  /**
+   * TODO: this is only used by Diffusion right now and everything is completely
+   * faked since Diffusion doesn't use ApplicationTransactions yet. This should
+   * get fleshed out as we have more use cases.
+   *
+   * @task appxaction
+   */
+  public function buildApplicationTransactionMailBody(
+    PhabricatorApplicationTransaction $xaction,
+    PhabricatorMetaMTAMailBody $body) {
+    if ($this->proxy) {
+      return $this->proxy->buildApplicationTransactionMailBody($xaction, $body);
+    }
+    return;
+  }
+
+
+/* -(  Transaction Mail  )--------------------------------------------------- */
+
+
+  /**
+   * @task xactionmail
+   */
+  public function shouldAppearInTransactionMail() {
+    if ($this->proxy) {
+      return $this->proxy->shouldAppearInTransactionMail();
+    }
+    return false;
+  }
+
+
+  /**
+   * @task xactionmail
+   */
+  public function updateTransactionMailBody(
+    PhabricatorMetaMTAMailBody $body,
+    PhabricatorApplicationTransactionEditor $editor,
+    array $xactions) {
+    if ($this->proxy) {
+      return $this->proxy->updateTransactionMailBody($body, $editor, $xactions);
+    }
+    return;
+  }
+
+
 /* -(  Edit View  )---------------------------------------------------------- */
 
 
@@ -932,9 +1108,31 @@ abstract class PhabricatorCustomField {
   /**
    * @task edit
    */
-  public function renderEditControl() {
+  public function getRequiredHandlePHIDsForEdit() {
     if ($this->proxy) {
-      return $this->proxy->renderEditControl();
+      return $this->proxy->getRequiredHandlePHIDsForEdit();
+    }
+    return array();
+  }
+
+
+  /**
+   * @task edit
+   */
+  public function getInstructionsForEdit() {
+    if ($this->proxy) {
+      return $this->proxy->getInstructionsForEdit();
+    }
+    return null;
+  }
+
+
+  /**
+   * @task edit
+   */
+  public function renderEditControl(array $handles) {
+    if ($this->proxy) {
+      return $this->proxy->renderEditControl($handles);
     }
     throw new PhabricatorCustomFieldImplementationIncompleteException($this);
   }
@@ -968,9 +1166,9 @@ abstract class PhabricatorCustomField {
   /**
    * @task view
    */
-  public function renderPropertyViewValue() {
+  public function renderPropertyViewValue(array $handles) {
     if ($this->proxy) {
-      return $this->proxy->renderPropertyViewValue();
+      return $this->proxy->renderPropertyViewValue($handles);
     }
     throw new PhabricatorCustomFieldImplementationIncompleteException($this);
   }
@@ -984,6 +1182,28 @@ abstract class PhabricatorCustomField {
       return $this->proxy->getStyleForPropertyView();
     }
     return 'property';
+  }
+
+
+  /**
+   * @task view
+   */
+  public function getIconForPropertyView() {
+    if ($this->proxy) {
+      return $this->proxy->getIconForPropertyView();
+    }
+    return null;
+  }
+
+
+  /**
+   * @task view
+   */
+  public function getRequiredHandlePHIDsForPropertyView() {
+    if ($this->proxy) {
+      return $this->proxy->getRequiredHandlePHIDsForPropertyView();
+    }
+    return array();
   }
 
 
@@ -1009,6 +1229,132 @@ abstract class PhabricatorCustomField {
       return $this->proxy->renderOnListItem($view);
     }
     throw new PhabricatorCustomFieldImplementationIncompleteException($this);
+  }
+
+
+/* -(  Global Search  )------------------------------------------------------ */
+
+
+  /**
+   * @task globalsearch
+   */
+  public function shouldAppearInGlobalSearch() {
+    if ($this->proxy) {
+      return $this->proxy->shouldAppearInGlobalSearch();
+    }
+    return false;
+  }
+
+
+  /**
+   * @task globalsearch
+   */
+  public function updateAbstractDocument(
+    PhabricatorSearchAbstractDocument $document) {
+    if ($this->proxy) {
+      return $this->proxy->updateAbstractDocument($document);
+    }
+    return $document;
+  }
+
+
+/* -(  Conduit  )------------------------------------------------------------ */
+
+
+  /**
+   * @task conduit
+   */
+  public function shouldAppearInConduitDictionary() {
+    if ($this->proxy) {
+      return $this->proxy->shouldAppearInConduitDictionary();
+    }
+    return false;
+  }
+
+
+  /**
+   * @task conduit
+   */
+  public function getConduitDictionaryValue() {
+    if ($this->proxy) {
+      return $this->proxy->getConduitDictionaryValue();
+    }
+    throw new PhabricatorCustomFieldImplementationIncompleteException($this);
+  }
+
+
+/* -(  Herald  )------------------------------------------------------------- */
+
+
+  /**
+   * Return `true` to make this field available in Herald.
+   *
+   * @return bool True to expose the field in Herald.
+   * @task herald
+   */
+  public function shouldAppearInHerald() {
+    if ($this->proxy) {
+      return $this->proxy->shouldAppearInHerald();
+    }
+    return false;
+  }
+
+
+  /**
+   * Get the name of the field in Herald. By default, this uses the
+   * normal field name.
+   *
+   * @return string Herald field name.
+   * @task herald
+   */
+  public function getHeraldFieldName() {
+    if ($this->proxy) {
+      return $this->proxy->getHeraldFieldName();
+    }
+    return $this->getFieldName();
+  }
+
+
+  /**
+   * Get the field value for evaluation by Herald.
+   *
+   * @return wild Field value.
+   * @task herald
+   */
+  public function getHeraldFieldValue() {
+    if ($this->proxy) {
+      return $this->proxy->getHeraldFieldValue();
+    }
+    throw new PhabricatorCustomFieldImplementationIncompleteException($this);
+  }
+
+
+  /**
+   * Get the available conditions for this field in Herald.
+   *
+   * @return list<const> List of Herald condition constants.
+   * @task herald
+   */
+  public function getHeraldFieldConditions() {
+    if ($this->proxy) {
+      return $this->proxy->getHeraldFieldConditions();
+    }
+    throw new PhabricatorCustomFieldImplementationIncompleteException($this);
+  }
+
+
+  /**
+   * Get the Herald value type for the given condition.
+   *
+   * @param   const       Herald condition constant.
+   * @return  const|null  Herald value type, or null to use the default.
+   * @task herald
+   */
+  public function getHeraldFieldValueType($condition) {
+    if ($this->proxy) {
+      return $this->proxy->getHeraldFieldValueType($condition);
+    }
+    return null;
   }
 
 

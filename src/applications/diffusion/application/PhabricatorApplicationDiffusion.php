@@ -15,7 +15,7 @@ final class PhabricatorApplicationDiffusion extends PhabricatorApplication {
   }
 
   public function getHelpURI() {
-    return PhabricatorEnv::getDoclink('article/Diffusion_User_Guide.html');
+    return PhabricatorEnv::getDoclink('Diffusion User Guide');
   }
 
   public function getFactObjectsForAnalysis() {
@@ -32,7 +32,8 @@ final class PhabricatorApplicationDiffusion extends PhabricatorApplication {
 
   public function getRemarkupRules() {
     return array(
-      new DiffusionRemarkupRule(),
+      new DiffusionRepositoryRemarkupRule(),
+      new DiffusionCommitRemarkupRule(),
     );
   }
 
@@ -46,6 +47,10 @@ final class PhabricatorApplicationDiffusion extends PhabricatorApplication {
         'new/' => 'DiffusionRepositoryNewController',
         '(?P<edit>create)/' => 'DiffusionRepositoryCreateController',
         '(?P<edit>import)/' => 'DiffusionRepositoryCreateController',
+        'pushlog/' => array(
+          '(?:query/(?P<queryKey>[^/]+)/)?' => 'DiffusionPushLogListController',
+          'view/(?P<id>\d+)/' => 'DiffusionPushEventViewController',
+        ),
         '(?P<callsign>[A-Z]+)/' => array(
           '' => 'DiffusionRepositoryController',
 
@@ -58,7 +63,6 @@ final class PhabricatorApplicationDiffusion extends PhabricatorApplication {
           'tags/(?P<dblob>.*)'          => 'DiffusionTagListController',
           'branches/(?P<dblob>.*)'      => 'DiffusionBranchTableController',
           'lint/(?P<dblob>.*)'          => 'DiffusionLintController',
-
           'commit/(?P<commit>[a-z0-9]+)/branches/'
             => 'DiffusionCommitBranchesController',
           'commit/(?P<commit>[a-z0-9]+)/tags/'
@@ -70,11 +74,12 @@ final class PhabricatorApplicationDiffusion extends PhabricatorApplication {
             'basic/' => 'DiffusionRepositoryEditBasicController',
             'encoding/' => 'DiffusionRepositoryEditEncodingController',
             'activate/' => 'DiffusionRepositoryEditActivateController',
-            'policy/' => 'DiffusionRepositoryEditPolicyController',
+            'dangerous/' => 'DiffusionRepositoryEditDangerousController',
             'branches/' => 'DiffusionRepositoryEditBranchesController',
             'subversion/' => 'DiffusionRepositoryEditSubversionController',
             'actions/' => 'DiffusionRepositoryEditActionsController',
             '(?P<edit>remote)/' => 'DiffusionRepositoryCreateController',
+            '(?P<edit>policy)/' => 'DiffusionRepositoryCreateController',
             'local/' => 'DiffusionRepositoryEditLocalController',
             'delete/' => 'DiffusionRepositoryEditDeleteController',
             'hosting/' => 'DiffusionRepositoryEditHostingController',

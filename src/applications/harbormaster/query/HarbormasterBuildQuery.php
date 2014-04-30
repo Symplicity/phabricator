@@ -8,6 +8,7 @@ final class HarbormasterBuildQuery
   private $buildStatuses;
   private $buildablePHIDs;
   private $buildPlanPHIDs;
+  private $needBuildTargets;
 
   public function withIDs(array $ids) {
     $this->ids = $ids;
@@ -31,6 +32,11 @@ final class HarbormasterBuildQuery
 
   public function withBuildPlanPHIDs(array $build_plan_phids) {
     $this->buildPlanPHIDs = $build_plan_phids;
+    return $this;
+  }
+
+  public function needBuildTargets($need_targets) {
+    $this->needBuildTargets = $need_targets;
     return $this;
   }
 
@@ -92,41 +98,69 @@ final class HarbormasterBuildQuery
       $build->attachBuildPlan(idx($plans, $plan_phid));
     }
 
+    $build_phids = mpull($page, 'getPHID');
+    $commands = id(new HarbormasterBuildCommand())->loadAllWhere(
+      'targetPHID IN (%Ls) ORDER BY id ASC',
+      $build_phids);
+    $commands = mgroup($commands, 'getTargetPHID');
+    foreach ($page as $build) {
+      $unprocessed_commands = idx($commands, $build->getPHID(), array());
+      $build->attachUnprocessedCommands($unprocessed_commands);
+    }
+
+    if ($this->needBuildTargets) {
+      $targets = id(new HarbormasterBuildTargetQuery())
+        ->setViewer($this->getViewer())
+        ->setParentQuery($this)
+        ->withBuildPHIDs($build_phids)
+        ->execute();
+
+      // TODO: Some day, when targets have dependencies, we should toposort
+      // these. For now, just put them into chronological order.
+      $targets = array_reverse($targets);
+
+      $targets = mgroup($targets, 'getBuildPHID');
+      foreach ($page as $build) {
+        $build_targets = idx($targets, $build->getPHID(), array());
+        $build->attachBuildTargets($build_targets);
+      }
+    }
+
     return $page;
   }
 
   private function buildWhereClause(AphrontDatabaseConnection $conn_r) {
     $where = array();
 
-    if ($this->ids) {
+    if ($this->ids !== null) {
       $where[] = qsprintf(
         $conn_r,
         'id IN (%Ld)',
         $this->ids);
     }
 
-    if ($this->phids) {
+    if ($this->phids !== null) {
       $where[] = qsprintf(
         $conn_r,
         'phid in (%Ls)',
         $this->phids);
     }
 
-    if ($this->buildStatuses) {
+    if ($this->buildStatuses !== null) {
       $where[] = qsprintf(
         $conn_r,
         'buildStatus in (%Ls)',
         $this->buildStatuses);
     }
 
-    if ($this->buildablePHIDs) {
+    if ($this->buildablePHIDs !== null) {
       $where[] = qsprintf(
         $conn_r,
         'buildablePHID IN (%Ls)',
         $this->buildablePHIDs);
     }
 
-    if ($this->buildPlanPHIDs) {
+    if ($this->buildPlanPHIDs !== null) {
       $where[] = qsprintf(
         $conn_r,
         'buildPlanPHID IN (%Ls)',

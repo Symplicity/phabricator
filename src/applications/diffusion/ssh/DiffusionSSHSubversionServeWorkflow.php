@@ -38,7 +38,9 @@ final class DiffusionSSHSubversionServeWorkflow
       throw new Exception("Expected `svnserve -t`!");
     }
 
-    $command = csprintf('svnserve -t');
+    $command = csprintf(
+      'svnserve -t --tunnel-user=%s',
+      $this->getUser()->getUsername());
     $command = PhabricatorDaemon::sudoCommandAsDaemonUser($command);
 
     $future = new ExecFuture('%C', $command);
@@ -117,6 +119,15 @@ final class DiffusionSSHSubversionServeWorkflow
             // ( diff ( ( rev ) target recurse ignore-ancestry url ... ) )
             $struct[1]['value'][4]['value'] = $this->makeInternalURI(
               $struct[1]['value'][4]['value']);
+            $message_raw = $proto->serializeStruct($struct);
+            break;
+          case 'add-file':
+            // ( add-file ( path dir-token file-token [ copy-path copy-rev ] ) )
+            if (isset($struct[1]['value'][3]['value'][0]['value'])) {
+              $copy_from = $struct[1]['value'][3]['value'][0]['value'];
+              $copy_from = $this->makeInternalURI($copy_from);
+              $struct[1]['value'][3]['value'][0]['value'] = $copy_from;
+            }
             $message_raw = $proto->serializeStruct($struct);
             break;
         }
@@ -231,7 +242,7 @@ final class DiffusionSSHSubversionServeWorkflow
       rtrim($repository->getLocalPath(), '/'),
       $path);
 
-    if (preg_match('(^/diffusion/[A-Z]+/$)', $path)) {
+    if (preg_match('(^/diffusion/[A-Z]+/\z)', $path)) {
       $path = rtrim($path, '/');
     }
 

@@ -10,6 +10,18 @@ final class PHUIObjectItemListView extends AphrontTagView {
   private $noDataString;
   private $flush;
   private $plain;
+  private $allowEmptyList;
+  private $states;
+
+
+  public function setAllowEmptyList($allow_empty_list) {
+    $this->allowEmptyList = $allow_empty_list;
+    return $this;
+  }
+
+  public function getAllowEmptyList() {
+    return $this->allowEmptyList;
+  }
 
   public function setFlush($flush) {
     $this->flush = $flush;
@@ -51,6 +63,11 @@ final class PHUIObjectItemListView extends AphrontTagView {
     return $this;
   }
 
+  public function setStates($states) {
+    $this->states = $states;
+    return $this;
+  }
+
   protected function getTagName() {
     return 'ul';
   }
@@ -64,6 +81,9 @@ final class PHUIObjectItemListView extends AphrontTagView {
     }
     if ($this->cards) {
       $classes[] = 'phui-object-list-cards';
+    }
+    if ($this->states) {
+      $classes[] = 'phui-object-list-states';
     }
     if ($this->flush) {
       $classes[] = 'phui-object-list-flush';
@@ -92,11 +112,19 @@ final class PHUIObjectItemListView extends AphrontTagView {
 
     if ($this->items) {
       $items = $this->items;
+    } else if ($this->allowEmptyList) {
+      $items = null;
     } else {
       $string = nonempty($this->noDataString, pht('No data.'));
-      $items = id(new AphrontErrorView())
+      $string = id(new AphrontErrorView())
         ->setSeverity(AphrontErrorView::SEVERITY_NODATA)
         ->appendChild($string);
+      $items = phutil_tag(
+        'li',
+        array(
+          'class' => 'phui-object-item-empty'),
+        $string);
+
     }
 
     $pager = null;

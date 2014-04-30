@@ -1,6 +1,9 @@
 <?php
 
 /**
+ * NOTE: Do not extend this!
+ *
+ * @concrete-extensible
  * @group aphront
  */
 class AphrontDefaultApplicationConfiguration
@@ -16,34 +19,6 @@ class AphrontDefaultApplicationConfiguration
 
   public function getURIMap() {
     return $this->getResourceURIMapRules() + array(
-      '/(?:(?P<filter>(?:jump))/)?' =>
-        'PhabricatorDirectoryMainController',
-
-      '/typeahead/' => array(
-        'common/(?P<type>\w+)/'
-          => 'PhabricatorTypeaheadCommonDatasourceController',
-      ),
-
-      '/oauthserver/' => array(
-        'auth/'          => 'PhabricatorOAuthServerAuthController',
-        'test/'          => 'PhabricatorOAuthServerTestController',
-        'token/'         => 'PhabricatorOAuthServerTokenController',
-        'clientauthorization/' => array(
-          '' => 'PhabricatorOAuthClientAuthorizationListController',
-          'delete/(?P<phid>[^/]+)/' =>
-            'PhabricatorOAuthClientAuthorizationDeleteController',
-          'edit/(?P<phid>[^/]+)/' =>
-            'PhabricatorOAuthClientAuthorizationEditController',
-        ),
-        'client/' => array(
-          ''                        => 'PhabricatorOAuthClientListController',
-          'create/'                 => 'PhabricatorOAuthClientEditController',
-          'delete/(?P<phid>[^/]+)/' => 'PhabricatorOAuthClientDeleteController',
-          'edit/(?P<phid>[^/]+)/'   => 'PhabricatorOAuthClientEditController',
-          'view/(?P<phid>[^/]+)/'   => 'PhabricatorOAuthClientViewController',
-        ),
-      ),
-
       '/~/' => array(
         '' => 'DarkConsoleController',
         'data/(?P<key>[^/]+)/' => 'DarkConsoleDataController',
@@ -54,23 +29,6 @@ class AphrontDefaultApplicationConfiguration
         'view/(?P<view>[^/]+)/$' => 'PhabricatorShineBadgeController',
       ),
 
-      '/status/' => 'PhabricatorStatusController',
-
-
-      '/help/' => array(
-        'keyboardshortcut/' => 'PhabricatorHelpKeyboardShortcutController',
-      ),
-
-      '/notification/' => array(
-        '(?:(?P<filter>all|unread)/)?'
-          => 'PhabricatorNotificationListController',
-        'panel/' => 'PhabricatorNotificationPanelController',
-        'individual/' => 'PhabricatorNotificationIndividualController',
-        'status/' => 'PhabricatorNotificationStatusController',
-        'clear/' => 'PhabricatorNotificationClearController',
-      ),
-
-      '/debug/' => 'PhabricatorDebugController',
     );
   }
 
@@ -78,9 +36,9 @@ class AphrontDefaultApplicationConfiguration
     return array(
       '/res/' => array(
         '(?:(?P<mtime>[0-9]+)T/)?'.
-        '(?P<package>pkg/)?'.
+        '(?P<library>[^/]+)/'.
         '(?P<hash>[a-f0-9]{8})/'.
-        '(?P<path>.+\.(?:css|js|jpg|png|swf|gif))'
+        '(?P<path>.+\.(?:css|js|jpg|png|swf|gif|woff))'
           => 'CelerityPhabricatorResourceController',
       ),
     );
@@ -112,9 +70,12 @@ class AphrontDefaultApplicationConfiguration
 
     $data += $parser->parseQueryString(idx($_SERVER, 'QUERY_STRING', ''));
 
+    $cookie_prefix = PhabricatorEnv::getEnvConfig('phabricator.cookie-prefix');
+
     $request = new AphrontRequest($this->getHost(), $this->getPath());
     $request->setRequestData($data);
     $request->setApplicationConfiguration($this);
+    $request->setCookiePrefix($cookie_prefix);
 
     return $request;
   }
@@ -148,12 +109,69 @@ class AphrontDefaultApplicationConfiguration
       return $response;
     }
 
-    $is_serious = PhabricatorEnv::getEnvConfig('phabricator.serious-business');
-
     $user = $request->getUser();
     if (!$user) {
       // If we hit an exception very early, we won't have a user.
       $user = new PhabricatorUser();
+    }
+
+    if ($ex instanceof PhabricatorSystemActionRateLimitException) {
+      $dialog = id(new AphrontDialogView())
+        ->setTitle(pht('Slow Down!'))
+        ->setUser($user)
+        ->setErrors(array(pht('You are being rate limited.')))
+        ->appendParagraph($ex->getMessage())
+        ->appendParagraph($ex->getRateExplanation())
+        ->addCancelButton('/', pht('Okaaaaaaaaaaaaaay...'));
+
+      $response = new AphrontDialogResponse();
+      $response->setDialog($dialog);
+      return $response;
+    }
+
+    if ($ex instanceof PhabricatorAuthHighSecurityRequiredException) {
+
+      $form = id(new PhabricatorAuthSessionEngine())->renderHighSecurityForm(
+        $ex->getFactors(),
+        $ex->getFactorValidationResults(),
+        $user,
+        $request);
+
+      $dialog = id(new AphrontDialogView())
+        ->setUser($user)
+        ->setTitle(pht('Entering High Security'))
+        ->setShortTitle(pht('Security Checkpoint'))
+        ->setWidth(AphrontDialogView::WIDTH_FORM)
+        ->addHiddenInput(AphrontRequest::TYPE_HISEC, true)
+        ->setErrors(
+          array(
+            pht(
+              'You are taking an action which requires you to enter '.
+              'high security.'),
+          ))
+        ->appendParagraph(
+          pht(
+            'High security mode helps protect your account from security '.
+            'threats, like session theft or someone messing with your stuff '.
+            'while you\'re grabbing a coffee. To enter high security mode, '.
+            'confirm your credentials.'))
+        ->appendChild($form->buildLayoutView())
+        ->appendParagraph(
+          pht(
+            'Your account will remain in high security mode for a short '.
+            'period of time. When you are finished taking sensitive '.
+            'actions, you should leave high security.'))
+        ->setSubmitURI($request->getPath())
+        ->addCancelButton($ex->getCancelURI())
+        ->addSubmitButton(pht('Enter High Security'));
+
+      foreach ($request->getPassthroughRequestParameters() as $key => $value) {
+        $dialog->addHiddenInput($key, $value);
+      }
+
+      $response = new AphrontDialogResponse();
+      $response->setDialog($dialog);
+      return $response;
     }
 
     if ($ex instanceof PhabricatorPolicyException) {
@@ -206,9 +224,9 @@ class AphrontDefaultApplicationConfiguration
         ->appendChild($content);
 
       if ($this->getRequest()->isAjax()) {
-        $dialog->addCancelButton('/', 'Close');
+        $dialog->addCancelButton('/', pht('Close'));
       } else {
-        $dialog->addCancelButton('/', $is_serious ? 'OK' : 'Away With Thee');
+        $dialog->addCancelButton('/', pht('OK'));
       }
 
       $response = new AphrontDialogResponse();

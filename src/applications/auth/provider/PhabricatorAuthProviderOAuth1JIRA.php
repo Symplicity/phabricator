@@ -11,13 +11,21 @@ final class PhabricatorAuthProviderOAuth1JIRA
     return pht('JIRA');
   }
 
+  public function getDescriptionForCreate() {
+    return pht('Configure JIRA OAuth. NOTE: Only supports JIRA 6.');
+  }
+
   public function getConfigurationHelp() {
+    return $this->getProviderConfigurationHelp();
+  }
+
+  protected function getProviderConfigurationHelp() {
     if ($this->isSetup()) {
       return pht(
         "**Step 1 of 2**: Provide the name and URI for your JIRA install.\n\n".
         "In the next step, you will configure JIRA.");
     } else {
-      $login_uri = $this->getLoginURI();
+      $login_uri = PhabricatorEnv::getURI($this->getLoginURI());
       return pht(
         "**Step 2 of 2**: In this step, you will configure JIRA.\n\n".
         "**Create a JIRA Application**: Log into JIRA and go to ".
@@ -110,7 +118,7 @@ final class PhabricatorAuthProviderOAuth1JIRA
     if (!strlen($values[$key_name])) {
       $errors[] = pht('JIRA instance name is required.');
       $issues[$key_name] = pht('Required');
-    } else if (!preg_match('/^[a-z0-9.]+$/', $values[$key_name])) {
+    } else if (!preg_match('/^[a-z0-9.]+\z/', $values[$key_name])) {
       $errors[] = pht(
         'JIRA instance name must contain only lowercase letters, digits, and '.
         'period.');
@@ -161,6 +169,11 @@ final class PhabricatorAuthProviderOAuth1JIRA
           "Install the 'openssl' extension, restart your webserver, and try ".
           "again."));
     }
+
+    $form->appendRemarkupInstructions(
+      pht(
+        'NOTE: This provider **only supports JIRA 6**. It will not work with '.
+        'JIRA 5 or earlier.'));
 
     $is_setup = $this->isSetup();
 

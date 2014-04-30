@@ -6,6 +6,7 @@ final class DoorkeeperImportEngine extends Phobject {
   private $refs = array();
   private $phids = array();
   private $localOnly;
+  private $throwOnMissingLink;
 
   public function setViewer(PhabricatorUser $viewer) {
     $this->viewer = $viewer;
@@ -36,6 +37,16 @@ final class DoorkeeperImportEngine extends Phobject {
     return $this;
   }
 
+
+  /**
+   * Configure behavior if remote refs can not be retrieved because an
+   * authentication link is missing.
+   */
+  public function setThrowOnMissingLink($throw) {
+    $this->throwOnMissingLink = $throw;
+    return $this;
+  }
+
   public function execute() {
     $refs = $this->getRefs();
     $viewer = $this->getViewer();
@@ -53,6 +64,12 @@ final class DoorkeeperImportEngine extends Phobject {
           $xobj = $ref
             ->newExternalObject()
             ->setImporterPHID($viewer->getPHID());
+
+          // NOTE: Fill the new external object into the object map, so we'll
+          // reference the same external object if more than one ref is the
+          // same. This prevents issues later where we double-populate
+          // external objects when handed duplicate refs.
+          $xobjs[$ref->getObjectKey()] = $xobj;
         }
         $ref->attachExternalObject($xobj);
       }
@@ -80,6 +97,7 @@ final class DoorkeeperImportEngine extends Phobject {
           unset($bridges[$key]);
         }
         $bridge->setViewer($viewer);
+        $bridge->setThrowOnMissingLink($this->throwOnMissingLink);
       }
 
       $working_set = $refs;

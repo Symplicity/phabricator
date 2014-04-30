@@ -1,16 +1,19 @@
 <?php
 
-/**
- * @group conduit
- */
 final class ConduitAPI_user_removestatus_Method extends ConduitAPI_user_Method {
 
   public function getMethodStatus() {
-    return self::METHOD_STATUS_UNSTABLE;
+    return self::METHOD_STATUS_DEPRECATED;
   }
 
   public function getMethodDescription() {
-    return "Delete status information of the logged-in user.";
+    return pht("Delete status information of the logged-in user.");
+  }
+
+  public function getMethodStatusDescription() {
+    return pht(
+      'Statuses are becoming full-fledged events as part of the '.
+      'Calendar application.');
   }
 
   public function defineParamTypes() {
@@ -39,7 +42,7 @@ final class ConduitAPI_user_removestatus_Method extends ConduitAPI_user_Method {
       throw new ConduitException('ERR-BAD-EPOCH');
     }
 
-    $table = new PhabricatorUserStatus();
+    $table = new PhabricatorCalendarEvent();
     $table->openTransaction();
     $table->beginReadLocking();
 
@@ -52,7 +55,7 @@ final class ConduitAPI_user_removestatus_Method extends ConduitAPI_user_Method {
       if ($status->getDateFrom() < $from) {
         if ($status->getDateTo() > $to) {
           // Split the interval.
-          id(new PhabricatorUserStatus())
+          id(new PhabricatorCalendarEvent())
             ->setUserPHID($user_phid)
             ->setDateFrom($to)
             ->setDateTo($status->getDateTo())

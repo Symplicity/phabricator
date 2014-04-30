@@ -13,6 +13,11 @@
   border-radius: 3px;
 }
 
+.phabricator-notification .phabricator-notification-date {
+  margin-left: 8px;
+  color: {$lightgreytext};
+}
+
 .phabricator-notification-menu-loading {
   text-align: center;
   padding: 10px 0;
@@ -38,6 +43,9 @@
 
 .phabricator-notification {
   padding: 6px;
+}
+
+.phabricator-notification-menu .phabricator-notification {
   cursor: pointer;
 }
 
@@ -53,10 +61,6 @@
   color: {$lightgreytext};
 }
 
-.phabricator-notification-list {
-  font-size: 11px;
-}
-
 .phabricator-notification-list .phabricator-notification-unread,
 .phabricator-notification-menu .phabricator-notification-unread {
   background: #eceff5;
@@ -68,6 +72,15 @@
   padding: 6px;
   font-size: 12px;
   border-bottom: 1px solid #e9e9e9;
+}
+
+.phabricator-notification-header a {
+  color: {$darkgreytext};
+}
+
+.phabricator-notification-header .phabricator-notification-clear-all {
+  color: #18559D;
+  float: right;
 }
 
 .phabricator-notification-view-all {

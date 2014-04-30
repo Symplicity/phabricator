@@ -15,27 +15,26 @@ final class ReleephReasonFieldSpecification
     return 'reason';
   }
 
-  public function renderLabelForHeaderView() {
-    return null;
+  public function getStyleForPropertyView() {
+    return 'block';
   }
 
-  public function renderValueForHeaderView() {
-    $markup = phutil_tag(
+  public function getIconForPropertyView() {
+    return PHUIPropertyListView::ICON_SUMMARY;
+  }
+
+  public function renderPropertyViewValue(array $handles) {
+    return phutil_tag(
       'div',
       array(
         'class' => 'phabricator-remarkup',
       ),
       $this->getMarkupEngineOutput());
-
-    return id(new AphrontNoteView())
-      ->setTitle('Reason')
-      ->appendChild($markup)
-      ->render();
   }
 
   private $error = true;
 
-  public function renderEditControl() {
+  public function renderEditControl(array $handles) {
     return id(new AphrontFormTextAreaControl())
       ->setLabel('Reason')
       ->setName('reason')

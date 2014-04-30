@@ -13,7 +13,6 @@ final class PhabricatorStandardPageView extends PhabricatorBarePageView {
   private $menuContent;
   private $showChrome = true;
   private $disableConsole;
-  private $searchDefaultScope;
   private $pageObjects = array();
   private $applicationMenu;
 
@@ -56,15 +55,6 @@ final class PhabricatorStandardPageView extends PhabricatorBarePageView {
 
   public function getShowChrome() {
     return $this->showChrome;
-  }
-
-  public function setSearchDefaultScope($search_default_scope) {
-    $this->searchDefaultScope = $search_default_scope;
-    return $this;
-  }
-
-  public function getSearchDefaultScope() {
-    return $this->searchDefaultScope;
   }
 
   public function appendPageObjects(array $objs) {
@@ -178,6 +168,22 @@ final class PhabricatorStandardPageView extends PhabricatorBarePageView {
 
     Javelin::initBehavior('device');
 
+    if ($user->hasSession()) {
+      $hisec = ($user->getSession()->getHighSecurityUntil() - time());
+      if ($hisec > 0) {
+        $remaining_time = phabricator_format_relative_time($hisec);
+        Javelin::initBehavior(
+          'high-security-warning',
+          array(
+            'uri' => '/auth/session/downgrade/',
+            'message' => pht(
+              'Your session is in high security mode. When you '.
+              'finish using it, click here to leave.',
+              $remaining_time),
+          ));
+      }
+    }
+
     if ($console) {
       require_celerity_resource('aphront-dark-console-css');
 
@@ -212,8 +218,7 @@ final class PhabricatorStandardPageView extends PhabricatorBarePageView {
     }
 
     $menu = id(new PhabricatorMainMenuView())
-      ->setUser($viewer)
-      ->setDefaultSearchScope($this->getSearchDefaultScope());
+      ->setUser($viewer);
 
     if ($this->getController()) {
       $menu->setController($this->getController());
@@ -255,7 +260,7 @@ final class PhabricatorStandardPageView extends PhabricatorBarePageView {
       parent::getHead(),
       phutil_safe_html($monospaced),
       phutil_safe_html($monospaced_win),
-      $response->renderSingleResource('javelin-magical-init'));
+      $response->renderSingleResource('javelin-magical-init', 'phabricator'));
   }
 
   public function setGlyph($glyph) {

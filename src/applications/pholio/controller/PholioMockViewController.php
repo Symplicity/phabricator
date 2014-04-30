@@ -98,10 +98,7 @@ final class PholioMockViewController extends PholioController {
 
     $crumbs = $this->buildApplicationCrumbs();
     $crumbs->setActionList($actions);
-    $crumbs->addCrumb(
-      id(new PhabricatorCrumbView())
-        ->setName('M'.$mock->getID())
-        ->setHref('/M'.$mock->getID()));
+    $crumbs->addTextCrumb('M'.$mock->getID(), '/M'.$mock->getID());
 
     $object_box = id(new PHUIObjectBoxView())
       ->setHeader($header)
@@ -222,6 +219,10 @@ final class PholioMockViewController extends PholioController {
 
     $properties->invokeWillRenderEvent();
 
+    $properties->addSectionHeader(
+        pht('Description'),
+        PHUIPropertyListView::ICON_SUMMARY);
+
     $properties->addImageContent(
         $engine->getOutput($mock, PholioMock::MARKUP_FIELD_DESCRIPTION));
 
@@ -234,14 +235,9 @@ final class PholioMockViewController extends PholioController {
     $draft = PhabricatorDraft::newFromUserAndKey($user, $mock->getPHID());
 
     $is_serious = PhabricatorEnv::getEnvConfig('phabricator.serious-business');
-
     $title = $is_serious
       ? pht('Add Comment')
       : pht('History Beckons');
-
-    $button_name = $is_serious
-      ? pht('Add Comment')
-      : pht('Answer The Call');
 
     $form = id(new PhabricatorApplicationTransactionCommentView())
       ->setUser($user)
@@ -249,7 +245,7 @@ final class PholioMockViewController extends PholioController {
       ->setFormID($comment_form_id)
       ->setDraft($draft)
       ->setHeaderText($title)
-      ->setSubmitButtonName($button_name)
+      ->setSubmitButtonName(pht('Add Comment'))
       ->setAction($this->getApplicationURI('/comment/'.$mock->getID().'/'))
       ->setRequestURI($this->getRequest()->getRequestURI());
 

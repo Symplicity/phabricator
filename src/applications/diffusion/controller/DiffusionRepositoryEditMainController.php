@@ -231,6 +231,7 @@ final class DiffusionRepositoryEditMainController
         ->setIcon('delete')
         ->setHref(
           $this->getRepositoryControllerURI($repository, 'edit/delete/'))
+        ->setDisabled(true)
         ->setWorkflow(true));
 
     return $view;
@@ -251,6 +252,30 @@ final class DiffusionRepositoryEditMainController
 
     $view->addProperty(pht('Type'), $type);
     $view->addProperty(pht('Callsign'), $repository->getCallsign());
+
+
+    $clone_name = $repository->getDetail('clone-name');
+
+    if ($repository->isHosted()) {
+      $view->addProperty(
+        pht('Clone/Checkout As'),
+        $clone_name
+          ? $clone_name.'/'
+          : phutil_tag('em', array(), $repository->getCloneName().'/'));
+    }
+
+    $project_phids = PhabricatorEdgeQuery::loadDestinationPHIDs(
+      $repository->getPHID(),
+      PhabricatorEdgeConfig::TYPE_OBJECT_HAS_PROJECT);
+    if ($project_phids) {
+      $this->loadHandles($project_phids);
+      $project_text = $this->renderHandlesForPHIDs($project_phids);
+    } else {
+      $project_text = phutil_tag('em', array(), pht('None'));
+    }
+    $view->addProperty(
+      pht('Projects'),
+      $project_text);
 
     $view->addProperty(
       pht('Status'),
@@ -577,6 +602,25 @@ final class DiffusionRepositoryEditMainController
         $this->getRepositoryControllerURI($repository, 'edit/hosting/'));
     $view->addAction($edit);
 
+    if ($repository->canAllowDangerousChanges()) {
+      if ($repository->shouldAllowDangerousChanges()) {
+        $changes = id(new PhabricatorActionView())
+          ->setIcon('blame')
+          ->setName(pht('Prevent Dangerous Changes'))
+          ->setHref(
+            $this->getRepositoryControllerURI($repository, 'edit/dangerous/'))
+          ->setWorkflow(true);
+      } else {
+        $changes = id(new PhabricatorActionView())
+          ->setIcon('warning')
+          ->setName(pht('Allow Dangerous Changes'))
+          ->setHref(
+            $this->getRepositoryControllerURI($repository, 'edit/dangerous/'))
+          ->setWorkflow(true);
+      }
+      $view->addAction($changes);
+    }
+
     return $view;
   }
 
@@ -611,6 +655,18 @@ final class DiffusionRepositoryEditMainController
         PhabricatorRepository::getProtocolAvailabilityName(
           $repository->getServeOverSSH())));
 
+    if ($repository->canAllowDangerousChanges()) {
+      if ($repository->shouldAllowDangerousChanges()) {
+        $description = pht('Allowed');
+      } else {
+        $description = pht('Not Allowed');
+      }
+
+      $view->addProperty(
+        pht('Dangerous Changes'),
+        $description);
+    }
+
     return $view;
   }
 
@@ -641,6 +697,7 @@ final class DiffusionRepositoryEditMainController
     }
 
     $binaries = array();
+    $svnlook_check = false;
     switch ($repository->getVersionControlSystem()) {
       case PhabricatorRepositoryType::REPOSITORY_TYPE_GIT:
         $binaries[] = 'git';
@@ -662,6 +719,8 @@ final class DiffusionRepositoryEditMainController
           case PhabricatorRepositoryType::REPOSITORY_TYPE_SVN:
             $binaries[] = 'svnserve';
             $binaries[] = 'svnadmin';
+            $binaries[] = 'svnlook';
+            $svnlook_check = true;
             break;
           case PhabricatorRepositoryType::REPOSITORY_TYPE_MERCURIAL:
             $binaries[] = 'hg';
@@ -677,6 +736,8 @@ final class DiffusionRepositoryEditMainController
           case PhabricatorRepositoryType::REPOSITORY_TYPE_SVN:
             $binaries[] = 'svnserve';
             $binaries[] = 'svnadmin';
+            $binaries[] = 'svnlook';
+            $svnlook_check = true;
             break;
           case PhabricatorRepositoryType::REPOSITORY_TYPE_MERCURIAL:
             $binaries[] = 'hg';
@@ -689,14 +750,6 @@ final class DiffusionRepositoryEditMainController
     foreach ($binaries as $binary) {
       $where = Filesystem::resolveBinary($binary);
       if (!$where) {
-        $config_href = '/config/edit/environment.append-paths/';
-        $config_link = phutil_tag(
-          'a',
-          array(
-            'href' => $config_href,
-          ),
-          'environment.append-paths');
-
         $view->addItem(
           id(new PHUIStatusItemView())
             ->setIcon('warning-red')
@@ -705,7 +758,7 @@ final class DiffusionRepositoryEditMainController
             ->setNote(pht(
               "Unable to find this binary in the webserver's PATH. You may ".
               "need to configure %s.",
-              $config_link)));
+              $this->getEnvConfigLink())));
       } else {
         $view->addItem(
           id(new PHUIStatusItemView())
@@ -716,8 +769,38 @@ final class DiffusionRepositoryEditMainController
       }
     }
 
-    $doc_href = PhabricatorEnv::getDocLink(
-      'article/Managing_Daemons_with_phd.html');
+    // This gets checked generically above. However, for svn commit hooks, we
+    // need this to be in environment.append-paths because subversion strips
+    // PATH.
+    if ($svnlook_check) {
+      $where = Filesystem::resolveBinary('svnlook');
+      if ($where) {
+        $path = substr($where, 0, strlen($where) - strlen('svnlook'));
+        $dirs = PhabricatorEnv::getEnvConfig('environment.append-paths');
+        $in_path = false;
+        foreach ($dirs as $dir) {
+          if (Filesystem::isDescendant($path, $dir)) {
+            $in_path = true;
+            break;
+          }
+        }
+        if (!$in_path) {
+          $view->addItem(
+            id(new PHUIStatusItemView())
+            ->setIcon('warning-red')
+            ->setTarget(
+              pht('Missing Binary %s', phutil_tag('tt', array(), $binary)))
+            ->setNote(pht(
+                'Unable to find this binary in `environment.append-paths`. '.
+                'You need to configure %s and include %s.',
+                $this->getEnvConfigLink(),
+                $path)));
+        }
+      }
+    }
+
+    $doc_href = PhabricatorEnv::getDocLink('Managing Daemons with phd');
+
     $daemon_instructions = pht(
       'Use %s to start daemons. See %s.',
       phutil_tag('tt', array(), 'bin/phd start'),
@@ -912,7 +995,13 @@ final class DiffusionRepositoryEditMainController
         $percentage = 0;
       }
 
-      $percentage = sprintf('%.1f%%', $percentage);
+      // Cap this at "99.99%", because it's confusing to users when the actual
+      // fraction is "99.996%" and it rounds up to "100.00%".
+      if ($percentage > 99.99) {
+        $percentage = 99.99;
+      }
+
+      $percentage = sprintf('%.2f%%', $percentage);
 
       $view->addItem(
         id(new PHUIStatusItemView())
@@ -1019,5 +1108,14 @@ final class DiffusionRepositoryEditMainController
     return $mirror_list;
   }
 
+  private function getEnvConfigLink() {
+    $config_href = '/config/edit/environment.append-paths/';
+    return phutil_tag(
+      'a',
+      array(
+        'href' => $config_href,
+      ),
+      'environment.append-paths');
+  }
 
 }

@@ -67,9 +67,7 @@ final class DiffusionRepositoryEditHostingController
     }
 
     $crumbs = $this->buildApplicationCrumbs();
-    $crumbs->addCrumb(
-      id(new PhabricatorCrumbView())
-        ->setName(pht('Edit Hosting')));
+    $crumbs->addTextCrumb(pht('Edit Hosting'));
 
     $title = pht('Edit Hosting (%s)', $repository->getName());
 
@@ -93,7 +91,7 @@ final class DiffusionRepositoryEditHostingController
         ->setValue($v_hosting);
 
     $doc_href = PhabricatorEnv::getDoclink(
-      'article/Diffusion_User_Guide_Repository_Hosting.html');
+      'Diffusion User Guide: Repository Hosting');
 
     $form = id(new AphrontFormView())
       ->setUser($user)
@@ -172,9 +170,7 @@ final class DiffusionRepositoryEditHostingController
     }
 
     $crumbs = $this->buildApplicationCrumbs();
-    $crumbs->addCrumb(
-      id(new PhabricatorCrumbView())
-        ->setName(pht('Edit Protocols')));
+    $crumbs->addTextCrumb(pht('Edit Protocols'));
 
     $title = pht('Edit Protocols (%s)', $repository->getName());
 

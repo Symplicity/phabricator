@@ -30,7 +30,10 @@ final class PhabricatorRepositoryEditor
     $types[] = PhabricatorRepositoryTransaction::TYPE_PROTOCOL_SSH;
     $types[] = PhabricatorRepositoryTransaction::TYPE_PUSH_POLICY;
     $types[] = PhabricatorRepositoryTransaction::TYPE_CREDENTIAL;
+    $types[] = PhabricatorRepositoryTransaction::TYPE_DANGEROUS;
+    $types[] = PhabricatorRepositoryTransaction::TYPE_CLONE_NAME;
 
+    $types[] = PhabricatorTransactions::TYPE_EDGE;
     $types[] = PhabricatorTransactions::TYPE_VIEW_POLICY;
     $types[] = PhabricatorTransactions::TYPE_EDIT_POLICY;
 
@@ -80,6 +83,10 @@ final class PhabricatorRepositoryEditor
         return $object->getPushPolicy();
       case PhabricatorRepositoryTransaction::TYPE_CREDENTIAL:
         return $object->getCredentialPHID();
+      case PhabricatorRepositoryTransaction::TYPE_DANGEROUS:
+        return $object->shouldAllowDangerousChanges();
+      case PhabricatorRepositoryTransaction::TYPE_CLONE_NAME:
+        return $object->getDetail('clone-name');
     }
   }
 
@@ -110,6 +117,8 @@ final class PhabricatorRepositoryEditor
       case PhabricatorRepositoryTransaction::TYPE_PROTOCOL_SSH:
       case PhabricatorRepositoryTransaction::TYPE_PUSH_POLICY:
       case PhabricatorRepositoryTransaction::TYPE_CREDENTIAL:
+      case PhabricatorRepositoryTransaction::TYPE_DANGEROUS:
+      case PhabricatorRepositoryTransaction::TYPE_CLONE_NAME:
         return $xaction->getNewValue();
       case PhabricatorRepositoryTransaction::TYPE_NOTIFY:
       case PhabricatorRepositoryTransaction::TYPE_AUTOCLOSE:
@@ -175,6 +184,12 @@ final class PhabricatorRepositoryEditor
         return $object->setPushPolicy($xaction->getNewValue());
       case PhabricatorRepositoryTransaction::TYPE_CREDENTIAL:
         return $object->setCredentialPHID($xaction->getNewValue());
+      case PhabricatorRepositoryTransaction::TYPE_DANGEROUS:
+        $object->setDetail('allow-dangerous-changes', $xaction->getNewValue());
+        return;
+      case PhabricatorRepositoryTransaction::TYPE_CLONE_NAME:
+        $object->setDetail('clone-name', $xaction->getNewValue());
+        return;
       case PhabricatorRepositoryTransaction::TYPE_ENCODING:
         // Make sure the encoding is valid by converting to UTF-8. This tests
         // that the user has mbstring installed, and also that they didn't type
@@ -285,12 +300,43 @@ final class PhabricatorRepositoryEditor
       case PhabricatorRepositoryTransaction::TYPE_PROTOCOL_SSH:
       case PhabricatorRepositoryTransaction::TYPE_PUSH_POLICY:
       case PhabricatorRepositoryTransaction::TYPE_CREDENTIAL:
+      case PhabricatorRepositoryTransaction::TYPE_DANGEROUS:
+      case PhabricatorRepositoryTransaction::TYPE_CLONE_NAME:
         PhabricatorPolicyFilter::requireCapability(
           $this->requireActor(),
           $object,
           PhabricatorPolicyCapability::CAN_EDIT);
         break;
     }
+  }
+
+  protected function validateTransaction(
+    PhabricatorLiskDAO $object,
+    $type,
+    array $xactions) {
+
+    $errors = parent::validateTransaction($object, $type, $xactions);
+
+    switch ($type) {
+      case PhabricatorRepositoryTransaction::TYPE_CREDENTIAL:
+        $ok = PassphraseCredentialControl::validateTransactions(
+          $this->getActor(),
+          $xactions);
+        if (!$ok) {
+          foreach ($xactions as $xaction) {
+            $errors[] = new PhabricatorApplicationTransactionValidationError(
+              $type,
+              pht('Invalid'),
+              pht(
+                'The selected credential does not exist, or you do not have '.
+                'permission to use it.'),
+              $xaction);
+          }
+        }
+        break;
+    }
+
+    return $errors;
   }
 
 }

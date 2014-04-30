@@ -100,10 +100,22 @@ final class ConduitAPI_diffusion_browsequery_Method
 
     $results = array();
     foreach (explode("\0", rtrim($stdout)) as $line) {
-
       // NOTE: Limit to 5 components so we parse filenames with spaces in them
       // correctly.
-      list($mode, $type, $hash, $size, $name) = preg_split('/\s+/', $line, 5);
+      // NOTE: The output uses a mixture of tabs and one-or-more spaces to
+      // delimit fields.
+      $parts = preg_split('/\s+/', $line, 5);
+      if (count($parts) < 5) {
+        throw new Exception(
+          pht(
+            'Expected "<mode> <type> <hash> <size>\t<name>", for ls-tree of '.
+            '"%s:%s", got: %s',
+            $commit,
+            $path,
+            $line));
+      }
+
+      list($mode, $type, $hash, $size, $name) = $parts;
 
       $path_result = new DiffusionRepositoryPath();
 
@@ -185,25 +197,18 @@ final class ConduitAPI_diffusion_browsequery_Method
     $commit = $request->getValue('commit');
     $result = $this->getEmptyResultSet();
 
-    // TODO: This is a really really awful mess but Mercurial doesn't offer
-    // an equivalent of "git ls-files -- directory". If it's any comfort, this
-    // is what "hgweb" does too, see:
-    //
-    //   http://selenic.com/repo/hg/file/91dc8878f888/mercurial/hgweb/webcommands.py#l320
-    //
-    // derp derp derp derp
-    //
-    // Anyway, figure out what's in this path by applying massive amounts
-    // of brute force.
+    $match_against = trim($path, '/');
+
+    $prefix = trim('./'.$match_against, '/');
 
     list($entire_manifest) = $repository->execxLocalCommand(
-      'manifest --rev %s',
-      hgsprintf('%s', $commit));
-    $entire_manifest = explode("\n", $entire_manifest);
+      'locate --print0 --rev %s -I %s',
+      hgsprintf('%s', $commit),
+      $prefix);
+    $entire_manifest = explode("\0", $entire_manifest);
 
     $results = array();
 
-    $match_against = trim($path, '/');
     $match_len = strlen($match_against);
 
     // For the root, don't trim. For other paths, trim the "/" after we match.

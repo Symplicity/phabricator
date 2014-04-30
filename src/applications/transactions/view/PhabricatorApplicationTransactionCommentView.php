@@ -85,6 +85,7 @@ class PhabricatorApplicationTransactionCommentView extends AphrontView {
       $uri = id(new PhutilURI('/login/'))
         ->setQueryParam('next', (string) $this->getRequestURI());
       return id(new PHUIObjectBoxView())
+        ->setFlush(true)
         ->setHeaderText(pht('Add Comment'))
         ->appendChild(
           javelin_tag(
@@ -180,7 +181,7 @@ class PhabricatorApplicationTransactionCommentView extends AphrontView {
 
   private function renderPreviewPanel() {
 
-    $preview = id(new PhabricatorTimelineView())
+    $preview = id(new PHUITimelineView())
       ->setID($this->getPreviewTimelineID());
 
     return phutil_tag(
@@ -233,4 +234,3 @@ class PhabricatorApplicationTransactionCommentView extends AphrontView {
   }
 
 }
-

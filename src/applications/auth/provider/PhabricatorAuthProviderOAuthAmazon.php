@@ -1,14 +1,14 @@
 <?php
 
 final class PhabricatorAuthProviderOAuthAmazon
-  extends PhabricatorAuthProviderOAuth {
+  extends PhabricatorAuthProviderOAuth2 {
 
   public function getProviderName() {
     return pht('Amazon');
   }
 
-  public function getConfigurationHelp() {
-    $login_uri = $this->getLoginURI();
+  protected function getProviderConfigurationHelp() {
+    $login_uri = PhabricatorEnv::getURI($this->getLoginURI());
 
     $uri = new PhutilURI(PhabricatorEnv::getProductionURI('/'));
     $https_note = null;

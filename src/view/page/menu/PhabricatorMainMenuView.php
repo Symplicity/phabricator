@@ -2,7 +2,6 @@
 
 final class PhabricatorMainMenuView extends AphrontView {
 
-  private $defaultSearchScope;
   private $controller;
   private $applicationMenu;
 
@@ -24,19 +23,11 @@ final class PhabricatorMainMenuView extends AphrontView {
     return $this->controller;
   }
 
-  public function setDefaultSearchScope($default_search_scope) {
-    $this->defaultSearchScope = $default_search_scope;
-    return $this;
-  }
-
-  public function getDefaultSearchScope() {
-    return $this->defaultSearchScope;
-  }
-
   public function render() {
     $user = $this->user;
 
     require_celerity_resource('phabricator-main-menu-view');
+    require_celerity_resource('sprite-main-header-css');
 
     $header_id = celerity_generate_unique_node_id();
     $menus = array();
@@ -50,6 +41,11 @@ final class PhabricatorMainMenuView extends AphrontView {
       $menus = array_merge($menus, $dropdowns);
       $app_button = $this->renderApplicationMenuButton($header_id);
       $search_button = $this->renderSearchMenuButton($header_id);
+    } else {
+      $app_button = $this->renderApplicationMenuButton($header_id);
+      if (PhabricatorEnv::getEnvConfig('policy.allow-public')) {
+        $search_button = $this->renderSearchMenuButton($header_id);
+      }
     }
 
     $search_menu = $this->renderPhabricatorSearchMenu();
@@ -64,11 +60,15 @@ final class PhabricatorMainMenuView extends AphrontView {
     }
 
     $application_menu = $this->renderApplicationMenu();
+    $classes = array();
+    $classes[] = 'phabricator-main-menu';
+    $classes[] = 'sprite-main-header';
+    $classes[] = 'main-header-'.PhabricatorEnv::getEnvConfig('ui.header-color');
 
     return phutil_tag(
       'div',
       array(
-        'class' => 'phabricator-main-menu',
+        'class' => implode(' ', $classes),
         'id'    => $header_id,
       ),
       array(
@@ -100,7 +100,6 @@ final class PhabricatorMainMenuView extends AphrontView {
     if ($show_search) {
       $search = new PhabricatorMainMenuSearchView();
       $search->setUser($user);
-      $search->setScope($this->getDefaultSearchScope());
       $result = $search;
 
       $pref_shortcut = PhabricatorUserPreferences::PREFERENCE_SEARCH_SHORTCUT;
@@ -157,6 +156,8 @@ final class PhabricatorMainMenuView extends AphrontView {
         $actions[] = $action;
       }
     }
+
+    $actions = msort($actions, 'getOrder');
 
     $view = $this->getApplicationMenu();
 
@@ -227,6 +228,8 @@ final class PhabricatorMainMenuView extends AphrontView {
   }
 
   private function renderPhabricatorLogo() {
+    $class = 'phabricator-main-menu-logo-image';
+
     return phutil_tag(
       'a',
       array(
@@ -236,7 +239,7 @@ final class PhabricatorMainMenuView extends AphrontView {
       phutil_tag(
         'span',
         array(
-          'class' => 'sprite-menu phabricator-main-menu-logo-image',
+          'class' => 'sprite-menu menu-logo-image '.$class,
         ),
         ''));
   }
@@ -385,6 +388,13 @@ final class PhabricatorMainMenuView extends AphrontView {
     $dropdowns = array(
       $notification_dropdown,
       $message_notification_dropdown);
+
+    $applications = PhabricatorApplication::getAllInstalledApplications();
+    foreach ($applications as $application) {
+      $dropdowns[] = $application->buildMainMenuExtraNodes(
+        $this->getUser(),
+        $this->getController());
+    }
 
     return array(
       hsprintf('%s%s', $bubble_tag, $message_tag),

@@ -1,17 +1,42 @@
 <?php
 
-/**
- * @group herald
- */
 final class HeraldManiphestTaskAdapter extends HeraldAdapter {
 
   private $task;
   private $ccPHIDs = array();
   private $assignPHID;
   private $projectPHIDs = array();
+  private $emailPHIDs = array();
+
+  public function getEmailPHIDs() {
+    return $this->emailPHIDs;
+  }
 
   public function getAdapterApplicationClass() {
     return 'PhabricatorApplicationManiphest';
+  }
+
+  public function getAdapterContentDescription() {
+    return pht(
+      'React to tasks being created or updated.');
+  }
+
+  public function getRepetitionOptions() {
+    return array(
+      HeraldRepetitionPolicyConfig::EVERY,
+      HeraldRepetitionPolicyConfig::FIRST,
+    );
+  }
+
+  public function supportsRuleType($rule_type) {
+    switch ($rule_type) {
+      case HeraldRuleTypeConfig::RULE_TYPE_GLOBAL:
+      case HeraldRuleTypeConfig::RULE_TYPE_PERSONAL:
+        return true;
+      case HeraldRuleTypeConfig::RULE_TYPE_OBJECT:
+      default:
+        return false;
+    }
   }
 
   public function setTask(ManiphestTask $task) {
@@ -60,9 +85,12 @@ final class HeraldManiphestTaskAdapter extends HeraldAdapter {
         self::FIELD_TITLE,
         self::FIELD_BODY,
         self::FIELD_AUTHOR,
+        self::FIELD_ASSIGNEE,
         self::FIELD_CC,
         self::FIELD_CONTENT_SOURCE,
         self::FIELD_PROJECTS,
+        self::FIELD_TASK_PRIORITY,
+        self::FIELD_IS_NEW_OBJECT,
       ),
       parent::getFields());
   }
@@ -72,6 +100,7 @@ final class HeraldManiphestTaskAdapter extends HeraldAdapter {
       case HeraldRuleTypeConfig::RULE_TYPE_GLOBAL:
         return array(
           self::ACTION_ADD_CC,
+          self::ACTION_EMAIL,
           self::ACTION_ASSIGN_TASK,
           self::ACTION_ADD_PROJECTS,
           self::ACTION_NOTHING,
@@ -79,6 +108,7 @@ final class HeraldManiphestTaskAdapter extends HeraldAdapter {
       case HeraldRuleTypeConfig::RULE_TYPE_PERSONAL:
         return array(
           self::ACTION_ADD_CC,
+          self::ACTION_EMAIL,
           self::ACTION_FLAG,
           self::ACTION_ASSIGN_TASK,
           self::ACTION_NOTHING,
@@ -102,10 +132,14 @@ final class HeraldManiphestTaskAdapter extends HeraldAdapter {
         return $this->getTask()->getDescription();
       case self::FIELD_AUTHOR:
         return $this->getTask()->getAuthorPHID();
+      case self::FIELD_ASSIGNEE:
+        return $this->getTask()->getOwnerPHID();
       case self::FIELD_CC:
         return $this->getTask()->getCCPHIDs();
       case self::FIELD_PROJECTS:
         return $this->getTask()->getProjectPHIDs();
+      case self::FIELD_TASK_PRIORITY:
+        return $this->getTask()->getPriority();
     }
 
     return parent::getHeraldField($field);
@@ -131,7 +165,16 @@ final class HeraldManiphestTaskAdapter extends HeraldAdapter {
           $result[] = new HeraldApplyTranscript(
             $effect,
             true,
-            pht('Added address to cc list.'));
+            pht('Added addresses to cc list.'));
+          break;
+        case self::ACTION_EMAIL:
+          foreach ($effect->getTarget() as $phid) {
+            $this->emailPHIDs[] = $phid;
+          }
+          $result[] = new HeraldApplyTranscript(
+            $effect,
+            true,
+            pht('Added addresses to email list.'));
           break;
         case self::ACTION_FLAG:
           $result[] = parent::applyFlagEffect(
@@ -162,4 +205,9 @@ final class HeraldManiphestTaskAdapter extends HeraldAdapter {
     }
     return $result;
   }
+
+  protected function getCustomFieldTemplateObject() {
+    return new ManiphestTask();
+  }
+
 }

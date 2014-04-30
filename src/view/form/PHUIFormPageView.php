@@ -13,7 +13,7 @@ class PHUIFormPageView extends AphrontView {
   private $isValid;
   private $validateFormPageCallback;
   private $adjustFormPageCallback;
-  private $pageErrors;
+  private $pageErrors = array();
   private $pageName;
 
 
@@ -191,7 +191,9 @@ class PHUIFormPageView extends AphrontView {
 
   public function readFromObject($object) {
     foreach ($this->getControls() as $name => $control) {
-      $control->readValueFromDictionary($object);
+      if (is_array($object)) {
+        $control->readValueFromDictionary($object);
+      }
     }
 
     return $this;

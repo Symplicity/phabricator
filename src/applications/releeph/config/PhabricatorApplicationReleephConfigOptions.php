@@ -14,20 +14,19 @@ final class PhabricatorApplicationReleephConfigOptions
   public function getOptions() {
 
     $default_fields = array(
-      new ReleephCommitMessageFieldSpecification(),
       new ReleephSummaryFieldSpecification(),
+      new ReleephRequestorFieldSpecification(),
+      new ReleephSeverityFieldSpecification(),
+      new ReleephIntentFieldSpecification(),
       new ReleephReasonFieldSpecification(),
       new ReleephAuthorFieldSpecification(),
       new ReleephRevisionFieldSpecification(),
-      new ReleephRequestorFieldSpecification(),
-      new ReleephSeverityFieldSpecification(),
       new ReleephOriginalCommitFieldSpecification(),
-      new ReleephDiffMessageFieldSpecification(),
-      new ReleephStatusFieldSpecification(),
-      new ReleephIntentFieldSpecification(),
       new ReleephBranchCommitFieldSpecification(),
       new ReleephDiffSizeFieldSpecification(),
       new ReleephDiffChurnFieldSpecification(),
+      new ReleephDiffMessageFieldSpecification(),
+      new ReleephCommitMessageFieldSpecification(),
     );
 
     $default = array();
@@ -59,18 +58,6 @@ final class PhabricatorApplicationReleephConfigOptions
             "stable.")),
       $this->newOption('releeph.fields', $custom_field_type, $default)
         ->setCustomData('ReleephFieldSpecification'),
-      $this->newOption(
-        'releeph.user-view',
-        'class',
-        'ReleephDefaultUserView')
-        ->setBaseClass('ReleephUserView')
-        ->setSummary(pht('Extra markup when rendering usernames'))
-        ->setDescription(
-          pht(
-            "A wrapper to render Phabricator users in Releeph, with custom ".
-            "markup.  For example, Facebook extends this to render additional ".
-            "information about requestors, to each Releeph project's ".
-            "pushers.")),
       $this->newOption(
         'releeph.default-branch-template',
         'string',

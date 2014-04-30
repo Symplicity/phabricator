@@ -4,6 +4,7 @@ final class HarbormasterBuildPlanTransaction
   extends PhabricatorApplicationTransaction {
 
   const TYPE_NAME = 'harbormaster:name';
+  const TYPE_STATUS = 'harbormaster:status';
 
   public function getApplicationName() {
     return 'harbormaster';
@@ -24,7 +25,7 @@ final class HarbormasterBuildPlanTransaction
     switch ($this->getTransactionType()) {
       case self::TYPE_NAME:
         if ($old === null) {
-          return 'create';
+          return 'fa-plus';
         }
         break;
     }
@@ -65,7 +66,16 @@ final class HarbormasterBuildPlanTransaction
             $old,
             $new);
         }
-        break;
+      case self::TYPE_STATUS:
+        if ($new == HarbormasterBuildPlan::STATUS_DISABLED) {
+          return pht(
+            '%s disabled this build plan.',
+            $author_handle);
+        } else {
+          return pht(
+            '%s enabled this build plan.',
+            $author_handle);
+        }
     }
 
     return parent::getTitle();

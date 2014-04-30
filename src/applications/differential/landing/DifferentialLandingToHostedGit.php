@@ -105,7 +105,7 @@ final class DifferentialLandingToHostedGit
     $workspace->execxLocal("push origin HEAD:master");
   }
 
-  public function createMenuItems(
+  public function createMenuItem(
     PhabricatorUser $viewer,
     DifferentialRevision $revision,
     PhabricatorRepository $repository) {
@@ -123,14 +123,13 @@ final class DifferentialLandingToHostedGit
       return;
     }
 
-    $can_push = PhabricatorPolicyFilter::hasCapability(
-        $viewer,
-        $repository,
-        DiffusionCapabilityPush::CAPABILITY);
+    // TODO: This temporarily disables this action, because it doesn't work
+    // and is confusing to users. If you want to use it, comment out this line
+    // for now and we'll provide real support eventually.
+    return;
 
     return $this->createActionView(
       $revision,
-      pht('Land to Hosted Repository'),
-      !$can_push);
+      pht('Land to Hosted Repository'));
   }
 }

@@ -11,23 +11,27 @@ final class PhabricatorApplicationTransactionDetailController
 
   public function processRequest() {
     $request = $this->getRequest();
-    $user = $request->getUser();
+    $viewer = $request->getUser();
 
     $xaction = id(new PhabricatorObjectQuery())
       ->withPHIDs(array($this->phid))
-      ->setViewer($user)
+      ->setViewer($viewer)
       ->executeOne();
-
     if (!$xaction) {
-      // future proofing for the day visibility of transactions can change
       return new Aphront404Response();
     }
 
-    return id(new PhabricatorApplicationTransactionResponse())
-      ->setViewer($user)
-      ->setTransactions(array($xaction))
-      ->setIsDetailView(true)
-      ->setAnchorOffset($request->getStr('anchor'));
+    $details = $xaction->renderChangeDetails($viewer);
+
+    $cancel_uri = $this->guessCancelURI($viewer, $xaction);
+    $dialog = id(new AphrontDialogView())
+      ->setUser($viewer)
+      ->setTitle(pht('Change Details'))
+      ->setWidth(AphrontDialogView::WIDTH_FULL)
+      ->appendChild($details)
+      ->addCancelButton($cancel_uri);
+
+    return id(new AphrontDialogResponse())->setDialog($dialog);
   }
 
 }

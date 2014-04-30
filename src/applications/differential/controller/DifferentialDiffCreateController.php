@@ -41,8 +41,7 @@ final class DifferentialDiffCreateController extends DifferentialController {
     }
 
     $form = new AphrontFormView();
-    $arcanist_href = PhabricatorEnv::getDoclink(
-      'article/Arcanist_User_Guide.html');
+    $arcanist_href = PhabricatorEnv::getDoclink('Arcanist User Guide');
     $arcanist_link = phutil_tag(
       'a',
       array(
@@ -84,18 +83,11 @@ final class DifferentialDiffCreateController extends DifferentialController {
 
     $form_box = id(new PHUIObjectBoxView())
       ->setHeaderText(pht('Create New Diff'))
-      ->setFormError($errors)
-      ->setForm($form);
+      ->setForm($form)
+      ->setFormErrors($errors);
 
     $crumbs = $this->buildApplicationCrumbs();
-    $crumbs->addCrumb(
-      id(new PhabricatorCrumbView())
-        ->setName(pht('Create Diff')));
-
-    if ($errors) {
-      $errors = id(new AphrontErrorView())
-        ->setErrors($errors);
-    }
+    $crumbs->addTextCrumb(pht('Create Diff'));
 
     return $this->buildApplicationPage(
       array(

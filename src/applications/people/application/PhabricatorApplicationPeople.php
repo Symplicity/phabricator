@@ -3,7 +3,7 @@
 final class PhabricatorApplicationPeople extends PhabricatorApplication {
 
   public function getShortDescription() {
-    return 'User Accounts';
+    return pht('User Accounts');
   }
 
   public function getBaseURI() {
@@ -40,11 +40,19 @@ final class PhabricatorApplicationPeople extends PhabricatorApplication {
     return array(
       '/people/' => array(
         '(query/(?P<key>[^/]+)/)?' => 'PhabricatorPeopleListController',
-        'logs/' => 'PhabricatorPeopleLogsController',
+        'logs/(?:query/(?P<queryKey>[^/]+)/)?'
+          => 'PhabricatorPeopleLogsController',
         'approve/(?P<id>[1-9]\d*)/' => 'PhabricatorPeopleApproveController',
-        'disable/(?P<id>[1-9]\d*)/' => 'PhabricatorPeopleDisableController',
-        'edit/(?:(?P<id>[1-9]\d*)/(?:(?P<view>\w+)/)?)?'
-          => 'PhabricatorPeopleEditController',
+        '(?P<via>disapprove)/(?P<id>[1-9]\d*)/'
+          => 'PhabricatorPeopleDisableController',
+        '(?P<via>disable)/(?P<id>[1-9]\d*)/'
+          => 'PhabricatorPeopleDisableController',
+        'empower/(?P<id>[1-9]\d*)/' => 'PhabricatorPeopleEmpowerController',
+        'delete/(?P<id>[1-9]\d*)/' => 'PhabricatorPeopleDeleteController',
+        'rename/(?P<id>[1-9]\d*)/' => 'PhabricatorPeopleRenameController',
+        'welcome/(?P<id>[1-9]\d*)/' => 'PhabricatorPeopleWelcomeController',
+        'create/' => 'PhabricatorPeopleCreateController',
+        'new/(?P<type>[^/]+)/' => 'PhabricatorPeopleNewController',
         'ldap/' => 'PhabricatorPeopleLdapController',
         'editprofile/(?P<id>[1-9]\d*)/' =>
           'PhabricatorPeopleProfileEditController',
@@ -53,12 +61,22 @@ final class PhabricatorApplicationPeople extends PhabricatorApplication {
       ),
       '/p/(?P<username>[\w._-]+)/'
         => 'PhabricatorPeopleProfileController',
+      '/p/(?P<username>[\w._-]+)/calendar/'
+        => 'PhabricatorPeopleCalendarController',
     );
   }
 
   public function getRemarkupRules() {
     return array(
       new PhabricatorRemarkupRuleMention(),
+    );
+  }
+
+
+  protected function getCustomCapabilities() {
+    return array(
+      PeopleCapabilityBrowseUserDirectory::CAPABILITY => array(
+      ),
     );
   }
 
@@ -70,6 +88,7 @@ final class PhabricatorApplicationPeople extends PhabricatorApplication {
     $need_approval = id(new PhabricatorPeopleQuery())
       ->setViewer($user)
       ->withIsApproved(false)
+      ->withIsDisabled(false)
       ->execute();
 
     if (!$need_approval) {
@@ -97,10 +116,11 @@ final class PhabricatorApplicationPeople extends PhabricatorApplication {
     if ($user->isLoggedIn() && $user->isUserActivated()) {
       $image = $user->loadProfileImageURI();
 
-      $item = new PHUIListItemView();
-      $item->setName($user->getUsername());
-      $item->setHref('/p/'.$user->getUsername().'/');
-      $item->addClass('core-menu-item');
+      $item = id(new PHUIListItemView())
+        ->setName($user->getUsername())
+        ->setHref('/p/'.$user->getUsername().'/')
+        ->addClass('core-menu-item')
+        ->setOrder(100);
 
       $classes = array(
         'phabricator-core-menu-icon',
@@ -121,5 +141,21 @@ final class PhabricatorApplicationPeople extends PhabricatorApplication {
 
     return $items;
   }
+
+
+  public function getQuickCreateItems(PhabricatorUser $viewer) {
+    $items = array();
+
+    if ($viewer->getIsAdmin()) {
+      $item = id(new PHUIListItemView())
+        ->setName(pht('User Account'))
+        ->setAppIcon('people-dark')
+        ->setHref($this->getBaseURI().'create/');
+      $items[] = $item;
+    }
+
+    return $items;
+  }
+
 
 }

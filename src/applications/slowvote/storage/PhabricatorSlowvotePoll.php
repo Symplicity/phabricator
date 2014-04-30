@@ -24,6 +24,7 @@ final class PhabricatorSlowvotePoll extends PhabricatorSlowvoteDAO
   protected $shuffle;
   protected $method;
   protected $viewPolicy;
+  protected $isClosed = 0;
 
   private $options = self::ATTACHABLE;
   private $choices = self::ATTACHABLE;
@@ -123,6 +124,14 @@ final class PhabricatorSlowvotePoll extends PhabricatorSlowvoteDAO
 
   public function isAutomaticallySubscribed($phid) {
     return ($phid == $this->getAuthorPHID());
+  }
+
+  public function shouldShowSubscribersProperty() {
+    return true;
+  }
+
+  public function shouldAllowSubscription($phid) {
+    return true;
   }
 
 

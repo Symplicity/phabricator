@@ -91,13 +91,8 @@ final class PhabricatorPeopleProfilePictureController
 
     $title = pht('Edit Profile Picture');
     $crumbs = $this->buildApplicationCrumbs();
-    $crumbs->addCrumb(
-      id(new PhabricatorCrumbView())
-        ->setName($user->getUsername())
-        ->setHref($profile_uri));
-    $crumbs->addCrumb(
-      id(new PhabricatorCrumbView())
-        ->setName($title));
+    $crumbs->addTextCrumb($user->getUsername(), $profile_uri);
+    $crumbs->addTextCrumb($title);
 
     $form = id(new PHUIFormLayoutView())
       ->setUser($viewer);
@@ -160,7 +155,7 @@ final class PhabricatorPeopleProfilePictureController
     if (PhabricatorEnv::getEnvConfig('security.allow-outbound-http')) {
       $emails = id(new PhabricatorUserEmail())->loadAllWhere(
         'userPHID = %s ORDER BY address',
-        $viewer->getPHID());
+        $user->getPHID());
 
       $futures = array();
       foreach ($emails as $email_object) {
@@ -263,11 +258,11 @@ final class PhabricatorPeopleProfilePictureController
 
     $form_box = id(new PHUIObjectBoxView())
       ->setHeaderText($title)
-      ->setFormError($errors)
+      ->setFormErrors($errors)
       ->setForm($form);
 
     $upload_form = id(new AphrontFormView())
-      ->setUser($user)
+      ->setUser($viewer)
       ->setEncType('multipart/form-data')
       ->appendChild(
         id(new AphrontFormFileControl())
@@ -280,15 +275,6 @@ final class PhabricatorPeopleProfilePictureController
         id(new AphrontFormSubmitControl())
           ->addCancelButton($profile_uri)
           ->setValue(pht('Upload Picture')));
-
-    if ($errors) {
-      $errors = id(new AphrontErrorView())->setErrors($errors);
-    }
-
-    $form_box = id(new PHUIObjectBoxView())
-      ->setHeaderText($title)
-      ->setFormError($errors)
-      ->setForm($form);
 
     $upload_box = id(new PHUIObjectBoxView())
       ->setHeaderText(pht('Upload New Picture'))

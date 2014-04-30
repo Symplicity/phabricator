@@ -58,10 +58,7 @@ final class PhameBlogViewController extends PhameController {
 
 
     $crumbs = $this->buildApplicationCrumbs();
-    $crumbs->addCrumb(
-      id(new PhabricatorCrumbView())
-        ->setName($blog->getName())
-        ->setHref($this->getApplicationURI()));
+    $crumbs->addTextCrumb($blog->getName(), $this->getApplicationURI());
 
     $object_box = id(new PHUIObjectBoxView())
       ->setHeader($header)
@@ -161,8 +158,6 @@ final class PhameBlogViewController extends PhameController {
       $blog,
       PhabricatorPolicyCapability::CAN_JOIN);
 
-    $must_use_form = $blog->getDomain();
-
     $actions->addAction(
       id(new PhabricatorActionView())
         ->setIcon('new')
@@ -175,8 +170,7 @@ final class PhameBlogViewController extends PhameController {
       id(new PhabricatorActionView())
         ->setUser($user)
         ->setIcon('world')
-        ->setHref($this->getApplicationURI('live/'.$blog->getID().'/'))
-        ->setRenderAsForm($must_use_form)
+        ->setHref($blog->getLiveURI())
         ->setName(pht('View Live')));
 
     $actions->addAction(

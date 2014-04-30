@@ -15,6 +15,11 @@ final class PhabricatorCountdownEditController
 
     $request = $this->getRequest();
     $user = $request->getUser();
+    $epoch_control = id(new AphrontFormDateControl())
+      ->setUser($user)
+      ->setName('epoch')
+      ->setLabel(pht('End Date'))
+      ->setInitialTime(AphrontFormDateControl::TIME_END_OF_DAY);
 
     if ($this->id) {
       $page_title = pht('Edit Countdown');
@@ -34,15 +39,13 @@ final class PhabricatorCountdownEditController
       $page_title = pht('Create Countdown');
       $countdown = PhabricatorCountdown::initializeNewCountdown($user);
     }
+    $epoch_control->setValue($countdown->getEpoch());
 
-    $error_view = null;
     $e_text = true;
-    $e_epoch = null;
-
+    $errors = array();
     if ($request->isFormPost()) {
-      $errors = array();
       $title = $request->getStr('title');
-      $epoch = $request->getStr('epoch');
+      $epoch = $epoch_control->readValueFromRequest($request);
       $view_policy = $request->getStr('viewPolicy');
 
       $e_text = null;
@@ -50,32 +53,17 @@ final class PhabricatorCountdownEditController
         $e_text = pht('Required');
         $errors[] = pht('You must give the countdown a name.');
       }
-
-      if (strlen($epoch)) {
-        $timestamp = PhabricatorTime::parseLocalTime($epoch, $user);
-        if (!$timestamp) {
-          $errors[] = pht(
-            'You entered an incorrect date. You can enter date '.
-            'like \'2011-06-26 13:33:37\' to create an event at '.
-            '13:33:37 on the 26th of June 2011.');
-        }
-      } else {
-        $e_epoch = pht('Required');
-        $errors[] = pht('You must specify the end date for a countdown.');
+      if (!$epoch) {
+        $errors[] = pht('You must give the countdown a valid end date.');
       }
 
       if (!count($errors)) {
         $countdown->setTitle($title);
-        $countdown->setEpoch($timestamp);
+        $countdown->setEpoch($epoch);
         $countdown->setViewPolicy($view_policy);
         $countdown->save();
         return id(new AphrontRedirectResponse())
           ->setURI('/countdown/'.$countdown->getID().'/');
-      } else {
-        $error_view = id(new AphrontErrorView())
-          ->setErrors($errors)
-          ->setTitle(pht('It\'s not The Final Countdown (du nu nuuu nun)' .
-            ' until you fix these problem'));
       }
     }
 
@@ -90,18 +78,11 @@ final class PhabricatorCountdownEditController
     $cancel_uri = '/countdown/';
     if ($countdown->getID()) {
       $cancel_uri = '/countdown/'.$countdown->getID().'/';
-      $crumbs->addCrumb(
-        id(new PhabricatorCrumbView())
-          ->setName('C'.$countdown->getID())
-          ->setHref($cancel_uri));
-      $crumbs->addCrumb(
-        id(new PhabricatorCrumbView())
-          ->setName(pht('Edit')));
+      $crumbs->addTextCrumb('C'.$countdown->getID(), $cancel_uri);
+      $crumbs->addTextCrumb(pht('Edit'));
       $submit_label = pht('Save Changes');
     } else {
-      $crumbs->addCrumb(
-        id(new PhabricatorCrumbView())
-          ->setName(pht('Create Countdown')));
+      $crumbs->addTextCrumb(pht('Create Countdown'));
       $submit_label = pht('Create Countdown');
     }
 
@@ -119,15 +100,7 @@ final class PhabricatorCountdownEditController
           ->setValue($countdown->getTitle())
           ->setName('title')
           ->setError($e_text))
-      ->appendChild(
-        id(new AphrontFormTextControl())
-          ->setLabel(pht('End Date'))
-          ->setValue($display_epoch)
-          ->setName('epoch')
-          ->setError($e_epoch)
-          ->setCaption(pht('Examples: '.
-            '2011-12-25 or 3 hours or '.
-            'June 8 2011, 5 PM.')))
+      ->appendChild($epoch_control)
       ->appendChild(
         id(new AphrontFormPolicyControl())
           ->setUser($user)
@@ -142,7 +115,7 @@ final class PhabricatorCountdownEditController
 
     $form_box = id(new PHUIObjectBoxView())
       ->setHeaderText($page_title)
-      ->setFormError($error_view)
+      ->setFormErrors($errors)
       ->setForm($form);
 
     return $this->buildApplicationPage(

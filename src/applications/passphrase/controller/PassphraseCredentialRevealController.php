@@ -35,16 +35,34 @@ final class PassphraseCredentialRevealController
           ->appendChild(
             id(new AphrontFormTextAreaControl())
               ->setLabel(pht('Plaintext'))
+              ->setReadOnly(true)
+              ->setHeight(AphrontFormTextAreaControl::HEIGHT_VERY_TALL)
               ->setValue($credential->getSecret()->openEnvelope()));
       } else {
         $body = pht('This credential has no associated secret.');
       }
 
+      // NOTE: Disable workflow on the cancel button to reload the page so
+      // the viewer can see that their view was logged.
+
       $dialog = id(new AphrontDialogView())
         ->setUser($viewer)
-        ->setTitle(pht('Credential Secret'))
+        ->setWidth(AphrontDialogView::WIDTH_FORM)
+        ->setTitle(pht('Credential Secret (%s)', $credential->getMonogram()))
         ->appendChild($body)
+        ->setDisableWorkflowOnCancel(true)
         ->addCancelButton($view_uri, pht('Done'));
+
+      $type_secret = PassphraseCredentialTransaction::TYPE_LOOKEDATSECRET;
+      $xactions = array(id(new PassphraseCredentialTransaction())
+        ->setTransactionType($type_secret)
+        ->setNewValue(true));
+
+      $editor = id(new PassphraseCredentialTransactionEditor())
+        ->setActor($viewer)
+        ->setContinueOnNoEffect(true)
+        ->setContentSourceFromRequest($request)
+        ->applyTransactions($credential, $xactions);
 
       return id(new AphrontDialogResponse())->setDialog($dialog);
     }

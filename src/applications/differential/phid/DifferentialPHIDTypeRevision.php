@@ -9,7 +9,11 @@ final class DifferentialPHIDTypeRevision extends PhabricatorPHIDType {
   }
 
   public function getTypeName() {
-    return pht('Differential Revision');
+    return pht('Revision');
+  }
+
+  public function getPHIDTypeApplicationClass() {
+    return 'PhabricatorApplicationDifferential';
   }
 
   public function newObject() {
@@ -29,11 +33,6 @@ final class DifferentialPHIDTypeRevision extends PhabricatorPHIDType {
     array $handles,
     array $objects) {
 
-    static $closed_statuses = array(
-      ArcanistDifferentialRevisionStatus::CLOSED => true,
-      ArcanistDifferentialRevisionStatus::ABANDONED => true,
-    );
-
     foreach ($handles as $phid => $handle) {
       $revision = $objects[$phid];
 
@@ -45,7 +44,7 @@ final class DifferentialPHIDTypeRevision extends PhabricatorPHIDType {
       $handle->setURI("/D{$id}");
       $handle->setFullName("D{$id}: {$title}");
 
-      if (isset($closed_statuses[$status])) {
+      if ($revision->isClosed()) {
         $handle->setStatus(PhabricatorObjectHandleStatus::STATUS_CLOSED);
       }
     }

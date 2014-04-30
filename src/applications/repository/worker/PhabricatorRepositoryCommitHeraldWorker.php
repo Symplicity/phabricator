@@ -5,7 +5,7 @@ final class PhabricatorRepositoryCommitHeraldWorker
 
   public function getRequiredLeaseTime() {
     // Herald rules may take a long time to process.
-    return 4 * 60 * 60;
+    return phutil_units('4 hours in seconds');
   }
 
   public function parseCommit(
@@ -24,10 +24,16 @@ final class PhabricatorRepositoryCommitHeraldWorker
     PhabricatorRepository $repository,
     PhabricatorRepositoryCommit $commit) {
 
+    $commit->attachRepository($repository);
+
     // Don't take any actions on an importing repository. Principally, this
     // avoids generating thousands of audits or emails when you import an
     // established repository on an existing install.
     if ($repository->isImporting()) {
+      return;
+    }
+
+    if ($repository->getDetail('herald-disabled')) {
       return;
     }
 
@@ -36,14 +42,14 @@ final class PhabricatorRepositoryCommitHeraldWorker
       $commit->getID());
 
     if (!$data) {
-      // TODO: Permanent failure.
-      return;
+      throw new PhabricatorWorkerPermanentFailureException(
+        pht(
+          'Unable to load commit data. The data for this task is invalid '.
+          'or no longer exists.'));
     }
 
-    $adapter = HeraldCommitAdapter::newLegacyAdapter(
-      $repository,
-      $commit,
-      $data);
+    $adapter = id(new HeraldCommitAdapter())
+      ->setCommit($commit);
 
     $rules = id(new HeraldRuleQuery())
       ->setViewer(PhabricatorUser::getOmnipotentUser())
@@ -72,11 +78,6 @@ final class PhabricatorRepositoryCommitHeraldWorker
       $adapter->getBuildPlans());
 
     $explicit_auditors = $this->createAuditsFromCommitMessage($commit, $data);
-
-    if ($repository->getDetail('herald-disabled')) {
-      // This just means "disable email"; audits are (mostly) idempotent.
-      return;
-    }
 
     $this->publishFeedStory($repository, $commit, $data);
 
@@ -137,8 +138,14 @@ final class PhabricatorRepositoryCommitHeraldWorker
       ? PhabricatorEnv::getProductionURI('/D'.$revision->getID())
       : 'No revision.';
 
+    $limit = 1000;
     $files = $adapter->loadAffectedPaths();
     sort($files);
+    if (count($files) > $limit) {
+      array_splice($files, $limit);
+      $files[] = '(This commit affected more than 1000 files. '.
+        'Only 1000 are shown here and additional ones are truncated.)';
+    }
     $files = implode("\n", $files);
 
     $xscript_id = $xscript->getID();
@@ -155,6 +162,26 @@ final class PhabricatorRepositoryCommitHeraldWorker
     $body = new PhabricatorMetaMTAMailBody();
     $body->addRawSection($description);
     $body->addTextSection(pht('DETAILS'), $commit_uri);
+
+    // TODO: This should be integrated properly once we move to
+    // ApplicationTransactions.
+    $field_list = PhabricatorCustomField::getObjectFields(
+      $commit,
+      PhabricatorCustomField::ROLE_APPLICATIONTRANSACTIONS);
+    $field_list
+      ->setViewer(PhabricatorUser::getOmnipotentUser())
+      ->readFieldsFromStorage($commit);
+    foreach ($field_list->getFields() as $field) {
+      try {
+        $field->buildApplicationTransactionMailBody(
+          new DifferentialTransaction(), // Bogus object to satisfy typehint.
+          $body);
+      } catch (Exception $ex) {
+        // Log the exception and continue.
+        phlog($ex);
+      }
+    }
+
     $body->addTextSection(pht('DIFFERENTIAL REVISION'), $differential);
     $body->addTextSection(pht('AFFECTED FILES'), $files);
     $body->addReplySection($reply_handler->getReplyHandlerInstructions());
@@ -232,14 +259,12 @@ final class PhabricatorRepositoryCommitHeraldWorker
           }
           if ($status == PhabricatorAuditStatusConstants::AUDIT_REQUIRED) {
             $reasons[] = pht(
-              'Herald Rule #%d "%s" Triggered Audit',
-              $id,
-              $rule_name);
+              '%s Triggered Audit',
+              "H{$id} {$rule_name}");
           } else {
             $reasons[] = pht(
-              'Herald Rule #%d "%s" Triggered CC',
-              $id,
-              $rule_name);
+              '%s Triggered CC',
+              "H{$id} {$rule_name}");
           }
         }
 
@@ -272,10 +297,16 @@ final class PhabricatorRepositoryCommitHeraldWorker
       return array();
     }
 
-    $phids = DifferentialFieldSpecification::parseCommitMessageObjectList(
-      $matches[1],
-      $include_mailables = false,
-      $allow_partial = true);
+    $phids = id(new PhabricatorObjectListQuery())
+      ->setViewer(PhabricatorUser::getOmnipotentUser())
+      ->setAllowPartialResults(true)
+      ->setAllowedTypes(
+        array(
+          PhabricatorPeoplePHIDTypeUser::TYPECONST,
+          PhabricatorProjectPHIDTypeProject::TYPECONST,
+        ))
+      ->setObjectList($matches[1])
+      ->execute();
 
     if (!$phids) {
       return array();

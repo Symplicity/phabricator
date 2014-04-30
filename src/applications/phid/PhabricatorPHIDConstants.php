@@ -9,10 +9,6 @@ final class PhabricatorPHIDConstants {
   const PHID_TYPE_SOURCE  = 'SRCE';
   const PHID_TYPE_REPO = 'REPO';
   const PHID_TYPE_ACMT    = 'ACMT';
-  const PHID_TYPE_DRYR    = 'DRYR';
-  const PHID_TYPE_DRYL    = 'DRYL';
-  const PHID_TYPE_OASC    = 'OASC';
-  const PHID_TYPE_OASA    = 'OASA';
   const PHID_TYPE_TOBJ    = 'TOBJ';
   const PHID_TYPE_ACNT    = 'ACNT';
   const PHID_TYPE_PDCT    = 'PDCT';

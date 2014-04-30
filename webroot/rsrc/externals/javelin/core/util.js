@@ -48,13 +48,12 @@ JX.$E = function(message) {
  *
  * @group util
  */
-JX.$A = function(mysterious_arraylike_object) {
-  // NOTE: This avoids the Array.slice() trick because some bizarre COM object
-  // I dug up somewhere was freaking out when I tried to do it and it made me
-  // very upset, so do not replace this with Array.slice() cleverness.
+JX.$A = function(object) {
+  // IE8 throws "JScript object expected" when trying to call
+  // Array.prototype.slice on a NodeList, so just copy items one by one here.
   var r = [];
-  for (var ii = 0; ii < mysterious_arraylike_object.length; ii++) {
-    r.push(mysterious_arraylike_object[ii]);
+  for (var ii = 0; ii < object.length; ii++) {
+    r.push(object[ii]);
   }
   return r;
 };

@@ -13,6 +13,7 @@ final class DivinerLiveSymbol extends DivinerDAO
   protected $nodeHash;
 
   protected $title;
+  protected $titleSlugHash;
   protected $groupName;
   protected $summary;
   protected $isDocumentable = 0;
@@ -73,7 +74,12 @@ final class DivinerLiveSymbol extends DivinerDAO
   }
 
   public function getSortKey() {
-    return $this->getTitle();
+    // Sort articles before other types of content. Then, sort atoms in a
+    // case-insensitive way.
+    return sprintf(
+      '%c:%s',
+      ($this->getType() == DivinerAtom::TYPE_ARTICLE ? '0' : '1'),
+      phutil_utf8_strtolower($this->getTitle()));
   }
 
   public function save() {
@@ -103,6 +109,18 @@ final class DivinerLiveSymbol extends DivinerDAO
       $title = $this->getName();
     }
     return $title;
+  }
+
+  public function setTitle($value) {
+    $this->writeField('title', $value);
+    if (strlen($value)) {
+      $slug = DivinerAtomRef::normalizeTitleString($value);
+      $hash = PhabricatorHash::digestForIndex($slug);
+      $this->titleSlugHash = $hash;
+    } else {
+      $this->titleSlugHash = null;
+    }
+    return $this;
   }
 
   public function attachExtends(array $extends) {
@@ -174,7 +192,7 @@ final class DivinerLiveSymbol extends DivinerDAO
 
 
   public function shouldUseMarkupCache($field) {
-    return false;
+    return true;
   }
 
 }

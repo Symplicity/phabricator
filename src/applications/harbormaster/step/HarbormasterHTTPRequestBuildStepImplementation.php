@@ -1,7 +1,7 @@
 <?php
 
 final class HarbormasterHTTPRequestBuildStepImplementation
-  extends VariableBuildStepImplementation {
+  extends HarbormasterBuildStepImplementation {
 
   public function getName() {
     return pht('Make HTTP Request');
@@ -12,32 +12,61 @@ final class HarbormasterHTTPRequestBuildStepImplementation
   }
 
   public function getDescription() {
-    $settings = $this->getSettings();
+    $domain = null;
+    $uri = $this->getSetting('uri');
+    if ($uri) {
+      $domain = id(new PhutilURI($uri))->getDomain();
+    }
 
-    $uri = new PhutilURI($settings['uri']);
-    $domain = $uri->getDomain();
-    return pht('Make an HTTP request to %s', $domain);
+    $method = $this->formatSettingForDescription('method', 'POST');
+    $domain = $this->formatValueForDescription($domain);
+
+    if ($this->getSetting('credential')) {
+      return pht(
+        'Make an authenticated HTTP %s request to %s.',
+        $method,
+        $domain);
+    } else {
+      return pht(
+        'Make an HTTP %s request to %s.',
+        $method,
+        $domain);
+    }
   }
 
   public function execute(
     HarbormasterBuild $build,
-    HarbormasterBuildStep $build_step) {
+    HarbormasterBuildTarget $build_target) {
 
+    $viewer = PhabricatorUser::getOmnipotentUser();
     $settings = $this->getSettings();
-    $variables = $this->retrieveVariablesFromBuild($build);
+    $variables = $build_target->getVariables();
 
     $uri = $this->mergeVariables(
       'vurisprintf',
       $settings['uri'],
       $variables);
 
-    $log_body = $build->createLog($build_step, $uri, 'http-body');
+    $log_body = $build->createLog($build_target, $uri, 'http-body');
     $start = $log_body->start();
 
-    list($status, $body, $headers) = id(new HTTPSFuture($uri))
-      ->setMethod('POST')
-      ->setTimeout(60)
-      ->resolve();
+    $method = nonempty(idx($settings, 'method'), 'POST');
+
+    $future = id(new HTTPSFuture($uri))
+      ->setMethod($method)
+      ->setTimeout(60);
+
+    $credential_phid = $this->getSetting('credential');
+    if ($credential_phid) {
+      $key = PassphrasePasswordKey::loadFromPHID(
+        $credential_phid,
+        $viewer);
+      $future->setHTTPBasicAuthCredentials(
+        $key->getUsernameEnvelope()->openEnvelope(),
+        $key->getPasswordEnvelope());
+    }
+
+    list($status, $body, $headers) = $future->resolve();
 
     $log_body->append($body);
     $log_body->finalize($start);
@@ -47,24 +76,31 @@ final class HarbormasterHTTPRequestBuildStepImplementation
     }
   }
 
-  public function validateSettings() {
-    $settings = $this->getSettings();
-
-    if ($settings['uri'] === null || !is_string($settings['uri'])) {
-      return false;
-    }
-
-    return true;
-  }
-
-  public function getSettingDefinitions() {
+  public function getFieldSpecifications() {
     return array(
       'uri' => array(
-        'name' => 'URI',
-        'description' => pht('The URI to request.'),
-        'type' => BuildStepImplementation::SETTING_TYPE_STRING,
+        'name' => pht('URI'),
+        'type' => 'text',
+        'required' => true,
+      ),
+      'method' => array(
+        'name' => pht('HTTP Method'),
+        'type' => 'select',
+        'options' => array_fuse(array('POST', 'GET', 'PUT', 'DELETE')),
+      ),
+      'credential' => array(
+        'name' => pht('Credentials'),
+        'type' => 'credential',
+        'credential.type'
+          => PassphraseCredentialTypePassword::CREDENTIAL_TYPE,
+        'credential.provides'
+          => PassphraseCredentialTypePassword::PROVIDES_TYPE,
       ),
     );
+  }
+
+  public function supportsWaitForMessage() {
+    return true;
   }
 
 }

@@ -23,8 +23,7 @@ final class DifferentialRevisionQuery
   const STATUS_ACCEPTED       = 'status-accepted';
   const STATUS_NEEDS_REVIEW   = 'status-needs-review';
   const STATUS_NEEDS_REVISION = 'status-needs-revision';
-  const STATUS_CLOSED         = 'status-closed';    // NOTE: Same as 'committed'
-  const STATUS_COMMITTED      = 'status-committed'; // TODO: Remove.
+  const STATUS_CLOSED         = 'status-closed';
   const STATUS_ABANDONED      = 'status-abandoned';
 
   private $authors = array();
@@ -34,11 +33,9 @@ final class DifferentialRevisionQuery
   private $revIDs = array();
   private $commitHashes = array();
   private $phids = array();
-  private $subscribers = array();
   private $responsibles = array();
   private $branches = array();
   private $arcanistProjectPHIDs = array();
-  private $draftRevisions = array();
   private $repositoryPHIDs;
 
   private $order            = 'order-modified';
@@ -60,6 +57,8 @@ final class DifferentialRevisionQuery
   private $needHashes         = false;
   private $needReviewerStatus = false;
   private $needReviewerAuthority;
+  private $needDrafts;
+  private $needFlags;
 
   private $buildingGlobalOrder;
 
@@ -115,7 +114,7 @@ final class DifferentialRevisionQuery
    * Filter results to revisions which CC one of the listed people. Calling this
    * function will clear anything set by previous calls to @{method:withCCs}.
    *
-   * @param array List of PHIDs of subscribers
+   * @param array List of PHIDs of subscribers.
    * @return this
    * @task config
    */
@@ -217,20 +216,6 @@ final class DifferentialRevisionQuery
    */
   public function withResponsibleUsers(array $responsible_phids) {
     $this->responsibles = $responsible_phids;
-    return $this;
-  }
-
-
-  /**
-   * Filter results to only return revisions with a given set of subscribers
-   * (i.e., they are authors, reviewers or CC'd).
-   *
-   * @param array List of user PHIDs.
-   * @return this
-   * @task config
-   */
-  public function withSubscribers(array $subscriber_phids) {
-    $this->subscribers = $subscriber_phids;
     return $this;
   }
 
@@ -362,6 +347,16 @@ final class DifferentialRevisionQuery
     return $this;
   }
 
+  public function needFlags($need_flags) {
+    $this->needFlags = $need_flags;
+    return $this;
+  }
+
+  public function needDrafts($need_drafts) {
+    $this->needDrafts = $need_drafts;
+    return $this;
+  }
+
 
 /* -(  Query Execution  )---------------------------------------------------- */
 
@@ -480,42 +475,42 @@ final class DifferentialRevisionQuery
     return $revisions;
   }
 
+  protected function didFilterPage(array $revisions) {
+    $viewer = $this->getViewer();
+
+    if ($this->needFlags) {
+      $flags = id(new PhabricatorFlagQuery())
+        ->setViewer($viewer)
+        ->withOwnerPHIDs(array($viewer->getPHID()))
+        ->withObjectPHIDs(mpull($revisions, 'getPHID'))
+        ->execute();
+      $flags = mpull($flags, null, 'getObjectPHID');
+      foreach ($revisions as $revision) {
+        $revision->attachFlag(
+          $viewer,
+          idx($flags, $revision->getPHID()));
+      }
+    }
+
+    if ($this->needDrafts) {
+      $drafts = id(new DifferentialDraft())->loadAllWhere(
+        'authorPHID = %s AND objectPHID IN (%Ls)',
+        $viewer->getPHID(),
+        mpull($revisions, 'getPHID'));
+      $drafts = mgroup($drafts, 'getObjectPHID');
+      foreach ($revisions as $revision) {
+        $revision->attachDrafts(
+          $viewer,
+          idx($drafts, $revision->getPHID(), array()));
+      }
+    }
+
+    return $revisions;
+  }
+
   private function loadData() {
     $table = new DifferentialRevision();
     $conn_r = $table->establishConnection('r');
-
-    if ($this->draftAuthors) {
-      $this->draftRevisions = array();
-
-      $draft_key = 'differential-comment-';
-      $drafts = id(new PhabricatorDraft())->loadAllWhere(
-        'authorPHID IN (%Ls) AND draftKey LIKE %> AND draft != %s',
-        $this->draftAuthors,
-        $draft_key,
-        '');
-      $len = strlen($draft_key);
-      foreach ($drafts as $draft) {
-        $this->draftRevisions[] = substr($draft->getDraftKey(), $len);
-      }
-
-      // TODO: Restore this after drafts are sorted out. It's now very
-      // expensive to get revision IDs.
-
-      /*
-
-      $inlines = id(new DifferentialInlineCommentQuery())
-        ->withDraftsByAuthors($this->draftAuthors)
-        ->execute();
-      foreach ($inlines as $inline) {
-        $this->draftRevisions[] = $inline->getRevisionID();
-      }
-
-      */
-
-      if (!$this->draftRevisions) {
-        return array();
-      }
-    }
 
     $selects = array();
 
@@ -629,11 +624,11 @@ final class DifferentialRevisionQuery
     if ($this->ccs) {
       $joins[] = qsprintf(
         $conn_r,
-        'JOIN %T cc_rel ON cc_rel.revisionID = r.id '.
-        'AND cc_rel.relation = %s '.
-        'AND cc_rel.objectPHID in (%Ls)',
-        DifferentialRevision::RELATIONSHIP_TABLE,
-        DifferentialRevision::RELATION_SUBSCRIBED,
+        'JOIN %T e_ccs ON e_ccs.src = r.phid '.
+        'AND e_ccs.type = %s '.
+        'AND e_ccs.dst in (%Ls)',
+        PhabricatorEdgeConfig::TABLE_NAME_EDGE,
+        PhabricatorEdgeConfig::TYPE_OBJECT_HAS_SUBSCRIBER,
         $this->ccs);
     }
 
@@ -648,25 +643,14 @@ final class DifferentialRevisionQuery
         $this->reviewers);
     }
 
-    if ($this->subscribers) {
-      // TODO: These can be expressed as a JOIN again (and the corresponding
-      // WHERE clause removed) once subscribers move to edges.
+    if ($this->draftAuthors) {
+      $differential_draft = new DifferentialDraft();
       $joins[] = qsprintf(
         $conn_r,
-        'LEFT JOIN %T sub_rel_cc ON sub_rel_cc.revisionID = r.id '.
-        'AND sub_rel_cc.relation = %s '.
-        'AND sub_rel_cc.objectPHID in (%Ls)',
-        DifferentialRevision::RELATIONSHIP_TABLE,
-        DifferentialRevision::RELATION_SUBSCRIBED,
-        $this->subscribers);
-      $joins[] = qsprintf(
-        $conn_r,
-        'LEFT JOIN %T sub_rel_reviewer ON sub_rel_reviewer.src = r.phid '.
-        'AND sub_rel_reviewer.type = %s '.
-        'AND sub_rel_reviewer.dst in (%Ls)',
-        PhabricatorEdgeConfig::TABLE_NAME_EDGE,
-        PhabricatorEdgeConfig::TYPE_DREV_HAS_REVIEWER,
-        $this->subscribers);
+        'JOIN %T has_draft ON has_draft.objectPHID = r.phid '.
+        'AND has_draft.authorPHID IN (%Ls)',
+        $differential_draft->getTableName(),
+        $this->draftAuthors);
     }
 
     $joins = implode(' ', $joins);
@@ -700,13 +684,6 @@ final class DifferentialRevisionQuery
         $conn_r,
         'r.authorPHID IN (%Ls)',
         $this->authors);
-    }
-
-    if ($this->draftRevisions) {
-      $where[] = qsprintf(
-        $conn_r,
-        'r.id IN (%Ld)',
-        $this->draftRevisions);
     }
 
     if ($this->revIDs) {
@@ -758,13 +735,6 @@ final class DifferentialRevisionQuery
         $this->arcanistProjectPHIDs);
     }
 
-    if ($this->subscribers) {
-      $where[] = qsprintf(
-        $conn_r,
-        '(sub_rel_cc.objectPHID IS NOT NULL)
-          OR (sub_rel_reviewer.dst IS NOT NULL)');
-    }
-
     switch ($this->status) {
       case self::STATUS_ANY:
         break;
@@ -772,11 +742,7 @@ final class DifferentialRevisionQuery
         $where[] = qsprintf(
           $conn_r,
           'r.status IN (%Ld)',
-          array(
-            ArcanistDifferentialRevisionStatus::NEEDS_REVIEW,
-            ArcanistDifferentialRevisionStatus::NEEDS_REVISION,
-            ArcanistDifferentialRevisionStatus::ACCEPTED,
-          ));
+          DifferentialRevisionStatus::getOpenStatuses());
         break;
       case self::STATUS_NEEDS_REVIEW:
         $where[] = qsprintf(
@@ -802,19 +768,11 @@ final class DifferentialRevisionQuery
             ArcanistDifferentialRevisionStatus::ACCEPTED,
           ));
         break;
-      case self::STATUS_COMMITTED:
-        phlog(
-          "WARNING: DifferentialRevisionQuery using deprecated ".
-          "STATUS_COMMITTED constant. This will be removed soon. ".
-          "Use STATUS_CLOSED.");
-        // fallthrough
       case self::STATUS_CLOSED:
         $where[] = qsprintf(
           $conn_r,
           'r.status IN (%Ld)',
-          array(
-            ArcanistDifferentialRevisionStatus::CLOSED,
-          ));
+          DifferentialRevisionStatus::getClosedStatuses());
         break;
       case self::STATUS_ABANDONED:
         $where[] = qsprintf(
@@ -841,8 +799,7 @@ final class DifferentialRevisionQuery
     $join_triggers = array_merge(
       $this->pathIDs,
       $this->ccs,
-      $this->reviewers,
-      $this->subscribers);
+      $this->reviewers);
 
     $needs_distinct = (count($join_triggers) > 1);
 
@@ -942,31 +899,32 @@ final class DifferentialRevisionQuery
 
   private function loadRelationships($conn_r, array $revisions) {
     assert_instances_of($revisions, 'DifferentialRevision');
-    $relationships = queryfx_all(
-      $conn_r,
-      'SELECT * FROM %T WHERE revisionID in (%Ld)
-        AND relation != %s ORDER BY sequence',
-      DifferentialRevision::RELATIONSHIP_TABLE,
-      mpull($revisions, 'getID'),
-      DifferentialRevision::RELATION_REVIEWER);
-    $relationships = igroup($relationships, 'revisionID');
 
     $type_reviewer = PhabricatorEdgeConfig::TYPE_DREV_HAS_REVIEWER;
+    $type_subscriber = PhabricatorEdgeConfig::TYPE_OBJECT_HAS_SUBSCRIBER;
+
     $edges = id(new PhabricatorEdgeQuery())
       ->withSourcePHIDs(mpull($revisions, 'getPHID'))
-      ->withEdgeTypes(array($type_reviewer))
+      ->withEdgeTypes(array($type_reviewer, $type_subscriber))
       ->setOrder(PhabricatorEdgeQuery::ORDER_OLDEST_FIRST)
       ->execute();
 
+    $type_map = array(
+      DifferentialRevision::RELATION_REVIEWER => $type_reviewer,
+      DifferentialRevision::RELATION_SUBSCRIBED => $type_subscriber,
+    );
+
     foreach ($revisions as $revision) {
-      $data = idx($relationships, $revision->getID(), array());
-      $revision_edges = $edges[$revision->getPHID()][$type_reviewer];
-      foreach ($revision_edges as $dst_phid => $edge_data) {
-        $data[] = array(
-          'relation' => DifferentialRevision::RELATION_REVIEWER,
-          'objectPHID' => $dst_phid,
-          'reasonPHID' => null,
-        );
+      $data = array();
+      foreach ($type_map as $rel_type => $edge_type) {
+        $revision_edges = $edges[$revision->getPHID()][$edge_type];
+        foreach ($revision_edges as $dst_phid => $edge_data) {
+          $data[] = array(
+            'relation' => $rel_type,
+            'objectPHID' => $dst_phid,
+            'reasonPHID' => null,
+          );
+        }
       }
 
       $revision->attachRelationships($data);
@@ -1072,11 +1030,11 @@ final class DifferentialRevisionQuery
 
     $viewer = $this->getViewer();
     $viewer_phid = $viewer->getPHID();
+    $allow_key = 'differential.allow-self-accept';
+    $allow_self = PhabricatorEnv::getEnvConfig($allow_key);
 
     // Figure out which of these reviewers the viewer has authority to act as.
     if ($this->needReviewerAuthority && $viewer_phid) {
-      $allow_key = 'differential.allow-self-accept';
-      $allow_self = PhabricatorEnv::getEnvConfig($allow_key);
       $authority = $this->loadReviewerAuthority(
         $revisions,
         $edges,
@@ -1114,7 +1072,6 @@ final class DifferentialRevisionQuery
   }
 
 
-
   public static function splitResponsible(array $revisions, array $user_phids) {
     $blocking = array();
     $active = array();
@@ -1129,6 +1086,11 @@ final class DifferentialRevisionQuery
       $filter_is_author = in_array($revision->getAuthorPHID(), $user_phids);
       if (!$revision->getReviewers()) {
         $needs_review = false;
+        $author_is_reviewer = false;
+      } else {
+        $author_is_reviewer = in_array(
+          $revision->getAuthorPHID(),
+          $revision->getReviewers());
       }
 
       // If exactly one of "needs review" and "the user is the author" is
@@ -1140,6 +1102,11 @@ final class DifferentialRevisionQuery
         } else {
           $active[] = $revision;
         }
+      // User is author **and** reviewer. An exotic but configurable workflow.
+      // User needs to act on it double.
+      } else if ($needs_review && $author_is_reviewer) {
+        array_unshift($blocking, $revision);
+        $active[] = $revision;
       } else {
         $waiting[] = $revision;
       }

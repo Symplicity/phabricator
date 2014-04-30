@@ -29,6 +29,36 @@ abstract class PhabricatorApplicationTransaction
   private $renderingTarget = self::TARGET_HTML;
   private $transactionGroup = array();
   private $viewer = self::ATTACHABLE;
+  private $object = self::ATTACHABLE;
+  private $oldValueHasBeenSet = false;
+
+  private $ignoreOnNoEffect;
+
+
+  /**
+   * Flag this transaction as a pure side-effect which should be ignored when
+   * applying transactions if it has no effect, even if transaction application
+   * would normally fail. This both provides users with better error messages
+   * and allows transactions to perform optional side effects.
+   */
+  public function setIgnoreOnNoEffect($ignore) {
+    $this->ignoreOnNoEffect = $ignore;
+    return $this;
+  }
+
+  public function getIgnoreOnNoEffect() {
+    return $this->ignoreOnNoEffect;
+  }
+
+  public function shouldGenerateOldValue() {
+    switch ($this->getTransactionType()) {
+      case PhabricatorTransactions::TYPE_BUILDABLE:
+      case PhabricatorTransactions::TYPE_TOKEN:
+      case PhabricatorTransactions::TYPE_CUSTOMFIELD:
+        return false;
+    }
+    return true;
+  }
 
   abstract public function getApplicationTransactionType();
 
@@ -110,6 +140,49 @@ abstract class PhabricatorApplicationTransaction
     return $this;
   }
 
+  public function attachObject($object) {
+    $this->object = $object;
+    return $this;
+  }
+
+  public function getObject() {
+    return $this->assertAttached($this->object);
+  }
+
+  public function getRemarkupBlocks() {
+    $blocks = array();
+
+    switch ($this->getTransactionType()) {
+      case PhabricatorTransactions::TYPE_CUSTOMFIELD:
+        $field = $this->getTransactionCustomField();
+        if ($field) {
+          $custom_blocks = $field->getApplicationTransactionRemarkupBlocks(
+            $this);
+          foreach ($custom_blocks as $custom_block) {
+            $blocks[] = $custom_block;
+          }
+        }
+        break;
+    }
+
+    if ($this->getComment()) {
+      $blocks[] = $this->getComment()->getContent();
+    }
+
+    return $blocks;
+  }
+
+  public function setOldValue($value) {
+    $this->oldValueHasBeenSet = true;
+    $this->writeField('oldValue', $value);
+    return $this;
+  }
+
+  public function hasOldValue() {
+    return $this->oldValueHasBeenSet;
+  }
+
+
 /* -(  Rendering  )---------------------------------------------------------- */
 
   public function setRenderingTarget($rendering_target) {
@@ -138,6 +211,13 @@ abstract class PhabricatorApplicationTransaction
 
     $phids[] = array($this->getAuthorPHID());
     switch ($this->getTransactionType()) {
+      case PhabricatorTransactions::TYPE_CUSTOMFIELD:
+        $field = $this->getTransactionCustomField();
+        if ($field) {
+          $phids[] = $field->getApplicationTransactionRequiredHandlePHIDs(
+            $this);
+        }
+        break;
       case PhabricatorTransactions::TYPE_SUBSCRIBERS:
         $phids[] = $old;
         $phids[] = $new;
@@ -156,6 +236,14 @@ abstract class PhabricatorApplicationTransaction
           $phids[] = array($new);
         }
         break;
+      case PhabricatorTransactions::TYPE_TOKEN:
+        break;
+      case PhabricatorTransactions::TYPE_BUILDABLE:
+        $phid = $this->getMetadataValue('harbormaster:buildablePHID');
+        if ($phid) {
+          $phids[] = array($phid);
+        }
+        break;
     }
 
     return array_mergev($phids);
@@ -169,7 +257,11 @@ abstract class PhabricatorApplicationTransaction
   public function getHandle($phid) {
     if (empty($this->handles[$phid])) {
       throw new Exception(
-        "Transaction requires a handle ('{$phid}') it did not load.");
+        pht(
+          'Transaction ("%s") requires a handle ("%s") that it did not '.
+          'load.',
+          $this->getPHID(),
+          $phid));
     }
     return $this->handles[$phid];
   }
@@ -207,11 +299,31 @@ abstract class PhabricatorApplicationTransaction
     }
   }
 
-  public function renderPolicyName($phid) {
+  private function renderSubscriberList(array $phids, $change_type) {
+    if ($this->getRenderingTarget() == self::TARGET_TEXT) {
+      return $this->renderHandleList($phids);
+    } else {
+      $handles = array_select_keys($this->getHandles(), $phids);
+      return id(new SubscriptionListStringBuilder())
+        ->setHandles($handles)
+        ->setObjectPHID($this->getPHID())
+        ->buildTransactionString($change_type);
+    }
+  }
+
+  protected function renderPolicyName($phid, $state = 'old') {
     $policy = PhabricatorPolicy::newFromPolicyAndHandle(
       $phid,
       $this->getHandleIfExists($phid));
     if ($this->renderingTarget == self::TARGET_HTML) {
+      switch ($policy->getType()) {
+        case PhabricatorPolicyType::TYPE_CUSTOM:
+          $policy->setHref('/transactions/'.$state.'/'.$this->getPHID().'/');
+          $policy->setWorkflow(true);
+          break;
+        default:
+          break;
+      }
       $output = $policy->renderDescription();
     } else {
       $output = hsprintf('%s', $policy->getFullName());
@@ -222,21 +334,78 @@ abstract class PhabricatorApplicationTransaction
   public function getIcon() {
     switch ($this->getTransactionType()) {
       case PhabricatorTransactions::TYPE_COMMENT:
-        return 'comment';
+        return 'fa-comment';
       case PhabricatorTransactions::TYPE_SUBSCRIBERS:
-        return 'message';
+        return 'fa-envelope';
       case PhabricatorTransactions::TYPE_VIEW_POLICY:
       case PhabricatorTransactions::TYPE_EDIT_POLICY:
       case PhabricatorTransactions::TYPE_JOIN_POLICY:
-        return 'lock';
+        return 'fa-lock';
       case PhabricatorTransactions::TYPE_EDGE:
-        return 'link';
+        return 'fa-link';
+      case PhabricatorTransactions::TYPE_BUILDABLE:
+        return 'fa-wrench';
+      case PhabricatorTransactions::TYPE_TOKEN:
+        if ($this->getNewValue()) {
+          return 'fa-thumbs-o-up';
+        } else {
+          return 'fa-thumbs-o-down';
+        }
     }
 
-    return null;
+    return 'fa-pencil';
+  }
+
+  public function getToken() {
+    switch ($this->getTransactionType()) {
+      case PhabricatorTransactions::TYPE_TOKEN:
+        $old = $this->getOldValue();
+        $new = $this->getNewValue();
+        if ($new) {
+          $icon = substr($new, 10);
+        } else {
+          $icon = substr($old, 10);
+        }
+        return array($icon, !$this->getNewValue());
+    }
+
+    return array(null, null);
   }
 
   public function getColor() {
+    switch ($this->getTransactionType()) {
+      case PhabricatorTransactions::TYPE_BUILDABLE:
+        switch ($this->getNewValue()) {
+          case HarbormasterBuildable::STATUS_PASSED:
+            return 'green';
+          case HarbormasterBuildable::STATUS_FAILED:
+            return 'red';
+        }
+        break;
+    }
+    return null;
+  }
+
+  protected function getTransactionCustomField() {
+    switch ($this->getTransactionType()) {
+      case PhabricatorTransactions::TYPE_CUSTOMFIELD:
+        $key = $this->getMetadataValue('customfield:key');
+        if (!$key) {
+          return null;
+        }
+
+        $field = PhabricatorCustomField::getObjectField(
+          $this->getObject(),
+          PhabricatorCustomField::ROLE_APPLICATIONTRANSACTIONS,
+          $key);
+        if (!$field) {
+          return null;
+        }
+
+        $field->setViewer($this->getViewer());
+        return $field;
+    }
+
     return null;
   }
 
@@ -251,13 +420,61 @@ abstract class PhabricatorApplicationTransaction
           return false;
         }
         break;
+      case PhabricatorTransactions::TYPE_CUSTOMFIELD:
+        $field = $this->getTransactionCustomField();
+        if ($field) {
+          return $field->shouldHideInApplicationTransactions($this);
+        }
     }
 
     return false;
   }
 
-  public function shouldHideForMail() {
+  public function shouldHideForMail(array $xactions) {
+    switch ($this->getTransactionType()) {
+      case PhabricatorTransactions::TYPE_TOKEN:
+        return true;
+      case PhabricatorTransactions::TYPE_BUILDABLE:
+        switch ($this->getNewValue()) {
+          case HarbormasterBuildable::STATUS_PASSED:
+            // For now, just never send mail when builds pass. We might let
+            // you customize this later, but in most cases this is probably
+            // completely uninteresting.
+            return true;
+        }
+    }
+
     return $this->shouldHide();
+  }
+
+  public function shouldHideForFeed() {
+    switch ($this->getTransactionType()) {
+      case PhabricatorTransactions::TYPE_TOKEN:
+        return true;
+      case PhabricatorTransactions::TYPE_BUILDABLE:
+        switch ($this->getNewValue()) {
+          case HarbormasterBuildable::STATUS_PASSED:
+            // For now, don't notify on build passes either. These are pretty
+            // high volume and annoying, with very little present value. We
+            // might want to turn them back on in the specific case of
+            // build successes on the current document?
+            return true;
+        }
+    }
+
+    return $this->shouldHide();
+  }
+
+  public function getTitleForMail() {
+    return id(clone $this)->setRenderingTarget('text')->getTitle();
+  }
+
+  public function getBodyForMail() {
+    $comment = $this->getComment();
+    if ($comment && strlen($comment->getContent())) {
+      return $comment->getContent();
+    }
+    return null;
   }
 
   public function getNoEffectDescription() {
@@ -304,22 +521,22 @@ abstract class PhabricatorApplicationTransaction
           '%s changed the visibility of this %s from "%s" to "%s".',
           $this->renderHandleLink($author_phid),
           $this->getApplicationObjectTypeName(),
-          $this->renderPolicyName($old),
-          $this->renderPolicyName($new));
+          $this->renderPolicyName($old, 'old'),
+          $this->renderPolicyName($new, 'new'));
       case PhabricatorTransactions::TYPE_EDIT_POLICY:
         return pht(
           '%s changed the edit policy of this %s from "%s" to "%s".',
           $this->renderHandleLink($author_phid),
           $this->getApplicationObjectTypeName(),
-          $this->renderPolicyName($old),
-          $this->renderPolicyName($new));
+          $this->renderPolicyName($old, 'old'),
+          $this->renderPolicyName($new, 'new'));
       case PhabricatorTransactions::TYPE_JOIN_POLICY:
         return pht(
           '%s changed the join policy of this %s from "%s" to "%s".',
           $this->renderHandleLink($author_phid),
           $this->getApplicationObjectTypeName(),
-          $this->renderPolicyName($old),
-          $this->renderPolicyName($new));
+          $this->renderPolicyName($old, 'old'),
+          $this->renderPolicyName($new, 'new'));
       case PhabricatorTransactions::TYPE_SUBSCRIBERS:
         $add = array_diff($new, $old);
         $rem = array_diff($old, $new);
@@ -329,21 +546,21 @@ abstract class PhabricatorApplicationTransaction
             '%s edited subscriber(s), added %d: %s; removed %d: %s.',
             $this->renderHandleLink($author_phid),
             count($add),
-            $this->renderHandleList($add),
+            $this->renderSubscriberList($add, 'add'),
             count($rem),
-            $this->renderHandleList($rem));
+            $this->renderSubscriberList($rem, 'rem'));
         } else if ($add) {
           return pht(
             '%s added %d subscriber(s): %s.',
             $this->renderHandleLink($author_phid),
             count($add),
-            $this->renderHandleList($add));
+            $this->renderSubscriberList($add, 'add'));
         } else if ($rem) {
           return pht(
             '%s removed %d subscriber(s): %s.',
             $this->renderHandleLink($author_phid),
             count($rem),
-            $this->renderHandleList($rem));
+            $this->renderSubscriberList($rem, 'rem'));
         } else {
           // This is used when rendering previews, before the user actually
           // selects any CCs.
@@ -376,31 +593,60 @@ abstract class PhabricatorApplicationTransaction
             $this->renderHandleLink($author_phid),
             count($add),
             $this->renderHandleList($add));
-        } else {
+        } else if ($rem) {
           $string = PhabricatorEdgeConfig::getRemoveStringForEdgeType($type);
           return pht(
             $string,
             $this->renderHandleLink($author_phid),
             count($rem),
             $this->renderHandleList($rem));
+        } else {
+          return pht(
+            '%s edited edge metadata.',
+            $this->renderHandleLink($author_phid));
         }
 
       case PhabricatorTransactions::TYPE_CUSTOMFIELD:
-        $key = $this->getMetadataValue('customfield:key');
-        $field = PhabricatorCustomField::getObjectField(
-          // TODO: This is a giant hack, but we currently don't have a way to
-          // get the contextual object and this pathway is only hit by
-          // Maniphest. We should provide a way to get the actual object here.
-          new ManiphestTask(),
-          PhabricatorCustomField::ROLE_APPLICATIONTRANSACTIONS,
-          $key);
+        $field = $this->getTransactionCustomField();
         if ($field) {
-          $field->setViewer($this->getViewer());
           return $field->getApplicationTransactionTitle($this);
         } else {
           return pht(
             '%s edited a custom field.',
             $this->renderHandleLink($author_phid));
+        }
+
+      case PhabricatorTransactions::TYPE_TOKEN:
+        if ($old && $new) {
+          return pht(
+            '%s updated a token.',
+            $this->renderHandleLink($author_phid));
+        } else if ($old) {
+          return pht(
+            '%s rescinded a token.',
+            $this->renderHandleLink($author_phid));
+        } else {
+          return pht(
+            '%s awarded a token.',
+            $this->renderHandleLink($author_phid));
+        }
+
+      case PhabricatorTransactions::TYPE_BUILDABLE:
+        switch ($this->getNewValue()) {
+          case HarbormasterBuildable::STATUS_PASSED:
+            return pht(
+              '%s completed building %s.',
+              $this->renderHandleLink($author_phid),
+              $this->renderHandleLink(
+                $this->getMetadataValue('harbormaster:buildablePHID')));
+          case HarbormasterBuildable::STATUS_FAILED:
+            return pht(
+              '%s failed to build %s!',
+              $this->renderHandleLink($author_phid),
+              $this->renderHandleLink(
+                $this->getMetadataValue('harbormaster:buildablePHID')));
+          default:
+            return null;
         }
 
       default:
@@ -453,22 +699,33 @@ abstract class PhabricatorApplicationTransaction
           $this->renderHandleLink($author_phid),
           $this->renderHandleLink($object_phid));
       case PhabricatorTransactions::TYPE_CUSTOMFIELD:
-        $key = $this->getMetadataValue('customfield:key');
-        $field = PhabricatorCustomField::getObjectField(
-          // TODO: This is a giant hack, but we currently don't have a way to
-          // get the contextual object and this pathway is only hit by
-          // Maniphest. We should provide a way to get the actual object here.
-          new ManiphestTask(),
-          PhabricatorCustomField::ROLE_APPLICATIONTRANSACTIONS,
-          $key);
+        $field = $this->getTransactionCustomField();
         if ($field) {
-          $field->setViewer($this->getViewer());
           return $field->getApplicationTransactionTitleForFeed($this, $story);
         } else {
           return pht(
             '%s edited a custom field on %s.',
             $this->renderHandleLink($author_phid),
             $this->renderHandleLink($object_phid));
+        }
+      case PhabricatorTransactions::TYPE_BUILDABLE:
+        switch ($this->getNewValue()) {
+          case HarbormasterBuildable::STATUS_PASSED:
+            return pht(
+              '%s completed building %s for %s.',
+              $this->renderHandleLink($author_phid),
+              $this->renderHandleLink(
+                $this->getMetadataValue('harbormaster:buildablePHID')),
+              $this->renderHandleLink($object_phid));
+          case HarbormasterBuildable::STATUS_FAILED:
+            return pht(
+              '%s failed to build %s for %s.',
+              $this->renderHandleLink($author_phid),
+              $this->renderHandleLink(
+                $this->getMetadataValue('harbormaster:buildablePHID')),
+              $this->renderHandleLink($object_phid));
+          default:
+            return null;
         }
 
     }
@@ -500,6 +757,19 @@ abstract class PhabricatorApplicationTransaction
     return 1.0;
   }
 
+  public function isCommentTransaction() {
+    if ($this->hasComment()) {
+      return true;
+    }
+
+    switch ($this->getTransactionType()) {
+      case PhabricatorTransactions::TYPE_COMMENT:
+        return true;
+    }
+
+    return false;
+  }
+
   public function getActionName() {
     switch ($this->getTransactionType()) {
       case PhabricatorTransactions::TYPE_COMMENT:
@@ -510,6 +780,15 @@ abstract class PhabricatorApplicationTransaction
         return pht('Changed Policy');
       case PhabricatorTransactions::TYPE_SUBSCRIBERS:
         return pht('Changed Subscribers');
+      case PhabricatorTransactions::TYPE_BUILDABLE:
+        switch ($this->getNewValue()) {
+          case HarbormasterBuildable::STATUS_PASSED:
+            return pht('Build Passed');
+          case HarbormasterBuildable::STATUS_FAILED:
+            return pht('Build Failed');
+          default:
+            return pht('Build Status');
+        }
       default:
         return pht('Updated');
     }
@@ -520,11 +799,43 @@ abstract class PhabricatorApplicationTransaction
   }
 
   public function hasChangeDetails() {
+    switch ($this->getTransactionType()) {
+      case PhabricatorTransactions::TYPE_CUSTOMFIELD:
+        $field = $this->getTransactionCustomField();
+        if ($field) {
+          return $field->getApplicationTransactionHasChangeDetails($this);
+        }
+        break;
+    }
     return false;
   }
 
   public function renderChangeDetails(PhabricatorUser $viewer) {
-    return null;
+    switch ($this->getTransactionType()) {
+      case PhabricatorTransactions::TYPE_CUSTOMFIELD:
+        $field = $this->getTransactionCustomField();
+        if ($field) {
+          return $field->getApplicationTransactionChangeDetails($this, $viewer);
+        }
+        break;
+    }
+
+    return $this->renderTextCorpusChangeDetails();
+  }
+
+  public function renderTextCorpusChangeDetails(
+    PhabricatorUser $viewer,
+    $old,
+    $new) {
+
+    require_celerity_resource('differential-changeset-view-css');
+
+    $view = id(new PhabricatorApplicationTransactionTextDiffDetailView())
+      ->setUser($viewer)
+      ->setOldText($old)
+      ->setNewText($new);
+
+    return $view->render();
   }
 
   public function attachTransactionGroup(array $group) {
@@ -535,6 +846,70 @@ abstract class PhabricatorApplicationTransaction
 
   public function getTransactionGroup() {
     return $this->transactionGroup;
+  }
+
+  /**
+   * Should this transaction be visually grouped with an existing transaction
+   * group?
+   *
+   * @param list<PhabricatorApplicationTransaction> List of transactions.
+   * @return bool True to display in a group with the other transactions.
+   */
+  public function shouldDisplayGroupWith(array $group) {
+    $this_source = null;
+    if ($this->getContentSource()) {
+      $this_source = $this->getContentSource()->getSource();
+    }
+
+    foreach ($group as $xaction) {
+      // Don't group transactions by different authors.
+      if ($xaction->getAuthorPHID() != $this->getAuthorPHID()) {
+        return false;
+      }
+
+      // Don't group transactions for different objects.
+      if ($xaction->getObjectPHID() != $this->getObjectPHID()) {
+        return false;
+      }
+
+      // Don't group anything into a group which already has a comment.
+      if ($xaction->isCommentTransaction()) {
+        return false;
+      }
+
+      // Don't group transactions from different content sources.
+      $other_source = null;
+      if ($xaction->getContentSource()) {
+        $other_source = $xaction->getContentSource()->getSource();
+      }
+
+      if ($other_source != $this_source) {
+        return false;
+      }
+
+      // Don't group transactions which happened more than 2 minutes apart.
+      $apart = abs($xaction->getDateCreated() - $this->getDateCreated());
+      if ($apart > (60 * 2)) {
+        return false;
+      }
+    }
+
+    return true;
+  }
+
+  public function renderExtraInformationLink() {
+    $herald_xscript_id = $this->getMetadataValue('herald:transcriptID');
+
+    if ($herald_xscript_id) {
+      return phutil_tag(
+        'a',
+        array(
+          'href' => '/herald/transcript/'.$herald_xscript_id.'/',
+        ),
+        pht('View Herald Transcript'));
+    }
+
+    return null;
   }
 
 

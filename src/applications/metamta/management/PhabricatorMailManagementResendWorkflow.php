@@ -1,7 +1,7 @@
 <?php
 
 final class PhabricatorMailManagementResendWorkflow
-  extends PhabricatorSearchManagementWorkflow {
+  extends PhabricatorMailManagementWorkflow {
 
   protected function didConstruct() {
     $this
@@ -44,27 +44,12 @@ final class PhabricatorMailManagementResendWorkflow
     }
 
     foreach ($messages as $message) {
-      if ($message->getStatus() == PhabricatorMetaMTAMail::STATUS_QUEUE) {
-        if ($message->getWorkerTaskID()) {
-          $console->writeOut(
-            "Message #%d is already queued with an assigned send task.\n",
-            $message->getID());
-          continue;
-        }
-      }
-
       $message->setStatus(PhabricatorMetaMTAMail::STATUS_QUEUE);
-      $message->setRetryCount(0);
-      $message->setNextRetry(time());
-
       $message->save();
 
       $mailer_task = PhabricatorWorker::scheduleTask(
         'PhabricatorMetaMTAWorker',
         $message->getID());
-
-      $message->setWorkerTaskID($mailer_task->getID());
-      $message->save();
 
       $console->writeOut(
         "Queued message #%d for resend.\n",

@@ -2,6 +2,10 @@
 
 final class DiffusionSetPasswordPanel extends PhabricatorSettingsPanel {
 
+  public function isEditableByAdministrators() {
+    return true;
+  }
+
   public function getPanelKey() {
     return 'vcspassword';
   }
@@ -19,7 +23,8 @@ final class DiffusionSetPasswordPanel extends PhabricatorSettingsPanel {
   }
 
   public function processRequest(AphrontRequest $request) {
-    $user = $request->getUser();
+    $viewer = $request->getUser();
+    $user = $this->getUser();
 
     $vcspassword = id(new PhabricatorRepositoryVCSPassword())
       ->loadOneWhere(
@@ -68,12 +73,27 @@ final class DiffusionSetPasswordPanel extends PhabricatorSettingsPanel {
           $e_password = pht('Does Not Match');
           $e_confirm = pht('Does Not Match');
           $errors[] = pht('Password and confirmation do not match.');
-        } else if ($user->comparePassword($envelope)) {
+        } else if ($viewer->comparePassword($envelope)) {
+          // NOTE: The above test is against $viewer (not $user), so that the
+          // error message below makes sense in the case that the two are
+          // different, and because an admin reusing their own password is bad,
+          // while system agents generally do not have passwords anyway.
+
           $e_password = pht('Not Unique');
           $e_confirm = pht('Not Unique');
           $errors[] = pht(
-            'This password is not unique. You must use a unique password.');
+            'This password is the same as another password associated '.
+            'with your account. You must use a unique password for '.
+            'VCS access.');
+        } else if (
+          PhabricatorCommonPasswords::isCommonPassword($new_password)) {
+          $e_password = pht('Very Weak');
+          $e_confirm = pht('Very Weak');
+          $errors[] = pht(
+            'This password is extremely weak: it is one of the most common '.
+            'passwords in use. Choose a stronger password.');
         }
+
 
         if (!$errors) {
           $vcspassword->setPassword($envelope, $user);
@@ -86,15 +106,8 @@ final class DiffusionSetPasswordPanel extends PhabricatorSettingsPanel {
 
     $title = pht('Set VCS Password');
 
-    $error_view = null;
-    if ($errors) {
-      $error_view = id(new AphrontErrorView())
-        ->setTitle(pht('Form Errors'))
-        ->setErrors($errors);
-    }
-
     $form = id(new AphrontFormView())
-      ->setUser($user)
+      ->setUser($viewer)
       ->appendRemarkupInstructions(
         pht(
           'To access repositories hosted by Phabricator over HTTP, you must '.
@@ -162,13 +175,35 @@ final class DiffusionSetPasswordPanel extends PhabricatorSettingsPanel {
       }
     }
 
+    $hash_envelope = new PhutilOpaqueEnvelope($vcspassword->getPasswordHash());
+
+    $form->appendChild(
+      id(new AphrontFormStaticControl())
+        ->setLabel(pht('Current Algorithm'))
+        ->setValue(
+          PhabricatorPasswordHasher::getCurrentAlgorithmName($hash_envelope)));
+
+    $form->appendChild(
+      id(new AphrontFormStaticControl())
+        ->setLabel(pht('Best Available Algorithm'))
+        ->setValue(PhabricatorPasswordHasher::getBestAlgorithmName()));
+
+    if (strlen($hash_envelope->openEnvelope())) {
+      if (PhabricatorPasswordHasher::canUpgradeHash($hash_envelope)) {
+        $errors[] = pht(
+          'The strength of your stored VCS password hash can be upgraded. '.
+          'To upgrade, either: use the password to authenticate with a '.
+          'repository; or change your password.');
+      }
+    }
+
     $object_box = id(new PHUIObjectBoxView())
       ->setHeaderText($title)
       ->setForm($form)
-      ->setFormError($error_view);
+      ->setFormErrors($errors);
 
     $remove_form = id(new AphrontFormView())
-      ->setUser($user);
+      ->setUser($viewer);
 
     if ($vcspassword->getID()) {
       $remove_form

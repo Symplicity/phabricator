@@ -37,18 +37,35 @@ final class PhabricatorProjectListController
 
       $item = id(new PHUIObjectItemView())
         ->setHeader($project->getName())
-        ->setHref($this->getApplicationURI("view/{$id}/"));
+        ->setHref($this->getApplicationURI("view/{$id}/"))
+        ->setImageURI($project->getProfileImageURI());
 
       if ($project->getStatus() == PhabricatorProjectStatus::STATUS_ARCHIVED) {
         $item->addIcon('delete-grey', pht('Archived'));
         $item->setDisabled(true);
       }
 
-
       $list->addItem($item);
     }
 
     return $list;
+  }
+
+  public function buildApplicationCrumbs() {
+    $crumbs = parent::buildApplicationCrumbs();
+
+    $can_create = $this->hasApplicationCapability(
+      ProjectCapabilityCreateProjects::CAPABILITY);
+
+    $crumbs->addAction(
+      id(new PHUIListItemView())
+        ->setName(pht('Create Project'))
+        ->setHref($this->getApplicationURI('create/'))
+        ->setIcon('create')
+        ->setWorkflow(!$can_create)
+        ->setDisabled(!$can_create));
+
+    return $crumbs;
   }
 
 }

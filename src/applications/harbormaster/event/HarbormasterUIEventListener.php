@@ -24,12 +24,19 @@ final class HarbormasterUIEventListener
       return;
     }
 
-    $target = null;
-    if ($object instanceof PhabricatorRepositoryCommit) {
-      $target = $object;
-    } elseif ($object instanceof DifferentialRevision) {
-      $target = $object->loadActiveDiff();
-    } else {
+    if ($object instanceof HarbormasterBuildable) {
+      // Although HarbormasterBuildable implements the correct interface, it
+      // does not make sense to show a build's build status. In the best case
+      // it is meaningless, and in the worst case it's confusing.
+      return;
+    }
+
+    if (!($object instanceof HarbormasterBuildableInterface)) {
+      return;
+    }
+
+    $buildable_phid = $object->getHarbormasterBuildablePHID();
+    if (!$buildable_phid) {
       return;
     }
 
@@ -39,7 +46,8 @@ final class HarbormasterUIEventListener
 
     $buildables = id(new HarbormasterBuildableQuery())
       ->setViewer($user)
-      ->withBuildablePHIDs(array($target->getPHID()))
+      ->withManualBuildables(false)
+      ->withBuildablePHIDs(array($buildable_phid))
       ->execute();
     if (!$buildables) {
       return;
@@ -62,38 +70,39 @@ final class HarbormasterUIEventListener
 
     foreach ($builds as $build) {
       $item = new PHUIStatusItemView();
-      $item->setTarget(
-        $build_handles[$build->getPHID()]->renderLink());
+      $item->setTarget($build_handles[$build->getPHID()]->renderLink());
 
-      switch ($build->getBuildStatus()) {
+      $status = $build->getBuildStatus();
+      $status_name = HarbormasterBuild::getBuildStatusName($status);
+
+      switch ($status) {
         case HarbormasterBuild::STATUS_INACTIVE:
-          $item->setIcon('open-dark', pht('Inactive'));
+          $icon = 'open-dark';
           break;
         case HarbormasterBuild::STATUS_PENDING:
-          $item->setIcon('open-blue', pht('Pending'));
-          break;
-        case HarbormasterBuild::STATUS_WAITING:
-          $item->setIcon('up-blue', pht('Waiting on Resource'));
+          $icon = 'open-blue';
           break;
         case HarbormasterBuild::STATUS_BUILDING:
-          $item->setIcon('right-blue', pht('Building'));
+          $icon = 'right-blue';
           break;
         case HarbormasterBuild::STATUS_PASSED:
-          $item->setIcon('accept-green', pht('Passed'));
+          $icon = 'accept-green';
           break;
         case HarbormasterBuild::STATUS_FAILED:
-          $item->setIcon('reject-red', pht('Failed'));
+          $icon = 'reject-red';
           break;
         case HarbormasterBuild::STATUS_ERROR:
-          $item->setIcon('minus-red', pht('Unexpected Error'));
+          $icon = 'minus-red';
           break;
-        case HarbormasterBuild::STATUS_CANCELLED:
-          $item->setIcon('minus-dark', pht('Cancelled'));
+        case HarbormasterBuild::STATUS_STOPPED:
+          $icon = 'minus-dark';
           break;
         default:
-          $item->setIcon('question', pht('Unknown'));
+          $icon = 'question';
           break;
       }
+
+      $item->setIcon($icon, $status_name);
 
 
       $status_view->addItem($item);

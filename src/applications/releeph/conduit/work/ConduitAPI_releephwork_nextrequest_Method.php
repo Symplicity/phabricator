@@ -18,8 +18,8 @@ final class ConduitAPI_releephwork_nextrequest_Method
 
   public function defineParamTypes() {
     return array(
-      'branchPHID'  => 'required int',
-      'seen'        => 'required list<string, bool>',
+      'branchPHID'  => 'required phid',
+      'seen'        => 'required map<string, bool>',
     );
   }
 
@@ -35,17 +35,24 @@ final class ConduitAPI_releephwork_nextrequest_Method
   }
 
   protected function execute(ConduitAPIRequest $request) {
+    $viewer = $request->getUser();
     $seen = $request->getValue('seen');
 
-    $branch = id(new ReleephBranch())
-      ->loadOneWhere('phid = %s', $request->getValue('branchPHID'));
+    $branch = id(new ReleephBranchQuery())
+      ->setViewer($viewer)
+      ->withPHIDs(array($request->getValue('branchPHID')))
+      ->executeOne();
 
-    $project = $branch->loadReleephProject();
+    $project = $branch->getProduct();
 
     $needs_pick = array();
     $needs_revert = array();
 
-    $releeph_requests = $branch->loadReleephRequests($request->getUser());
+    // Load every request ever made for this branch...?!!!
+    $releeph_requests = id(new ReleephRequestQuery())
+      ->setViewer($viewer)
+      ->withBranchIDs(array($branch->getID()))
+      ->execute();
 
     foreach ($releeph_requests as $candidate) {
       $phid = $candidate->getPHID();
@@ -109,7 +116,14 @@ final class ConduitAPI_releephwork_nextrequest_Method
 
     $diff_phid = null;
     $diff_rev_id = null;
-    $diff_rev = $releeph_request->loadDifferentialRevision();
+
+    $requested_object = $releeph_request->getRequestedObject();
+    if ($requested_object instanceof DifferentialRevision) {
+      $diff_rev = $requested_object;
+    } else {
+      $diff_rev = null;
+    }
+
     if ($diff_rev) {
       $diff_phid = $diff_rev->getPHID();
       $phids[] = $diff_phid;
@@ -127,27 +141,14 @@ final class ConduitAPI_releephwork_nextrequest_Method
       $diff_name = $handles[$diff_phid]->getName();
     }
 
-    // Calculate the new-author information (if any)
-    $new_author = null;
     $new_author_phid = null;
-    switch ($project->getDetail('commitWithAuthor')) {
-      case ReleephProject::COMMIT_AUTHOR_NONE:
-        break;
-
-      case ReleephProject::COMMIT_AUTHOR_FROM_DIFF:
-        if ($diff_rev) {
-          $new_author_phid = $diff_rev->getAuthorPHID();
-        } else {
-          $pr_commit = $releeph_request->loadPhabricatorRepositoryCommit();
-          if ($pr_commit) {
-            $new_author_phid = $pr_commit->getAuthorPHID();
-          }
-        }
-        break;
-
-      case ReleephProject::COMMIT_AUTHOR_REQUESTOR:
-        $new_author_phid = $releeph_request->getRequestUserPHID();
-        break;
+    if ($diff_rev) {
+      $new_author_phid = $diff_rev->getAuthorPHID();
+    } else {
+      $pr_commit = $releeph_request->loadPhabricatorRepositoryCommit();
+      if ($pr_commit) {
+        $new_author_phid = $pr_commit->getAuthorPHID();
+      }
     }
 
     return array(

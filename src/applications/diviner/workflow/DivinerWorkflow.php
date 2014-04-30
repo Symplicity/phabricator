@@ -1,16 +1,12 @@
 <?php
 
-abstract class DivinerWorkflow extends PhutilArgumentWorkflow {
+abstract class DivinerWorkflow extends PhabricatorManagementWorkflow {
 
   private $config;
   private $bookConfigPath;
 
   public function getBookConfigPath() {
     return $this->bookConfigPath;
-  }
-
-  public function isExecutable() {
-    return true;
   }
 
   protected function getConfig($key, $default = null) {
@@ -21,8 +17,7 @@ abstract class DivinerWorkflow extends PhutilArgumentWorkflow {
     return $this->config;
   }
 
-  protected function readBookConfiguration(PhutilArgumentParser $args) {
-    $book_path = $args->getArg('book');
+  protected function readBookConfiguration($book_path) {
     if ($book_path === null) {
       throw new PhutilArgumentUsageException(
         "Specify a Diviner book configuration file with --book.");
@@ -41,6 +36,7 @@ abstract class DivinerWorkflow extends PhutilArgumentWorkflow {
         'name' => 'string',
         'title' => 'optional string',
         'short' => 'optional string',
+        'preface' => 'optional string',
         'root' => 'optional string',
         'uri.source' => 'optional string',
         'rules' => 'optional map<regex, string>',
@@ -56,7 +52,7 @@ abstract class DivinerWorkflow extends PhutilArgumentWorkflow {
     }
     $book['root'] = Filesystem::resolvePath($book['root'], $full_path);
 
-    if (!preg_match('/^[a-z][a-z-]*$/', $book['name'])) {
+    if (!preg_match('/^[a-z][a-z-]*\z/', $book['name'])) {
       $name = $book['name'];
       throw new PhutilArgumentUsageException(
         "Book configuration '{$book_path}' has name '{$name}', but book names ".

@@ -1,14 +1,14 @@
 <?php
 
 final class PhabricatorAuthProviderOAuthTwitch
-  extends PhabricatorAuthProviderOAuth {
+  extends PhabricatorAuthProviderOAuth2 {
 
   public function getProviderName() {
     return pht('Twitch.tv');
   }
 
-  public function getConfigurationHelp() {
-    $login_uri = $this->getLoginURI();
+  protected function getProviderConfigurationHelp() {
+    $login_uri = PhabricatorEnv::getURI($this->getLoginURI());
 
     return pht(
       "To configure Twitch.tv OAuth, create a new application here:".

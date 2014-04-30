@@ -3,9 +3,15 @@
 final class PhabricatorNotificationBuilder {
 
   private $stories;
+  private $user = null;
 
   public function __construct(array $stories) {
     $this->stories = $stories;
+  }
+
+  public function setUser($user) {
+    $this->user = $user;
+    return $this;
   }
 
   public function buildView() {
@@ -123,9 +129,13 @@ final class PhabricatorNotificationBuilder {
     $null_view = new AphrontNullView();
 
     foreach ($stories as $story) {
-      $view = $story->renderView();
-
-      $null_view->appendChild($view->renderNotification());
+      try {
+        $view = $story->renderView();
+      } catch (Exception $ex) {
+        // TODO: Render a nice debuggable notice instead?
+        continue;
+      }
+      $null_view->appendChild($view->renderNotification($this->user));
     }
 
     return $null_view;

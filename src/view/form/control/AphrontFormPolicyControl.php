@@ -124,8 +124,10 @@ final class AphrontFormPolicyControl extends AphrontFormControl {
       // TODO: Make this configurable.
       $policy = PhabricatorPolicies::POLICY_USER;
     }
-    $this->setValue($policy);
 
+    if (!$this->getValue()) {
+      $this->setValue($policy);
+    }
 
     $control_id = celerity_generate_unique_node_id();
     $input_id = celerity_generate_unique_node_id();
@@ -178,7 +180,9 @@ final class AphrontFormPolicyControl extends AphrontFormControl {
         'customPlaceholder' => $this->getCustomPolicyPlaceholder(),
       ));
 
-    $selected = $flat_options[$this->getValue()];
+    $selected = idx($flat_options, $this->getValue(), array());
+    $selected_icon = idx($selected, 'icon');
+    $selected_name = idx($selected, 'name');
 
     return phutil_tag(
       'div',
@@ -203,8 +207,8 @@ final class AphrontFormPolicyControl extends AphrontFormControl {
                 'class' => 'phui-button-text',
               ),
               array(
-                $icons[$selected['icon']],
-                $selected['name'],
+                idx($icons, $selected_icon),
+                $selected_name,
               )),
           )),
         $input,

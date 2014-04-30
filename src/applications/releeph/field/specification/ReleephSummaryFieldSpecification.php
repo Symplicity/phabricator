@@ -5,6 +5,10 @@ final class ReleephSummaryFieldSpecification
 
   const MAX_SUMMARY_LENGTH = 60;
 
+  public function shouldAppearInPropertyView() {
+    return false;
+  }
+
   public function getFieldKey() {
     return 'summary';
   }
@@ -19,7 +23,7 @@ final class ReleephSummaryFieldSpecification
 
   private $error = false;
 
-  public function renderEditControl() {
+  public function renderEditControl(array $handles) {
     return id(new AphrontFormTextControl())
       ->setLabel('Summary')
       ->setName('summary')

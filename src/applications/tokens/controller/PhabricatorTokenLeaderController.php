@@ -1,7 +1,11 @@
 <?php
 
 final class PhabricatorTokenLeaderController
-    extends PhabricatorTokenController {
+  extends PhabricatorTokenController {
+
+  public function shouldAllowPublic() {
+    return true;
+  }
 
   public function processRequest() {
     $request = $this->getRequest();
@@ -42,9 +46,7 @@ final class PhabricatorTokenLeaderController
     $nav = $this->buildSideNav();
     $nav->setCrumbs(
       $this->buildApplicationCrumbs()
-        ->addCrumb(
-          id(new PhabricatorCrumbView())
-            ->setName($title)));
+        ->addTextCrumb($title));
     $nav->selectFilter('leaders/');
 
     $nav->appendChild($list);

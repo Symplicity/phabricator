@@ -12,6 +12,7 @@ final class ManiphestTaskEditController extends ManiphestController {
 
     $request = $this->getRequest();
     $user = $request->getUser();
+    $response_type = $request->getStr('responseType', 'task');
 
     $can_edit_assign = $this->hasApplicationCapability(
       ManiphestCapabilityEditAssign::CAPABILITY);
@@ -24,7 +25,6 @@ final class ManiphestTaskEditController extends ManiphestController {
     $can_edit_status = $this->hasApplicationCapability(
       ManiphestCapabilityEditStatus::CAPABILITY);
 
-    $files = array();
     $parent_task = null;
     $template_id = null;
 
@@ -44,6 +44,11 @@ final class ManiphestTaskEditController extends ManiphestController {
     } else {
       $task = ManiphestTask::initializeNewTask($user);
 
+      // We currently do not allow you to set the task status when creating
+      // a new task, although now that statuses are custom it might make
+      // sense.
+      $can_edit_status = false;
+
       // These allow task creation with defaults.
       if (!$request->isFormPost()) {
         $task->setTitle($request->getStr('title'));
@@ -51,33 +56,29 @@ final class ManiphestTaskEditController extends ManiphestController {
         if ($can_edit_projects) {
           $projects = $request->getStr('projects');
           if ($projects) {
-            $tokens = explode(';', $projects);
+            $tokens = $request->getStrList('projects');
 
-            $slug_map = id(new PhabricatorProjectQuery())
-              ->setViewer($user)
-              ->withPhrictionSlugs($tokens)
-              ->execute();
+            $type_project = PhabricatorProjectPHIDTypeProject::TYPECONST;
+            foreach ($tokens as $key => $token) {
+              if (phid_get_type($token) == $type_project) {
+                // If this is formatted like a PHID, leave it as-is.
+                continue;
+              }
 
-            $name_map = id(new PhabricatorProjectQuery())
+              if (preg_match('/^#/', $token)) {
+                // If this already has a "#", leave it as-is.
+                continue;
+              }
+
+              // Add a "#" prefix.
+              $tokens[$key] = '#'.$token;
+            }
+
+            $default_projects = id(new PhabricatorObjectQuery())
               ->setViewer($user)
               ->withNames($tokens)
               ->execute();
-
-            $phid_map = id(new PhabricatorProjectQuery())
-              ->setViewer($user)
-              ->withPHIDs($tokens)
-              ->execute();
-
-            $all_map = mpull($slug_map, null, 'getPhrictionSlug') +
-              mpull($name_map, null, 'getName') +
-              mpull($phid_map, null, 'getPHID');
-
-            $default_projects = array();
-            foreach ($tokens as $token) {
-              if (isset($all_map[$token])) {
-                $default_projects[] = $all_map[$token]->getPHID();
-              }
-            }
+            $default_projects = mpull($default_projects, 'getPHID');
 
             if ($default_projects) {
               $task->setProjectPHIDs($default_projects);
@@ -118,24 +119,6 @@ final class ManiphestTaskEditController extends ManiphestController {
         }
       }
 
-      $file_phids = $request->getArr('files', array());
-      if (!$file_phids) {
-        // Allow a single 'file' key instead, mostly since Mac OS X urlencodes
-        // square brackets in URLs when passed to 'open', so you can't 'open'
-        // a URL like '?files[]=xyz' and have PHP interpret it correctly.
-        $phid = $request->getStr('file');
-        if ($phid) {
-          $file_phids = array($phid);
-        }
-      }
-
-      if ($file_phids) {
-        $files = id(new PhabricatorFileQuery())
-          ->setViewer($user)
-          ->withPHIDs($file_phids)
-          ->execute();
-      }
-
       $template_id = $request->getInt('template');
 
       // You can only have a parent task if you're creating a new task.
@@ -157,12 +140,7 @@ final class ManiphestTaskEditController extends ManiphestController {
     $field_list = PhabricatorCustomField::getObjectFields(
       $task,
       PhabricatorCustomField::ROLE_EDIT);
-
-    foreach ($field_list->getFields() as $field) {
-      $field->setObject($task);
-      $field->setViewer($user);
-    }
-
+    $field_list->setViewer($user);
     $field_list->readFieldsFromStorage($task);
 
     $aux_fields = $field_list->getFields();
@@ -182,8 +160,13 @@ final class ManiphestTaskEditController extends ManiphestController {
 
       $changes[ManiphestTransaction::TYPE_TITLE] = $new_title;
       $changes[ManiphestTransaction::TYPE_DESCRIPTION] = $new_desc;
+
       if ($can_edit_status) {
         $changes[ManiphestTransaction::TYPE_STATUS] = $new_status;
+      } else if (!$task->getID()) {
+        // Create an initial status transaction for the burndown chart.
+        // TODO: We can probably remove this once Facts comes online.
+        $changes[ManiphestTransaction::TYPE_STATUS] = $task->getStatus();
       }
 
       $owner_tokenizer = $request->getArr('assigned_to');
@@ -246,8 +229,28 @@ final class ManiphestTaskEditController extends ManiphestController {
         $changes[ManiphestTransaction::TYPE_CCS] = $request->getArr('cc');
 
         if ($can_edit_projects) {
+          $projects = $request->getArr('projects');
           $changes[ManiphestTransaction::TYPE_PROJECTS] =
-            $request->getArr('projects');
+            $projects;
+          $column_phid = $request->getStr('columnPHID');
+          // allow for putting a task in a project column at creation -only-
+          if (!$task->getID() && $column_phid && $projects) {
+            $column = id(new PhabricatorProjectColumnQuery())
+              ->setViewer($user)
+              ->withProjectPHIDs($projects)
+              ->withPHIDs(array($column_phid))
+              ->executeOne();
+            if ($column) {
+              $changes[ManiphestTransaction::TYPE_PROJECT_COLUMN] =
+                array(
+                  'new' => array(
+                    'projectPHID' => $column->getProjectPHID(),
+                    'columnPHIDs' => array($column_phid)),
+                  'old' => array(
+                    'projectPHID' => $column->getProjectPHID(),
+                    'columnPHIDs' => array()));
+            }
+          }
         }
 
         if ($can_edit_policies) {
@@ -257,21 +260,18 @@ final class ManiphestTaskEditController extends ManiphestController {
             $request->getStr('editPolicy');
         }
 
-        if ($files) {
-          $file_map = mpull($files, 'getPHID');
-          $file_map = array_fill_keys($file_map, array());
-          $changes[ManiphestTransaction::TYPE_ATTACH] = array(
-            PhabricatorFilePHIDTypeFile::TYPECONST => $file_map,
-          );
-        }
-
         $template = new ManiphestTransaction();
         $transactions = array();
 
         foreach ($changes as $type => $value) {
           $transaction = clone $template;
           $transaction->setTransactionType($type);
-          $transaction->setNewValue($value);
+          if ($type == ManiphestTransaction::TYPE_PROJECT_COLUMN) {
+            $transaction->setNewValue($value['new']);
+            $transaction->setOldValue($value['old']);
+          } else {
+            $transaction->setNewValue($value);
+          }
           $transactions[] = $transaction;
         }
 
@@ -340,9 +340,87 @@ final class ManiphestTaskEditController extends ManiphestController {
         }
 
         if ($request->isAjax()) {
+          switch ($response_type) {
+            case 'card':
+              $owner = null;
+              if ($task->getOwnerPHID()) {
+                $owner = id(new PhabricatorHandleQuery())
+                  ->setViewer($user)
+                  ->withPHIDs(array($task->getOwnerPHID()))
+                  ->executeOne();
+              }
+              $tasks = id(new ProjectBoardTaskCard())
+                ->setViewer($user)
+                ->setTask($task)
+                ->setOwner($owner)
+                ->setCanEdit(true)
+                ->getItem();
+              $column_phid = $request->getStr('columnPHID');
+              $column = id(new PhabricatorProjectColumnQuery())
+                ->setViewer($user)
+                ->withPHIDs(array($column_phid))
+                ->executeOne();
+              if ($column->isDefaultColumn()) {
+                $column_tasks = array();
+                $potential_col_tasks = id(new ManiphestTaskQuery())
+                  ->setViewer($user)
+                  ->withAllProjects(array($column->getProjectPHID()))
+                  ->withStatuses(ManiphestTaskStatus::getOpenStatusConstants())
+                  ->setOrderBy(ManiphestTaskQuery::ORDER_PRIORITY)
+                  ->execute();
+                $potential_col_tasks = mpull(
+                  $potential_col_tasks,
+                  null,
+                  'getPHID');
+                $potential_task_phids = array_keys($potential_col_tasks);
+                if ($potential_task_phids) {
+                  $edge_type = PhabricatorEdgeConfig::TYPE_OBJECT_HAS_COLUMN;
+                  $edge_query = id(new PhabricatorEdgeQuery())
+                    ->withSourcePHIDs($potential_task_phids)
+                    ->withEdgeTypes(array($edge_type));
+                  $edges = $edge_query->execute();
+                  foreach ($potential_col_tasks as $task_phid => $curr_task) {
+                    $curr_column_phids = $edges[$task_phid][$edge_type];
+                    $curr_column_phid = head_key($curr_column_phids);
+                    if (!$curr_column_phid ||
+                        $curr_column_phid == $column_phid) {
+                      $column_tasks[] = $curr_task;
+                    }
+                  }
+                }
+              } else {
+                $column_task_phids = PhabricatorEdgeQuery::loadDestinationPHIDs(
+                  $column_phid,
+                  PhabricatorEdgeConfig::TYPE_COLUMN_HAS_OBJECT);
+                $column_tasks = id(new ManiphestTaskQuery())
+                  ->setViewer($user)
+                  ->withPHIDs($column_task_phids)
+                  ->withStatuses(ManiphestTaskStatus::getOpenStatusConstants())
+                  ->setOrderBy(ManiphestTaskQuery::ORDER_PRIORITY)
+                  ->execute();
+              }
+              $column_task_phids = mpull($column_tasks, 'getPHID');
+              $task_phid = $task->getPHID();
+              $after_phid = null;
+              foreach ($column_task_phids as $phid) {
+                if ($phid == $task_phid) {
+                  break;
+                }
+                $after_phid = $phid;
+              }
+              $data = array(
+                'insertAfterPHID' => $after_phid);
+              break;
+            case 'task':
+            default:
+              $tasks = $this->renderSingleTask($task);
+              $data = array();
+              break;
+          }
           return id(new AphrontAjaxResponse())->setContent(
             array(
-              'tasks' => $this->renderSingleTask($task),
+              'tasks' => $tasks,
+              'data' => $data,
             ));
         }
 
@@ -370,6 +448,8 @@ final class ManiphestTaskEditController extends ManiphestController {
             $task->setProjectPHIDs($template_task->getProjectPHIDs());
             $task->setOwnerPHID($template_task->getOwnerPHID());
             $task->setPriority($template_task->getPriority());
+            $task->setViewPolicy($template_task->getViewPolicy());
+            $task->setEditPolicy($template_task->getEditPolicy());
 
             $template_fields = PhabricatorCustomField::getObjectFields(
               $template_task,
@@ -387,6 +467,7 @@ final class ManiphestTaskEditController extends ManiphestController {
 
             if ($fields) {
               id(new PhabricatorCustomFieldList($fields))
+                ->setViewer($user)
                 ->readFieldsFromStorage($template_task);
 
               foreach ($fields as $key => $field) {
@@ -417,7 +498,6 @@ final class ManiphestTaskEditController extends ManiphestController {
     if ($errors) {
       $error_view = new AphrontErrorView();
       $error_view->setErrors($errors);
-      $error_view->setTitle(pht('Form Errors'));
     }
 
     $priority_map = ManiphestTaskPriority::getTaskPriorityMap();
@@ -463,14 +543,12 @@ final class ManiphestTaskEditController extends ManiphestController {
 
     $project_tokenizer_id = celerity_generate_unique_node_id();
 
-    if ($request->isAjax()) {
-      $form = new PHUIFormLayoutView();
-    } else {
-      $form = new AphrontFormView();
-      $form
-        ->setUser($user)
-        ->addHiddenInput('template', $template_id);
-    }
+    $form = new AphrontFormView();
+    $form
+      ->setUser($user)
+      ->addHiddenInput('template', $template_id)
+      ->addHiddenInput('responseType', $response_type)
+      ->addHiddenInput('columnPHID', $request->getStr('columnPHID'));
 
     if ($parent_task) {
       $form
@@ -490,17 +568,22 @@ final class ManiphestTaskEditController extends ManiphestController {
           ->setHeight(AphrontFormTextAreaControl::HEIGHT_VERY_SHORT)
           ->setValue($task->getTitle()));
 
-    if ($task->getID() && $can_edit_status) {
-      // Only show this in "edit" mode, not "create" mode, since creating a
-      // non-open task is kind of silly and it would just clutter up the
-      // "create" interface.
+    if ($can_edit_status) {
+      // See T4819.
+      $status_map = ManiphestTaskStatus::getTaskStatusMap();
+      $dup_status = ManiphestTaskStatus::getDuplicateStatus();
+
+      if ($task->getStatus() != $dup_status) {
+        unset($status_map[$dup_status]);
+      }
+
       $form
         ->appendChild(
           id(new AphrontFormSelectControl())
             ->setLabel(pht('Status'))
             ->setName('status')
             ->setValue($task->getStatus())
-            ->setOptions(ManiphestTaskStatus::getTaskStatusMap()));
+            ->setOptions($status_map));
     }
 
     $policies = id(new PhabricatorPolicyQuery())
@@ -576,31 +659,13 @@ final class ManiphestTaskEditController extends ManiphestController {
             ->setDatasource('/typeahead/common/projects/'));
     }
 
-    foreach ($aux_fields as $aux_field) {
-      $aux_control = $aux_field->renderEditControl();
-      $form->appendChild($aux_control);
-    }
+    $field_list->appendFieldsToForm($form);
 
     require_celerity_resource('aphront-error-view-css');
 
     Javelin::initBehavior('project-create', array(
       'tokenizerID' => $project_tokenizer_id,
     ));
-
-    if ($files) {
-      $file_display = mpull($files, 'getName');
-      $file_display = phutil_implode_html(phutil_tag('br'), $file_display);
-
-      $form->appendChild(
-        id(new AphrontFormMarkupControl())
-          ->setLabel(pht('Files'))
-          ->setValue($file_display));
-
-      foreach ($files as $ii => $file) {
-        $form->addHiddenInput('files['.$ii.']', $file->getPHID());
-      }
-    }
-
 
     $description_control = new PhabricatorRemarkupControl();
     // "Upsell" creating tasks via email in create flows if the instance is
@@ -633,7 +698,7 @@ final class ManiphestTaskEditController extends ManiphestController {
         ->appendChild(
           array(
             $error_view,
-            $form,
+            $form->buildLayoutView(),
           ))
         ->addCancelButton($cancel_uri)
         ->addSubmitButton($button_name);
@@ -648,7 +713,7 @@ final class ManiphestTaskEditController extends ManiphestController {
 
     $form_box = id(new PHUIObjectBoxView())
       ->setHeaderText($header_name)
-      ->setFormError($error_view)
+      ->setFormErrors($errors)
       ->setForm($form);
 
     $preview = id(new PHUIRemarkupPreviewPanel())
@@ -663,9 +728,12 @@ final class ManiphestTaskEditController extends ManiphestController {
     }
 
     $crumbs = $this->buildApplicationCrumbs();
-    $crumbs->addCrumb(
-      id(new PhabricatorCrumbView())
-        ->setName($header_name));
+
+    if ($task->getID()) {
+      $crumbs->addTextCrumb('T'.$task->getID(), '/T'.$task->getID());
+    }
+
+    $crumbs->addTextCrumb($header_name);
 
     return $this->buildApplicationPage(
       array(

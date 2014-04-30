@@ -6,7 +6,7 @@
 final class CelerityResourceTransformer {
 
   private $minify;
-  private $rawResourceMap;
+  private $rawURIMap;
   private $celerityMap;
   private $translateURICallback;
   private $currentPath;
@@ -21,14 +21,18 @@ final class CelerityResourceTransformer {
     return $this;
   }
 
-  public function setRawResourceMap(array $raw_resource_map) {
-    $this->rawResourceMap = $raw_resource_map;
-    return $this;
-  }
-
   public function setCelerityMap(CelerityResourceMap $celerity_map) {
     $this->celerityMap = $celerity_map;
     return $this;
+  }
+
+  public function setRawURIMap(array $raw_urimap) {
+    $this->rawURIMap = $raw_urimap;
+    return $this;
+  }
+
+  public function getRawURIMap() {
+    return $this->rawURIMap;
   }
 
   /**
@@ -108,14 +112,33 @@ final class CelerityResourceTransformer {
   public function translateResourceURI(array $matches) {
     $uri = trim($matches[1], "'\" \r\t\n");
 
-    if ($this->rawResourceMap) {
-      if (isset($this->rawResourceMap[$uri]['uri'])) {
-        $uri = $this->rawResourceMap[$uri]['uri'];
+    $alternatives = array_unique(
+      array(
+        $uri,
+        ltrim($uri, '/'),
+      ));
+
+    foreach ($alternatives as $alternative) {
+      if ($this->rawURIMap !== null) {
+        if (isset($this->rawURIMap[$alternative])) {
+          $uri = $this->rawURIMap[$alternative];
+          break;
+        }
       }
-    } else if ($this->celerityMap) {
-      $info = $this->celerityMap->lookupFileInformation($uri);
-      if ($info) {
-        $uri = $info['uri'];
+
+      if ($this->celerityMap) {
+        $resource_uri = $this->celerityMap->getURIForName($alternative);
+        if ($resource_uri) {
+          // Check if we can use a data URI for this resource. If not, just
+          // use a normal Celerity URI.
+          $data_uri = $this->generateDataURI($alternative);
+          if ($data_uri) {
+            $uri = $data_uri;
+          } else {
+            $uri = $resource_uri;
+          }
+          break;
+        }
       }
     }
 
@@ -169,6 +192,7 @@ final class CelerityResourceTransformer {
       'darkgreytext'        => '#4B4D51',
       'lightgreybackground' => '#F7F7F7',
       'greybackground'      => '#EBECEE',
+      'darkgreybackground'  => '#DFE0E2',
 
       // Base Blues
       'thinblueborder'      => '#DDE8EF',
@@ -209,4 +233,51 @@ final class CelerityResourceTransformer {
 
     return implode("\n\n", $rules);
   }
+
+
+  /**
+   * Attempt to generate a data URI for a resource. We'll generate a data URI
+   * if the resource is a valid resource of an appropriate type, and is
+   * small enough. Otherwise, this method will return `null` and we'll end up
+   * using a normal URI instead.
+   *
+   * @param string  Resource name to attempt to generate a data URI for.
+   * @return string|null Data URI, or null if we declined to generate one.
+   */
+  private function generateDataURI($resource_name) {
+
+    $ext = last(explode('.', $resource_name));
+    switch ($ext) {
+      case 'png':
+        $type = 'image/png';
+        break;
+      case 'gif':
+        $type = 'image/gif';
+        break;
+      case 'jpg':
+        $type = 'image/jpeg';
+        break;
+      default:
+        return null;
+    }
+
+    // In IE8, 32KB is the maximum supported URI length.
+    $maximum_data_size = (1024 * 32);
+
+    $data = $this->celerityMap->getResourceDataForName($resource_name);
+    if (strlen($data) >= $maximum_data_size) {
+      // If the data is already too large on its own, just bail before
+      // encoding it.
+      return null;
+    }
+
+    $uri = 'data:'.$type.';base64,'.base64_encode($data);
+    if (strlen($uri) >= $maximum_data_size) {
+      return null;
+    }
+
+    return $uri;
+  }
+
+
 }

@@ -4,9 +4,10 @@ final class DifferentialRevisionDetailView extends AphrontView {
 
   private $revision;
   private $actions;
-  private $auxiliaryFields = array();
+  private $customFields;
   private $diff;
   private $uri;
+  private $actionList;
 
   public function setURI($uri) {
     $this->uri = $uri;
@@ -37,15 +38,23 @@ final class DifferentialRevisionDetailView extends AphrontView {
     return $this->actions;
   }
 
-  public function setAuxiliaryFields(array $fields) {
-    assert_instances_of($fields, 'DifferentialFieldSpecification');
-    $this->auxiliaryFields = $fields;
+  public function setActionList(PhabricatorActionListView $list) {
+    $this->actionList = $list;
+    return $this;
+  }
+
+  public function getActionList() {
+    return $this->actionList;
+  }
+
+  public function setCustomFields(PhabricatorCustomFieldList $list) {
+    $this->customFields = $list;
     return $this;
   }
 
   public function render() {
 
-    require_celerity_resource('differential-core-view-css');
+    $this->requireResource('differential-core-view-css');
 
     $revision = $this->revision;
     $user = $this->getUser();
@@ -57,15 +66,7 @@ final class DifferentialRevisionDetailView extends AphrontView {
       ->setObject($revision)
       ->setObjectURI($this->getURI());
     foreach ($this->getActions() as $action) {
-      $obj = id(new PhabricatorActionView())
-        ->setIcon(idx($action, 'icon', 'edit'))
-        ->setName($action['name'])
-        ->setHref(idx($action, 'href'))
-        ->setWorkflow(idx($action, 'sigil') == 'workflow')
-        ->setRenderAsForm(!empty($action['instant']))
-        ->setUser($user)
-        ->setDisabled(idx($action, 'disabled', false));
-      $actions->addAction($obj);
+      $actions->addAction($action);
     }
 
     $properties = id(new PHUIPropertyListView())
@@ -102,42 +103,16 @@ final class DifferentialRevisionDetailView extends AphrontView {
       $properties->addProperty(pht('Next Step'), $next_step);
     }
 
-    foreach ($this->auxiliaryFields as $field) {
-      $value = $field->renderValueForRevisionView();
-      if ($value !== null) {
-        $label = rtrim($field->renderLabelForRevisionView(), ':');
-        $properties->addProperty($label, $value);
-      }
-    }
     $properties->setHasKeyboardShortcuts(true);
     $properties->setActionList($actions);
+    $this->setActionList($actions);
 
-    $properties->invokeWillRenderEvent();
-
-    if (strlen($revision->getSummary())) {
-      $properties->addSectionHeader(
-        pht('Summary'),
-        PHUIPropertyListView::ICON_SUMMARY);
-      $properties->addTextContent(
-        PhabricatorMarkupEngine::renderOneObject(
-          id(new PhabricatorMarkupOneOff())
-            ->setPreserveLinebreaks(true)
-            ->setContent($revision->getSummary()),
-          'default',
-          $user));
-    }
-
-    if (strlen($revision->getTestPlan())) {
-      $properties->addSectionHeader(
-        pht('Test Plan'),
-        PHUIPropertyListView::ICON_TESTPLAN);
-      $properties->addTextContent(
-        PhabricatorMarkupEngine::renderOneObject(
-          id(new PhabricatorMarkupOneOff())
-            ->setPreserveLinebreaks(true)
-            ->setContent($revision->getTestPlan()),
-          'default',
-          $user));
+    $field_list = $this->customFields;
+    if ($field_list) {
+      $field_list->appendFieldsToPropertyList(
+        $revision,
+        $user,
+        $properties);
     }
 
     $object_box = id(new PHUIObjectBoxView())
@@ -169,8 +144,8 @@ final class DifferentialRevisionDetailView extends AphrontView {
     $status_name =
       ArcanistDifferentialRevisionStatus::getNameForRevisionStatus($status);
 
-    return id(new PhabricatorTagView())
-      ->setType(PhabricatorTagView::TYPE_STATE)
+    return id(new PHUITagView())
+      ->setType(PHUITagView::TYPE_STATE)
       ->setName($status_name);
   }
 

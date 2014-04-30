@@ -1,15 +1,15 @@
 <?php
 
 final class PhabricatorAuthProviderOAuthAsana
-  extends PhabricatorAuthProviderOAuth {
+  extends PhabricatorAuthProviderOAuth2 {
 
   public function getProviderName() {
     return pht('Asana');
   }
 
-  public function getConfigurationHelp() {
+  protected function getProviderConfigurationHelp() {
     $app_uri = PhabricatorEnv::getProductionURI('/');
-    $login_uri = $this->getLoginURI();
+    $login_uri = PhabricatorEnv::getURI($this->getLoginURI());
 
     return pht(
       "To configure Asana OAuth, create a new application here:".

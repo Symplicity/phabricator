@@ -27,7 +27,7 @@ final class DiffusionRepositoryNewController
     }
 
     $doc_href = PhabricatorEnv::getDoclink(
-      'article/Diffusion_User_Guide_Repository_Hosting.html');
+      'Diffusion User Guide: Repository Hosting');
 
     $doc_link = phutil_tag(
       'a',
@@ -67,9 +67,7 @@ final class DiffusionRepositoryNewController
           ->addCancelButton($this->getApplicationURI()));
 
     $crumbs = $this->buildApplicationCrumbs();
-    $crumbs->addCrumb(
-      id(new PhabricatorCrumbView())
-        ->setName(pht('New Repository')));
+    $crumbs->addTextCrumb(pht('New Repository'));
 
     $form_box = id(new PHUIObjectBoxView())
       ->setHeaderText(pht('Create or Import Repository'))

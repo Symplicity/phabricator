@@ -30,8 +30,7 @@ final class DifferentialRevisionListController extends DifferentialController
 
     $user = $this->getRequest()->getUser();
     $template = id(new DifferentialRevisionListView())
-      ->setUser($user)
-      ->setFields(DifferentialRevisionListView::getDefaultFields($user));
+      ->setUser($user);
 
     $views = array();
     if ($query->getQueryKey() == 'active') {
@@ -46,8 +45,7 @@ final class DifferentialRevisionListController extends DifferentialController
           pht('No revisions are blocked on your action.'))
         ->setHighlightAge(true)
         ->setRevisions($blocking)
-        ->setHandles(array())
-        ->loadAssets();
+        ->setHandles(array());
 
       $views[] = id(clone $template)
         ->setHeader(pht('Action Required'))
@@ -55,21 +53,18 @@ final class DifferentialRevisionListController extends DifferentialController
           pht('No revisions require your action.'))
         ->setHighlightAge(true)
         ->setRevisions($active)
-        ->setHandles(array())
-        ->loadAssets();
+        ->setHandles(array());
 
       $views[] = id(clone $template)
         ->setHeader(pht('Waiting on Others'))
         ->setNoDataString(
           pht('You have no revisions waiting on others.'))
         ->setRevisions($waiting)
-        ->setHandles(array())
-        ->loadAssets();
+        ->setHandles(array());
     } else {
       $views[] = id(clone $template)
         ->setRevisions($revisions)
-        ->setHandles(array())
-        ->loadAssets();
+        ->setHandles(array());
     }
 
     $phids = array_mergev(mpull($views, 'getRequiredHandlePHIDs'));

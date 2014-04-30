@@ -220,12 +220,40 @@ final class PhabricatorPolicyTestCase extends PhabricatorTestCase {
       if (!$class) {
         continue;
       }
-      $this->assertEqual(
-        true,
+      $this->assertTrue(
         (bool)PhabricatorApplication::getByClass($class),
         "Application class '{$class}' for query '{$qclass}'");
     }
   }
+
+  public function testMultipleCapabilities() {
+    $object = new PhabricatorPolicyTestObject();
+    $object->setCapabilities(
+      array(
+        PhabricatorPolicyCapability::CAN_VIEW,
+        PhabricatorPolicyCapability::CAN_EDIT,
+      ));
+    $object->setPolicies(
+      array(
+        PhabricatorPolicyCapability::CAN_VIEW
+          => PhabricatorPolicies::POLICY_USER,
+        PhabricatorPolicyCapability::CAN_EDIT
+          => PhabricatorPolicies::POLICY_NOONE,
+      ));
+
+    $filter = new PhabricatorPolicyFilter();
+    $filter->requireCapabilities(
+      array(
+        PhabricatorPolicyCapability::CAN_VIEW,
+        PhabricatorPolicyCapability::CAN_EDIT,
+      ));
+    $filter->setViewer($this->buildUser('user'));
+
+    $result = $filter->apply(array($object));
+
+    $this->assertEqual(array(), $result);
+  }
+
 
   /**
    * Test an object for visibility across multiple user specifications.
@@ -255,8 +283,7 @@ final class PhabricatorPolicyTestCase extends PhabricatorTestCase {
           $result,
           "{$description} with user {$spec} should succeed.");
       } else {
-        $this->assertEqual(
-          true,
+        $this->assertTrue(
           $caught instanceof PhabricatorPolicyException,
           "{$description} with user {$spec} should fail.");
       }

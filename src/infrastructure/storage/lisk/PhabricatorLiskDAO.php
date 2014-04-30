@@ -175,4 +175,25 @@ abstract class PhabricatorLiskDAO extends LiskDAO {
     return $value[$key];
   }
 
+  protected function detectEncodingForStorage($string) {
+    return phutil_is_utf8($string) ? 'utf8' : null;
+  }
+
+  protected function getUTF8StringFromStorage($string, $encoding) {
+    if ($encoding == 'utf8') {
+      return $string;
+    }
+    return phutil_utf8ize($string);
+  }
+
+  public function delete() {
+
+    // TODO: We should make some reasonable effort to destroy related
+    // infrastructure objects here, like edges, transactions, custom field
+    // storage, flags, Phrequent tracking, tokens, etc. This doesn't need to
+    // be exhaustive, but we can get a lot of it pretty easily.
+
+    return parent::delete();
+  }
+
 }

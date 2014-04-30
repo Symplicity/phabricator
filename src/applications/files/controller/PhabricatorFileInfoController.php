@@ -33,12 +33,14 @@ final class PhabricatorFileInfoController extends PhabricatorFileController {
 
     $this->loadHandles($handle_phids);
     $header = id(new PHUIHeaderView())
+      ->setUser($user)
+      ->setPolicyObject($file)
       ->setHeader($file->getName());
 
     $ttl = $file->getTTL();
     if ($ttl !== null) {
-      $ttl_tag = id(new PhabricatorTagView())
-        ->setType(PhabricatorTagView::TYPE_OBJECT)
+      $ttl_tag = id(new PHUITagView())
+        ->setType(PHUITagView::TYPE_OBJECT)
         ->setName(pht("Temporary"));
       $header->addTag($ttl_tag);
     }
@@ -47,10 +49,9 @@ final class PhabricatorFileInfoController extends PhabricatorFileController {
     $timeline = $this->buildTransactionView($file, $xactions);
     $crumbs = $this->buildApplicationCrumbs();
     $crumbs->setActionList($actions);
-    $crumbs->addCrumb(
-      id(new PhabricatorCrumbView())
-        ->setName('F'.$file->getID())
-        ->setHref($this->getApplicationURI("/info/{$phid}/")));
+    $crumbs->addTextCrumb(
+      'F'.$file->getID(),
+      $this->getApplicationURI("/info/{$phid}/"));
 
     $object_box = id(new PHUIObjectBoxView())
       ->setHeader($header);
@@ -98,10 +99,6 @@ final class PhabricatorFileInfoController extends PhabricatorFileController {
       ? pht('Add Comment')
       : pht('Question File Integrity');
 
-    $submit_button_name = $is_serious
-      ? pht('Add Comment')
-      : pht('Debate the Bits');
-
     $draft = PhabricatorDraft::newFromUserAndKey($user, $file->getPHID());
 
     $add_comment_form = id(new PhabricatorApplicationTransactionCommentView())
@@ -110,7 +107,7 @@ final class PhabricatorFileInfoController extends PhabricatorFileController {
       ->setDraft($draft)
       ->setHeaderText($add_comment_header)
       ->setAction($this->getApplicationURI('/comment/'.$file->getID().'/'))
-      ->setSubmitButtonName($submit_button_name);
+      ->setSubmitButtonName(pht('Add Comment'));
 
     return array(
       $timeline,

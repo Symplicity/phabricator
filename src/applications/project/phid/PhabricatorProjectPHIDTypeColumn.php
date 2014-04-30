@@ -32,7 +32,10 @@ final class PhabricatorProjectPHIDTypeColumn extends PhabricatorPHIDType {
     foreach ($handles as $phid => $handle) {
       $column = $objects[$phid];
 
-      $handle->setName($column->getName());
+      $handle->setName($column->getDisplayName());
+      $handle->setURI('/project/board/'.$column->getProject()->getID().'/');
+      $handle->setDisabled(
+        $column->getStatus() == PhabricatorProjectColumn::STATUS_DELETED);
     }
   }
 

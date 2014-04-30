@@ -33,6 +33,11 @@ final class PhabricatorSubscriptionsUIEventListener
       return;
     }
 
+    if (!$object->shouldAllowSubscription($user->getPHID())) {
+      // This object doesn't allow the viewer to subscribe.
+      return;
+    }
+
     if ($object->isAutomaticallySubscribed($user->getPHID())) {
       $sub_action = id(new PhabricatorActionView())
         ->setWorkflow(true)
@@ -95,6 +100,12 @@ final class PhabricatorSubscriptionsUIEventListener
       // This object isn't subscribable.
       return;
     }
+
+    if (!$object->shouldShowSubscribersProperty()) {
+      // This object doesn't render subscribers in its property list.
+      return;
+    }
+
     $subscribers = PhabricatorSubscribersQuery::loadSubscribersForPHID(
       $object->getPHID());
     if ($subscribers) {
@@ -102,14 +113,13 @@ final class PhabricatorSubscriptionsUIEventListener
         ->setViewer($user)
         ->withPHIDs($subscribers)
         ->execute();
-      $sub_view = array();
-      foreach ($subscribers as $subscriber) {
-        $sub_view[] = $handles[$subscriber]->renderLink();
-      }
-      $sub_view = phutil_implode_html(', ', $sub_view);
     } else {
-      $sub_view = phutil_tag('em', array(), pht('None'));
+      $handles = array();
     }
+    $sub_view = id(new SubscriptionListStringBuilder())
+      ->setObjectPHID($object->getPHID())
+      ->setHandles($handles)
+      ->buildPropertyString();
 
     $view = $event->getValue('view');
     $view->addProperty(pht('Subscribers'), $sub_view);
