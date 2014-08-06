@@ -24,6 +24,7 @@ abstract class PhabricatorApplicationTransactionEditor
 
   private $isPreview;
   private $isHeraldEditor;
+  private $isInverseEdgeEditor;
   private $actingAsPHID;
   private $disableEmail;
 
@@ -120,6 +121,15 @@ abstract class PhabricatorApplicationTransactionEditor
     return $this->isPreview;
   }
 
+  public function setIsInverseEdgeEditor($is_inverse_edge_editor) {
+    $this->isInverseEdgeEditor = $is_inverse_edge_editor;
+    return $this;
+  }
+
+  public function getIsInverseEdgeEditor() {
+    return $this->isInverseEdgeEditor;
+  }
+
   public function setIsHeraldEditor($is_herald_editor) {
     $this->isHeraldEditor = $is_herald_editor;
     return $this;
@@ -161,6 +171,10 @@ abstract class PhabricatorApplicationTransactionEditor
 
     if ($this->object instanceof PhabricatorTokenReceiverInterface) {
       $types[] = PhabricatorTransactions::TYPE_TOKEN;
+    }
+
+    if ($this->object instanceof PhabricatorProjectInterface) {
+      $types[] = PhabricatorTransactions::TYPE_EDGE;
     }
 
     return $types;
@@ -248,13 +262,13 @@ abstract class PhabricatorApplicationTransactionEditor
   protected function getCustomTransactionOldValue(
     PhabricatorLiskDAO $object,
     PhabricatorApplicationTransaction $xaction) {
-    throw new Exception("Capability not supported!");
+    throw new Exception('Capability not supported!');
   }
 
   protected function getCustomTransactionNewValue(
     PhabricatorLiskDAO $object,
     PhabricatorApplicationTransaction $xaction) {
-    throw new Exception("Capability not supported!");
+    throw new Exception('Capability not supported!');
   }
 
   protected function transactionHasEffect(
@@ -313,7 +327,7 @@ abstract class PhabricatorApplicationTransactionEditor
   protected function applyInitialEffects(
     PhabricatorLiskDAO $object,
     array $xactions) {
-    throw new Exception('Not implemented.');
+    throw new PhutilMethodNotImplementedException();
   }
 
   private function applyInternalEffects(
@@ -373,17 +387,31 @@ abstract class PhabricatorApplicationTransactionEditor
 
         break;
       case PhabricatorTransactions::TYPE_EDGE:
+        if ($this->getIsInverseEdgeEditor()) {
+          // If we're writing an inverse edge transaction, don't actually
+          // do anything. The initiating editor on the other side of the
+          // transaction will take care of the edge writes.
+          break;
+        }
+
         $old = $xaction->getOldValue();
         $new = $xaction->getNewValue();
         $src = $object->getPHID();
-        $type = $xaction->getMetadataValue('edge:type');
+        $const = $xaction->getMetadataValue('edge:type');
+
+        $type = PhabricatorEdgeType::getByConstant($const);
+        if ($type->shouldWriteInverseTransactions()) {
+          $this->applyInverseEdgeTransactions(
+            $object,
+            $xaction,
+            $type->getInverseEdgeConstant());
+        }
 
         foreach ($new as $dst_phid => $edge) {
           $new[$dst_phid]['src'] = $src;
         }
 
-        $editor = id(new PhabricatorEdgeEditor())
-          ->setActor($this->getActor());
+        $editor = new PhabricatorEdgeEditor();
 
         foreach ($old as $dst_phid => $edge) {
           if (!empty($new[$dst_phid])) {
@@ -391,7 +419,7 @@ abstract class PhabricatorApplicationTransactionEditor
               continue;
             }
           }
-          $editor->removeEdge($src, $type, $dst_phid);
+          $editor->removeEdge($src, $const, $dst_phid);
         }
 
         foreach ($new as $dst_phid => $edge) {
@@ -405,7 +433,7 @@ abstract class PhabricatorApplicationTransactionEditor
             'data' => $edge['data'],
           );
 
-          $editor->addEdge($src, $type, $dst_phid, $data);
+          $editor->addEdge($src, $const, $dst_phid, $data);
         }
 
         $editor->save();
@@ -688,7 +716,7 @@ abstract class PhabricatorApplicationTransactionEditor
         // Herald application) as the author of record, so that transactions
         // will render in a reasonable way ("Herald assigned this task ...").
         $herald_actor = PhabricatorUser::getOmnipotentUser();
-        $herald_phid = id(new PhabricatorApplicationHerald())->getPHID();
+        $herald_phid = id(new PhabricatorHeraldApplication())->getPHID();
 
         // TODO: It would be nice to give transactions a more specific source
         // which points at the rule which generated them. You can figure this
@@ -850,7 +878,7 @@ abstract class PhabricatorApplicationTransactionEditor
 
     if (!$this->getContentSource()) {
       throw new Exception(
-        "Call setContentSource() before applyTransactions()!");
+        'Call setContentSource() before applyTransactions()!');
     }
 
     // Do a bunch of sanity checks that the incoming transactions are fresh.
@@ -865,13 +893,13 @@ abstract class PhabricatorApplicationTransactionEditor
         throw new PhabricatorApplicationTransactionStructureException(
           $xaction,
           pht(
-            "You can not apply transactions which already have IDs/PHIDs!"));
+            'You can not apply transactions which already have IDs/PHIDs!'));
       }
       if ($xaction->getObjectPHID()) {
         throw new PhabricatorApplicationTransactionStructureException(
           $xaction,
           pht(
-            "You can not apply transactions which already have objectPHIDs!"));
+            'You can not apply transactions which already have objectPHIDs!'));
       }
       if ($xaction->getAuthorPHID()) {
         throw new PhabricatorApplicationTransactionStructureException(
@@ -1079,6 +1107,7 @@ abstract class PhabricatorApplicationTransactionEditor
 
     // TODO: For now, this is just a placeholder.
     $engine = PhabricatorMarkupEngine::getEngine('extract');
+    $engine->setConfig('viewer', $this->requireActor());
 
     $block_xactions = $this->expandRemarkupBlockTransactions(
       $object,
@@ -1098,11 +1127,42 @@ abstract class PhabricatorApplicationTransactionEditor
     array $xactions,
     $blocks,
     PhutilMarkupEngine $engine) {
-    return $this->expandCustomRemarkupBlockTransactions(
+
+    $block_xactions = $this->expandCustomRemarkupBlockTransactions(
       $object,
       $xactions,
       $blocks,
       $engine);
+
+    if ($object instanceof PhabricatorProjectInterface) {
+      $phids = array();
+      foreach ($blocks as $key => $xaction_blocks) {
+        foreach ($xaction_blocks as $block) {
+          $engine->markupText($block);
+          $phids += $engine->getTextMetadata(
+            PhabricatorObjectRemarkupRule::KEY_MENTIONED_OBJECTS,
+            array());
+        }
+      }
+
+      $project_type = PhabricatorProjectProjectPHIDType::TYPECONST;
+      foreach ($phids as $key => $phid) {
+        if (phid_get_type($phid) != $project_type) {
+          unset($phids[$key]);
+        }
+      }
+
+      if ($phids) {
+        $edge_type = PhabricatorProjectObjectHasProjectEdgeType::EDGECONST;
+        $block_xactions[] = newv(get_class(head($xactions)), array())
+          ->setIgnoreOnNoEffect(true)
+          ->setTransactionType(PhabricatorTransactions::TYPE_EDGE)
+          ->setMetadataValue('edge:type', $edge_type)
+          ->setNewValue(array('+' => $phids));
+      }
+    }
+
+    return $block_xactions;
   }
 
   protected function expandCustomRemarkupBlockTransactions(
@@ -1834,7 +1894,7 @@ abstract class PhabricatorApplicationTransactionEditor
    * @task mail
    */
   protected function buildReplyHandler(PhabricatorLiskDAO $object) {
-    throw new Exception("Capability not supported.");
+    throw new Exception('Capability not supported.');
   }
 
 
@@ -1842,7 +1902,7 @@ abstract class PhabricatorApplicationTransactionEditor
    * @task mail
    */
   protected function getMailSubjectPrefix() {
-    throw new Exception("Capability not supported.");
+    throw new Exception('Capability not supported.');
   }
 
 
@@ -1875,7 +1935,7 @@ abstract class PhabricatorApplicationTransactionEditor
    * @task mail
    */
   protected function buildMailTemplate(PhabricatorLiskDAO $object) {
-    throw new Exception("Capability not supported.");
+    throw new Exception('Capability not supported.');
   }
 
 
@@ -1883,7 +1943,7 @@ abstract class PhabricatorApplicationTransactionEditor
    * @task mail
    */
   protected function getMailTo(PhabricatorLiskDAO $object) {
-    throw new Exception("Capability not supported.");
+    throw new Exception('Capability not supported.');
   }
 
 
@@ -1891,10 +1951,67 @@ abstract class PhabricatorApplicationTransactionEditor
    * @task mail
    */
   protected function getMailCC(PhabricatorLiskDAO $object) {
+    $phids = array();
+    $has_support = false;
+
     if ($object instanceof PhabricatorSubscribableInterface) {
-      return $this->subscribers;
+      $phids[] = $this->subscribers;
+      $has_support = true;
     }
-    throw new Exception("Capability not supported.");
+
+    // TODO: The Maniphest legacy stuff should get cleaned up here.
+
+    if (($object instanceof ManiphestTask) ||
+        ($object instanceof PhabricatorProjectInterface)) {
+
+      if ($object instanceof PhabricatorProjectInterface) {
+        $project_phids = PhabricatorEdgeQuery::loadDestinationPHIDs(
+          $object->getPHID(),
+          PhabricatorProjectObjectHasProjectEdgeType::EDGECONST);
+      } else {
+        $project_phids = $object->getProjectPHIDs();
+      }
+
+      if ($project_phids) {
+        $watcher_type = PhabricatorEdgeConfig::TYPE_OBJECT_HAS_WATCHER;
+
+        $query = id(new PhabricatorEdgeQuery())
+          ->withSourcePHIDs($project_phids)
+          ->withEdgeTypes(array($watcher_type));
+        $query->execute();
+
+        $watcher_phids = $query->getDestinationPHIDs();
+        if ($watcher_phids) {
+          // We need to do a visibility check for all the watchers, as
+          // watching a project is not a guarantee that you can see objects
+          // associated with it.
+          $users = id(new PhabricatorPeopleQuery())
+            ->setViewer($this->requireActor())
+            ->withPHIDs($watcher_phids)
+            ->execute();
+
+          $watchers = array();
+          foreach ($users as $user) {
+            $can_see = PhabricatorPolicyFilter::hasCapability(
+              $user,
+              $object,
+              PhabricatorPolicyCapability::CAN_VIEW);
+            if ($can_see) {
+              $watchers[] = $user->getPHID();
+            }
+          }
+          $phids[] = $watchers;
+        }
+      }
+
+      $has_support = true;
+    }
+
+    if (!$has_support) {
+      throw new Exception('Capability not supported.');
+    }
+
+    return array_mergev($phids);
   }
 
 
@@ -2104,7 +2221,9 @@ abstract class PhabricatorApplicationTransactionEditor
     $this->setHeraldAdapter($adapter);
     $this->setHeraldTranscript($xscript);
 
-    return $this->didApplyHeraldRules($object, $adapter, $xscript);
+    return array_merge(
+      $this->didApplyHeraldRules($object, $adapter, $xscript),
+      $adapter->getQueuedTransactions());
   }
 
   protected function didApplyHeraldRules(
@@ -2223,13 +2342,7 @@ abstract class PhabricatorApplicationTransactionEditor
       return;
     }
 
-    $editor = id(new PhabricatorEdgeEditor())
-      ->setActor($this->getActor());
-
-    // TODO: Edge-based events were almost certainly a terrible idea. If we
-    // don't suppress this event, the Maniphest listener reenters and adds
-    // more transactions. Just suppress it until that can get cleaned up.
-    $editor->setSuppressEvents(true);
+    $editor = new PhabricatorEdgeEditor();
 
     $src = $object->getPHID();
     $type = PhabricatorEdgeConfig::TYPE_OBJECT_HAS_FILE;
@@ -2238,6 +2351,61 @@ abstract class PhabricatorApplicationTransactionEditor
     }
 
     $editor->save();
+  }
+
+  private function applyInverseEdgeTransactions(
+    PhabricatorLiskDAO $object,
+    PhabricatorApplicationTransaction $xaction,
+    $inverse_type) {
+
+    $old = $xaction->getOldValue();
+    $new = $xaction->getNewValue();
+
+    $add = array_keys(array_diff_key($new, $old));
+    $rem = array_keys(array_diff_key($old, $new));
+
+    $add = array_fuse($add);
+    $rem = array_fuse($rem);
+    $all = $add + $rem;
+
+    $nodes = id(new PhabricatorObjectQuery())
+      ->setViewer($this->requireActor())
+      ->withPHIDs($all)
+      ->execute();
+
+    foreach ($nodes as $node) {
+      if (!($node instanceof PhabricatorApplicationTransactionInterface)) {
+        continue;
+      }
+
+      $editor = $node->getApplicationTransactionEditor();
+      $template = $node->getApplicationTransactionTemplate();
+      $target = $node->getApplicationTransactionObject();
+
+      if (isset($add[$node->getPHID()])) {
+        $edge_edit_type = '+';
+      } else {
+        $edge_edit_type = '-';
+      }
+
+      $template
+        ->setTransactionType($xaction->getTransactionType())
+        ->setMetadataValue('edge:type', $inverse_type)
+        ->setNewValue(
+          array(
+            $edge_edit_type => array($object->getPHID() => $object->getPHID()),
+          ));
+
+      $editor
+        ->setContinueOnNoEffect(true)
+        ->setContinueOnMissingFields(true)
+        ->setParentMessageID($this->getParentMessageID())
+        ->setIsInverseEdgeEditor(true)
+        ->setActor($this->requireActor())
+        ->setContentSource($this->getContentSource());
+
+      $editor->applyTransactions($target, array($template));
+    }
   }
 
 }

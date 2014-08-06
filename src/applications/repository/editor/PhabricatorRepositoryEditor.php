@@ -225,8 +225,7 @@ final class PhabricatorRepositoryEditor
         $old_phid = $xaction->getOldValue();
         $new_phid = $xaction->getNewValue();
 
-        $editor = id(new PhabricatorEdgeEditor())
-          ->setActor($this->requireActor());
+        $editor = new PhabricatorEdgeEditor();
 
         $edge_type = PhabricatorEdgeConfig::TYPE_OBJECT_USES_CREDENTIAL;
         $src_phid = $object->getPHID();
@@ -318,6 +317,21 @@ final class PhabricatorRepositoryEditor
     $errors = parent::validateTransaction($object, $type, $xactions);
 
     switch ($type) {
+      case PhabricatorRepositoryTransaction::TYPE_REMOTE_URI:
+        foreach ($xactions as $xaction) {
+          $new_uri = $xaction->getNewValue();
+          try {
+            PhabricatorRepository::assertValidRemoteURI($new_uri);
+          } catch (Exception $ex) {
+            $errors[] = new PhabricatorApplicationTransactionValidationError(
+              $type,
+              pht('Invalid'),
+              $ex->getMessage(),
+              $xaction);
+          }
+        }
+        break;
+
       case PhabricatorRepositoryTransaction::TYPE_CREDENTIAL:
         $ok = PassphraseCredentialControl::validateTransactions(
           $this->getActor(),

@@ -4,17 +4,18 @@ final class PhabricatorPHPMailerConfigOptions
   extends PhabricatorApplicationConfigOptions {
 
   public function getName() {
-    return pht("PHPMailer");
+    return pht('PHPMailer');
   }
 
   public function getDescription() {
-    return pht("Configure PHPMailer.");
+    return pht('Configure PHPMailer.');
   }
 
   public function getOptions() {
     return array(
       $this->newOption('phpmailer.mailer', 'string', 'smtp')
-        ->setSummary(pht("Configure mailer used by PHPMailer."))
+        ->setLocked(true)
+        ->setSummary(pht('Configure mailer used by PHPMailer.'))
         ->setDescription(
           pht(
             "If you're using PHPMailer to send email, provide the mailer and ".
@@ -23,11 +24,14 @@ final class PhabricatorPHPMailerConfigOptions
             "You need it when you want to use SMTP instead of sendmail as the ".
             "mailer.")),
       $this->newOption('phpmailer.smtp-host', 'string', null)
+        ->setLocked(true)
         ->setDescription(pht('Host for SMTP.')),
       $this->newOption('phpmailer.smtp-port', 'int', 25)
+        ->setLocked(true)
         ->setDescription(pht('Port for SMTP.')),
       // TODO: Implement "enum"? Valid values are empty, 'tls', or 'ssl'.
       $this->newOption('phpmailer.smtp-protocol', 'string', null)
+        ->setLocked(true)
         ->setSummary(pht('Configure TLS or SSL for SMTP.'))
         ->setDescription(
           pht(
@@ -35,6 +39,7 @@ final class PhabricatorPHPMailerConfigOptions
             "'ssl' to use TLS or SSL, respectively. Leave it blank for ".
             "vanilla SMTP. If you're sending via Gmail, set it to 'ssl'.")),
       $this->newOption('phpmailer.smtp-user', 'string', null)
+        ->setLocked(true)
         ->setDescription(pht('Username for SMTP.')),
       $this->newOption('phpmailer.smtp-password', 'string', null)
         ->setMasked(true)

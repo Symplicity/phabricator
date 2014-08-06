@@ -1,8 +1,5 @@
 <?php
 
-/**
- * @group conpherence
- */
 final class ConpherenceEditor extends PhabricatorApplicationTransactionEditor {
 
   const ERROR_EMPTY_PARTICIPANTS = 'error-empty-participants';
@@ -219,8 +216,7 @@ final class ConpherenceEditor extends PhabricatorApplicationTransactionEditor {
 
     switch ($xaction->getTransactionType()) {
       case ConpherenceTransactionType::TYPE_FILES:
-        $editor = id(new PhabricatorEdgeEditor())
-          ->setActor($this->getActor());
+        $editor = new PhabricatorEdgeEditor();
         $edge_type = PhabricatorEdgeConfig::TYPE_OBJECT_HAS_FILE;
         $old = array_fill_keys($xaction->getOldValue(), true);
         $new = array_fill_keys($xaction->getNewValue(), true);
@@ -304,6 +300,17 @@ final class ConpherenceEditor extends PhabricatorApplicationTransactionEditor {
         $participant->setDateTouched($time);
       }
       $participant->save();
+    }
+
+    if ($xactions) {
+      $data = array(
+        'type'        => 'message',
+        'threadPHID'  => $object->getPHID(),
+        'messageID'   => last($xactions)->getID(),
+        'subscribers' => array($object->getPHID()),
+      );
+
+      PhabricatorNotificationClient::tryToPostMessage($data);
     }
 
     return $xactions;
@@ -410,4 +417,5 @@ final class ConpherenceEditor extends PhabricatorApplicationTransactionEditor {
   protected function supportsSearch() {
     return false;
   }
+
 }

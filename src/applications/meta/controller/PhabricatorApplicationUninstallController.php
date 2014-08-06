@@ -6,6 +6,10 @@ final class PhabricatorApplicationUninstallController
   private $application;
   private $action;
 
+  public function shouldRequireAdmin() {
+    return true;
+  }
+
   public function willProcessRequest(array $data) {
     $this->application = $data['application'];
     $this->action = $data['action'];
@@ -50,7 +54,7 @@ final class PhabricatorApplicationUninstallController
       if ($selected->canUninstall()) {
         $dialog->setTitle('Confirmation')
                ->appendChild(
-                 'Install '. $selected->getName(). ' application?')
+                 'Install '.$selected->getName().' application?')
                ->addSubmitButton('Install');
 
       } else {
@@ -61,7 +65,7 @@ final class PhabricatorApplicationUninstallController
       if ($selected->canUninstall()) {
         $dialog->setTitle('Confirmation')
                ->appendChild(
-                 'Really Uninstall '. $selected->getName(). ' application?')
+                 'Really Uninstall '.$selected->getName().' application?')
                ->addSubmitButton('Uninstall');
       } else {
         $dialog->setTitle('Information')

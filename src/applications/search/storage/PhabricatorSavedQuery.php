@@ -1,8 +1,5 @@
 <?php
 
-/**
- * @group search
- */
 final class PhabricatorSavedQuery extends PhabricatorSearchDAO
   implements PhabricatorPolicyInterface {
 
@@ -29,7 +26,7 @@ final class PhabricatorSavedQuery extends PhabricatorSearchDAO
 
   public function save() {
     if ($this->getEngineClassName() === null) {
-      throw new Exception(pht("Engine class is null."));
+      throw new Exception(pht('Engine class is null.'));
     }
 
     // Instantiate the engine to make sure it's valid.

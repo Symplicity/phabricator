@@ -70,8 +70,7 @@ final class PonderAnswer extends PonderDAO
   }
 
   public function generatePHID() {
-    return PhabricatorPHID::generateNewPHID(
-      PonderPHIDTypeAnswer::TYPECONST);
+    return PhabricatorPHID::generateNewPHID(PonderAnswerPHIDType::TYPECONST);
   }
 
   public function setContentSource(PhabricatorContentSource $content_source) {
@@ -160,11 +159,11 @@ final class PonderAnswer extends PonderDAO
 
   public function describeAutomaticCapability($capability) {
     $out = array();
-    $out[] = pht("The author of an answer can always view and edit it.");
+    $out[] = pht('The author of an answer can always view and edit it.');
     switch ($capability) {
       case PhabricatorPolicyCapability::CAN_VIEW:
         $out[] = pht(
-          "The user who asks a question can always view the answers.");
+          'The user who asks a question can always view the answers.');
         break;
     }
     return $out;

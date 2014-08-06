@@ -10,7 +10,7 @@ final class PhabricatorEmailLoginController
   public function processRequest() {
     $request = $this->getRequest();
 
-    if (!PhabricatorAuthProviderPassword::getPasswordProvider()) {
+    if (!PhabricatorPasswordAuthProvider::getPasswordProvider()) {
       return new Aphront400Response();
     }
 
@@ -26,13 +26,13 @@ final class PhabricatorEmailLoginController
 
       $captcha_ok = AphrontFormRecaptchaControl::processCaptcha($request);
       if (!$captcha_ok) {
-        $errors[] = pht("Captcha response is incorrect, try again.");
+        $errors[] = pht('Captcha response is incorrect, try again.');
         $e_captcha = pht('Invalid');
       }
 
       $email = $request->getStr('email');
       if (!strlen($email)) {
-       $errors[] = pht("You must provide an email address.");
+       $errors[] = pht('You must provide an email address.');
        $e_email = pht('Required');
       }
 
@@ -54,12 +54,17 @@ final class PhabricatorEmailLoginController
 
         if (!$target_user) {
           $errors[] =
-            pht("There is no account associated with that email address.");
-          $e_email = pht("Invalid");
+            pht('There is no account associated with that email address.');
+          $e_email = pht('Invalid');
         }
 
         if (!$errors) {
-          $uri = $target_user->getEmailLoginURI($target_email);
+          $engine = new PhabricatorAuthSessionEngine();
+          $uri = $engine->getOneTimeLoginURI(
+            $target_user,
+            null,
+            PhabricatorAuthSessionEngine::ONETIME_RESET);
+
           if ($is_serious) {
             $body = <<<EOBODY
 You can use this link to reset your Phabricator password:
@@ -87,24 +92,18 @@ EOBODY;
           // mail if they have the "don't send me email about my own actions"
           // preference set.
 
-          $mail = new PhabricatorMetaMTAMail();
-          $mail->setSubject('[Phabricator] Password Reset');
-          $mail->addTos(
-            array(
-              $target_user->getPHID(),
-            ));
-          $mail->setBody($body);
-          $mail->saveAndSend();
+          $mail = id(new PhabricatorMetaMTAMail())
+            ->setSubject(pht('[Phabricator] Password Reset'))
+            ->addRawTos(array($target_email->getAddress()))
+            ->setBody($body)
+            ->saveAndSend();
 
-          $view = new AphrontRequestFailureView();
-          $view->setHeader(pht('Check Your Email'));
-          $view->appendChild(phutil_tag('p', array(), pht(
-              'An email has been sent with a link you can use to login.')));
-          return $this->buildStandardPageResponse(
-            $view,
-            array(
-              'title' => pht('Email Sent'),
-            ));
+          return $this->newDialog()
+            ->setTitle(pht('Check Your Email'))
+            ->setShortTitle(pht('Email Sent'))
+            ->appendParagraph(
+              pht('An email has been sent with a link you can use to login.'))
+            ->addCancelButton('/', pht('Done'));
         }
       }
 
@@ -150,7 +149,6 @@ EOBODY;
       ),
       array(
         'title' => pht('Forgot Password'),
-        'device' => true,
       ));
   }
 

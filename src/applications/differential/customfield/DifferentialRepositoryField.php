@@ -49,7 +49,7 @@ final class DifferentialRepositoryField
 
     return id(new AphrontFormTokenizerControl())
       ->setName($this->getFieldKey())
-      ->setDatasource('/typeahead/common/repositories/')
+      ->setDatasource(new DiffusionRepositoryDatasource())
       ->setValue($control_value)
       ->setError($this->getFieldError())
       ->setLabel($this->getFieldName())
@@ -141,6 +141,24 @@ final class DifferentialRepositoryField
 
   public function renderPropertyViewValue(array $handles) {
     return $this->renderHandleList($handles);
+  }
+
+  public function shouldAppearInTransactionMail() {
+    return true;
+  }
+
+  public function updateTransactionMailBody(
+    PhabricatorMetaMTAMailBody $body,
+    PhabricatorApplicationTransactionEditor $editor,
+    array $xactions) {
+
+    $repository = $this->getObject()->getRepository();
+    if ($repository === null) {
+      return;
+    }
+
+    $body->addTextSection(pht('REPOSITORY'),
+      $repository->getMonogram().' '.$repository->getName());
   }
 
 }

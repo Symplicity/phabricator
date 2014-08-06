@@ -14,19 +14,92 @@ final class PhrequentTrackController
   public function processRequest() {
     $request = $this->getRequest();
     $user = $request->getUser();
+    $editor = new PhrequentTrackingEditor();
+
+    $phid = $this->phid;
+    $handle = id(new PhabricatorHandleQuery())
+      ->setViewer($user)
+      ->withPHIDs(array($phid))
+      ->executeOne();
 
     if (!$this->isStartingTracking() &&
         !$this->isStoppingTracking()) {
-      throw new Exception('Unrecognized verb: ' . $this->verb);
+      throw new Exception('Unrecognized verb: '.$this->verb);
     }
 
-    if ($this->isStartingTracking()) {
-      $this->startTracking($user, $this->phid);
-    } else if ($this->isStoppingTracking()) {
-      $this->stopTracking($user, $this->phid);
+    switch ($this->verb) {
+      case 'start':
+        $button_text = pht('Start Tracking');
+        $title_text = pht('Start Tracking Time');
+        $inner_text = pht('What time did you start working?');
+        $action_text = pht('Start Timer');
+        $label_text = pht('Start Time');
+        break;
+      case 'stop':
+        $button_text = pht('Stop Tracking');
+        $title_text = pht('Stop Tracking Time');
+        $inner_text = pht('What time did you stop working?');
+        $action_text = pht('Stop Timer');
+        $label_text = pht('Stop Time');
+        break;
     }
 
-    return id(new AphrontRedirectResponse());
+    $epoch_control = id(new AphrontFormDateControl())
+      ->setUser($user)
+      ->setName('epoch')
+      ->setLabel($action_text)
+      ->setValue(time());
+
+    $err = array();
+
+    if ($request->isDialogFormPost()) {
+      $timestamp = $epoch_control->readValueFromRequest($request);
+      $note = $request->getStr('note');
+
+      if (!$epoch_control->isValid() || $timestamp > time()) {
+        $err[] = pht('Invalid date, please enter a valid non-future date');
+      }
+
+      if (!$err) {
+        if ($this->isStartingTracking()) {
+          $editor->startTracking($user, $this->phid, $timestamp);
+        } else if ($this->isStoppingTracking()) {
+          $editor->stopTracking($user, $this->phid, $timestamp, $note);
+        }
+        return id(new AphrontRedirectResponse());
+      }
+
+    }
+
+    $dialog = $this->newDialog()
+      ->setTitle($title_text)
+      ->setWidth(AphrontDialogView::WIDTH_FORM);
+
+    if ($err) {
+      $dialog->setErrors($err);
+    }
+
+    $form = new PHUIFormLayoutView();
+    $form
+      ->appendChild(hsprintf(
+        '<p>%s</p><br />', $inner_text));
+
+    $form->appendChild($epoch_control);
+
+    if ($this->isStoppingTracking()) {
+      $form
+        ->appendChild(
+          id(new AphrontFormTextControl())
+            ->setLabel(pht('Note'))
+            ->setName('note'));
+    }
+
+    $dialog->appendChild($form);
+
+    $dialog->addCancelButton($handle->getURI());
+    $dialog->addSubmitButton($action_text);
+
+    return $dialog;
   }
 
   private function isStartingTracking() {
@@ -36,36 +109,4 @@ final class PhrequentTrackController
   private function isStoppingTracking() {
     return $this->verb === 'stop';
   }
-
-  private function startTracking($user, $phid) {
-    $usertime = new PhrequentUserTime();
-    $usertime->setDateStarted(time());
-    $usertime->setUserPHID($user->getPHID());
-    $usertime->setObjectPHID($phid);
-    $usertime->save();
-  }
-
-  private function stopTracking($user, $phid) {
-    if (!PhrequentUserTimeQuery::isUserTrackingObject($user, $phid)) {
-      // Don't do anything, it's not being tracked.
-      return;
-    }
-
-    $usertime_dao = new PhrequentUserTime();
-    $conn = $usertime_dao->establishConnection('r');
-
-    queryfx(
-      $conn,
-      'UPDATE %T usertime '.
-      'SET usertime.dateEnded = UNIX_TIMESTAMP() '.
-      'WHERE usertime.userPHID = %s '.
-      'AND usertime.objectPHID = %s '.
-      'AND usertime.dateEnded IS NULL '.
-      'ORDER BY usertime.dateStarted, usertime.id DESC '.
-      'LIMIT 1',
-      $usertime_dao->getTableName(),
-      $user->getPHID(),
-      $phid);
-  }
-
 }

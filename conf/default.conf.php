@@ -630,14 +630,6 @@ return array(
   // be enabled in production.
   'phabricator.developer-mode' => false,
 
-  // When users write comments which have URIs, they'll be automatically linked
-  // if the protocol appears in this set. This whitelist is primarily to prevent
-  // security issues like javascript:// URIs.
-  'uri.allowed-protocols' => array(
-    'http'  => true,
-    'https' => true,
-  ),
-
   // Should Phabricator show beta applications on the homepage
   'phabricator.show-beta-applications' => false,
 
@@ -811,7 +803,7 @@ return array(
     // '#/autobuilt/#',
   ),
 
-  // If you set this to true, users can accept their own revisions.  This action
+  // If you set this to true, users can accept their own revisions. This action
   // is disabled by default because it's most likely not a behavior you want,
   // but it proves useful if you are working alone on a project and want to make
   // use of all of differential's features.
@@ -824,9 +816,13 @@ return array(
   // only the submitter can close a revision.
   'differential.always-allow-close' => false,
 
+  // If you set this to true, any user can abandon any revision. If false, only
+  // the submitter can abandon a revision.
+  'differential.always-allow-abandon' => false,
+
   // If you set this to true, any user can reopen a revision so long as it has
   // been closed.  This can be useful if a revision is accidentally closed or
-  // if a developer changes his or her mind after closing a revision.  If it is
+  // if a developer changes his or her mind after closing a revision. If it is
   // false, reopening is not allowed.
   'differential.allow-reopen' => false,
 
@@ -1005,6 +1001,7 @@ return array(
     'bash' => 'Bash Scripting',
     'brainfuck' => 'Brainf*ck',
     'c' => 'C',
+    'coffee-script' => 'CoffeeScript',
     'cpp' => 'C++',
     'css' => 'CSS',
     'd' => 'D',
@@ -1012,14 +1009,18 @@ return array(
     'django' => 'Django Templating',
     'erb' => 'Embedded Ruby/ERB',
     'erlang' => 'Erlang',
+    'go' => 'Golang',
+    'groovy' => 'Groovy',
     'haskell' => 'Haskell',
     'html' => 'HTML',
     'java' => 'Java',
     'js' => 'Javascript',
+    'json' => 'JSON',
     'mysql' => 'MySQL',
     'objc' => 'Objective-C',
     'perl' => 'Perl',
     'php' => 'PHP',
+    'puppet' => 'Puppet',
     'rest' => 'reStructuredText',
     'text' => 'Plain Text',
     'python' => 'Python',
@@ -1027,6 +1028,7 @@ return array(
     'remarkup' => 'Remarkup',
     'ruby' => 'Ruby',
     'xml' => 'XML',
+    'yaml' => 'YAML',
   ),
 
   // This is an override list of regular expressions which allows you to choose
@@ -1048,6 +1050,7 @@ return array(
     // '@\\.([^.]+)\\.bak$@' => 1,
 
     '@\.arcconfig$@' => 'js',
+    '@\.arclint$@' => 'js',
     '@\.divinerconfig$@' => 'js',
   ),
 

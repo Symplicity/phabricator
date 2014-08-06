@@ -12,6 +12,7 @@ final class PassphraseCredential extends PassphraseDAO
   protected $username;
   protected $secretID;
   protected $isDestroyed;
+  protected $isLocked = 0;
 
   private $secret = self::ATTACHABLE;
 
@@ -37,7 +38,7 @@ final class PassphraseCredential extends PassphraseDAO
 
   public function generatePHID() {
     return PhabricatorPHID::generateNewPHID(
-      PassphrasePHIDTypeCredential::TYPECONST);
+      PassphraseCredentialPHIDType::TYPECONST);
   }
 
   public function attachSecret(PhutilOpaqueEnvelope $secret = null) {

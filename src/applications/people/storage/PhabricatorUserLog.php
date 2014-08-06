@@ -4,6 +4,8 @@ final class PhabricatorUserLog extends PhabricatorUserDAO
   implements PhabricatorPolicyInterface {
 
   const ACTION_LOGIN          = 'login';
+  const ACTION_LOGIN_PARTIAL  = 'login-partial';
+  const ACTION_LOGIN_FULL     = 'login-full';
   const ACTION_LOGOUT         = 'logout';
   const ACTION_LOGIN_FAILURE  = 'login-fail';
   const ACTION_RESET_PASSWORD = 'reset-pass';
@@ -23,6 +25,7 @@ final class PhabricatorUserLog extends PhabricatorUserDAO
   const ACTION_EMAIL_PRIMARY    = 'email-primary';
   const ACTION_EMAIL_REMOVE     = 'email-remove';
   const ACTION_EMAIL_ADD        = 'email-add';
+  const ACTION_EMAIL_VERIFY     = 'email-verify';
 
   const ACTION_CHANGE_PASSWORD  = 'change-password';
   const ACTION_CHANGE_USERNAME  = 'change-username';
@@ -46,7 +49,9 @@ final class PhabricatorUserLog extends PhabricatorUserDAO
   public static function getActionTypeMap() {
     return array(
       self::ACTION_LOGIN => pht('Login'),
-      self::ACTION_LOGIN_FAILURE => pht('Login Failure'),
+      self::ACTION_LOGIN_PARTIAL => pht('Login: Partial Login'),
+      self::ACTION_LOGIN_FULL => pht('Login: Upgrade to Full'),
+      self::ACTION_LOGIN_FAILURE => pht('Login: Failure'),
       self::ACTION_LOGOUT => pht('Logout'),
       self::ACTION_RESET_PASSWORD => pht('Reset Password'),
       self::ACTION_CREATE => pht('Create Account'),
@@ -63,6 +68,7 @@ final class PhabricatorUserLog extends PhabricatorUserDAO
       self::ACTION_EMAIL_PRIMARY => pht('Email: Change Primary'),
       self::ACTION_EMAIL_ADD => pht('Email: Add Address'),
       self::ACTION_EMAIL_REMOVE => pht('Email: Remove Address'),
+      self::ACTION_EMAIL_VERIFY => pht('Email: Verify'),
       self::ACTION_CHANGE_PASSWORD => pht('Change Password'),
       self::ACTION_CHANGE_USERNAME => pht('Change Username'),
       self::ACTION_ENTER_HISEC => pht('Hisec: Enter'),

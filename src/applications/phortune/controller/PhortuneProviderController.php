@@ -31,7 +31,7 @@ final class PhortuneProviderController extends PhortuneController {
 
     $provider = PhortunePaymentProvider::getProviderByDigest($this->digest);
     if (!$provider) {
-      throw new Exception("Invalid payment provider digest!");
+      throw new Exception('Invalid payment provider digest!');
     }
 
     if (!$provider->canRespondToControllerAction($this->getAction())) {
@@ -51,13 +51,24 @@ final class PhortuneProviderController extends PhortuneController {
       $response,
       array(
         'title' => $title,
-        'device' => true,
       ));
   }
 
 
   public function loadCart($id) {
-    return id(new PhortuneCart());
+    $request = $this->getRequest();
+    $viewer = $request->getUser();
+
+    return id(new PhortuneCartQuery())
+      ->setViewer($viewer)
+      ->needPurchases(true)
+      ->withIDs(array($id))
+      ->requireCapabilities(
+        array(
+          PhabricatorPolicyCapability::CAN_VIEW,
+          PhabricatorPolicyCapability::CAN_EDIT,
+        ))
+      ->executeOne();
   }
 
 }

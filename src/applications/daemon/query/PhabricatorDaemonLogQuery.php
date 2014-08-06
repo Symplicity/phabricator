@@ -7,6 +7,7 @@ final class PhabricatorDaemonLogQuery
   const STATUS_ALIVE = 'status-alive';
 
   private $ids;
+  private $notIDs;
   private $status = self::STATUS_ALL;
   private $daemonClasses;
   private $allowStatusWrites;
@@ -21,6 +22,11 @@ final class PhabricatorDaemonLogQuery
 
   public function withIDs(array $ids) {
     $this->ids = $ids;
+    return $this;
+  }
+
+  public function withoutIDs(array $ids) {
+    $this->notIDs = $ids;
     return $this;
   }
 
@@ -119,6 +125,13 @@ final class PhabricatorDaemonLogQuery
         $this->ids);
     }
 
+    if ($this->notIDs) {
+      $where[] = qsprintf(
+        $conn_r,
+        'id NOT IN (%Ld)',
+        $this->notIDs);
+    }
+
     if ($this->getStatusConstants()) {
       $where[] = qsprintf(
         $conn_r,
@@ -154,7 +167,7 @@ final class PhabricatorDaemonLogQuery
   }
 
   public function getQueryApplicationClass() {
-    return 'PhabricatorApplicationDaemons';
+    return 'PhabricatorDaemonsApplication';
   }
 
 }

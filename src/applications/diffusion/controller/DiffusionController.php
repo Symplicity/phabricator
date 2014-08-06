@@ -11,7 +11,7 @@ abstract class DiffusionController extends PhabricatorController {
 
   protected function getDiffusionRequest() {
     if (!$this->diffusionRequest) {
-      throw new Exception("No Diffusion request object!");
+      throw new Exception('No Diffusion request object!');
     }
     return $this->diffusionRequest;
   }
@@ -38,29 +38,6 @@ abstract class DiffusionController extends PhabricatorController {
         $this->getRequest());
       $this->setDiffusionRequest($drequest);
     }
-  }
-
-  public function buildApplicationPage($view, array $options) {
-    if ($this->diffusionRequest) {
-      $drequest = $this->getDiffusionRequest();
-      $repository = $drequest->getRepository();
-      $error_view = $this->buildRepositoryWarning($repository);
-
-      $views = array();
-      $not_inserted = true;
-      foreach ($view as $view_object_or_array) {
-        $views[] = $view_object_or_array;
-        if ($not_inserted &&
-            $view_object_or_array instanceof PhabricatorCrumbsView) {
-          $views[] = $error_view;
-          $not_inserted = false;
-        }
-      }
-    } else {
-      $views = $view;
-    }
-
-    return parent::buildApplicationPage($views, $options);
   }
 
   public function buildCrumbs(array $spec = array()) {
@@ -121,17 +98,17 @@ abstract class DiffusionController extends PhabricatorController {
         )));
     $crumb_list[] = $crumb;
 
-    $raw_commit = $drequest->getRawCommit();
+    $stable_commit = $drequest->getStableCommit();
 
     if ($spec['tags']) {
       $crumb = new PhabricatorCrumbView();
       if ($spec['commit']) {
         $crumb->setName(
-          pht("Tags for %s", 'r'.$callsign.$raw_commit));
+          pht('Tags for %s', 'r'.$callsign.$stable_commit));
         $crumb->setHref($drequest->generateURI(
           array(
             'action' => 'commit',
-            'commit' => $raw_commit,
+            'commit' => $drequest->getStableCommit(),
           )));
       } else {
         $crumb->setName(pht('Tags'));
@@ -149,8 +126,8 @@ abstract class DiffusionController extends PhabricatorController {
 
     if ($spec['commit']) {
       $crumb = id(new PhabricatorCrumbView())
-        ->setName("r{$callsign}{$raw_commit}")
-        ->setHref("r{$callsign}{$raw_commit}");
+        ->setName("r{$callsign}{$stable_commit}")
+        ->setHref("r{$callsign}{$stable_commit}");
       $crumb_list[] = $crumb;
       return $crumb_list;
     }
@@ -258,23 +235,4 @@ abstract class DiffusionController extends PhabricatorController {
       ->appendChild($body);
   }
 
-  private function buildRepositoryWarning(PhabricatorRepository $repository) {
-    $error_view = null;
-    $title = null;
-    if ($repository->isImporting()) {
-      $title = pht('This repository is still importing.');
-      $body = pht('Things may not work properly until the import finishes.');
-    } else if (!$repository->isTracked()) {
-      $title = pht('This repository is not tracked.');
-      $body = pht(
-        'Things may not work properly until tracking is enabled and '.
-        'importing finishes.');
-    }
-
-    if ($title) {
-      $error_view = $this->renderStatusMessage($title, $body);
-    }
-
-    return $error_view;
-  }
 }

@@ -28,12 +28,12 @@ final class HarbormasterWaitForPreviousBuildStepImplementation
     // finished.
     $plan = $build->getBuildPlan();
 
-    $log = $build->createLog($build_target, "waiting", "blockers");
+    $log = $build->createLog($build_target, 'waiting', 'blockers');
     $log_start = $log->start();
 
     $blockers = $this->getBlockers($object, $plan, $build);
     if ($blockers) {
-      $log->append("Blocked by: ".implode(",", $blockers)."\n");
+      $log->append("Blocked by: ".implode(',', $blockers)."\n");
     }
     $log->finalize($log_start);
 
@@ -73,26 +73,26 @@ final class HarbormasterWaitForPreviousBuildStepImplementation
       }
     }
 
-    $buildables = id(new HarbormasterBuildableQuery())
-      ->setViewer(PhabricatorUser::getOmnipotentUser())
-      ->withBuildablePHIDs($build_objects)
-      ->withManualBuildables(false)
-      ->execute();
-    $buildable_phids = mpull($buildables, 'getPHID');
+    if ($build_objects) {
+      $buildables = id(new HarbormasterBuildableQuery())
+        ->setViewer(PhabricatorUser::getOmnipotentUser())
+        ->withBuildablePHIDs($build_objects)
+        ->withManualBuildables(false)
+        ->execute();
+      $buildable_phids = mpull($buildables, 'getPHID');
 
-    if (!$buildable_phids) {
-      return array();
-    }
+      if ($buildable_phids) {
+        $builds = id(new HarbormasterBuildQuery())
+          ->setViewer(PhabricatorUser::getOmnipotentUser())
+          ->withBuildablePHIDs($buildable_phids)
+          ->withBuildPlanPHIDs(array($plan->getPHID()))
+          ->execute();
 
-    $builds = id(new HarbormasterBuildQuery())
-      ->setViewer(PhabricatorUser::getOmnipotentUser())
-      ->withBuildablePHIDs($buildable_phids)
-      ->withBuildPlanPHIDs(array($plan->getPHID()))
-      ->execute();
-
-    foreach ($builds as $build) {
-      if (!$build->isComplete()) {
-        $blockers[] = pht('Build %d', $build->getID());
+        foreach ($builds as $build) {
+          if (!$build->isComplete()) {
+            $blockers[] = pht('Build %d', $build->getID());
+          }
+        }
       }
     }
 

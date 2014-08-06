@@ -1,8 +1,5 @@
 <?php
 
-/**
- * @group phame
- */
 final class PhamePost extends PhameDAO
   implements
     PhabricatorPolicyInterface,
@@ -59,6 +56,10 @@ final class PhamePost extends PhameDAO
     return PhabricatorEnv::getProductionURI($uri);
   }
 
+  public function getEditURI() {
+    return '/phame/post/edit/'.$this->getID().'/';
+  }
+
   public function isDraft() {
     return $this->getVisibility() == self::VISIBILITY_DRAFT;
   }
@@ -92,7 +93,7 @@ final class PhamePost extends PhameDAO
 
   public function generatePHID() {
     return PhabricatorPHID::generateNewPHID(
-      PhabricatorPhamePHIDTypePost::TYPECONST);
+      PhabricatorPhamePostPHIDType::TYPECONST);
   }
 
   public function toDictionary() {
@@ -123,7 +124,7 @@ final class PhamePost extends PhameDAO
     $options = array();
 
     if ($current == 'facebook' ||
-        PhabricatorAuthProviderOAuthFacebook::getFacebookApplicationID()) {
+        PhabricatorFacebookAuthProvider::getFacebookApplicationID()) {
       $options['facebook'] = 'Facebook';
     }
     if ($current == 'disqus' ||

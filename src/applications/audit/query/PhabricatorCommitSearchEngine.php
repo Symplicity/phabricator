@@ -3,6 +3,10 @@
 final class PhabricatorCommitSearchEngine
   extends PhabricatorApplicationSearchEngine {
 
+  public function getResultTypeDescription() {
+    return pht('Commits');
+  }
+
   public function buildSavedQueryFromRequest(AphrontRequest $request) {
     $saved = new PhabricatorSavedQuery();
 
@@ -12,7 +16,7 @@ final class PhabricatorCommitSearchEngine
 
     $saved->setParameter(
       'commitAuthorPHIDs',
-      $this->readUsersFromRequest($request, 'commitAuthorPHIDs'));
+      $this->readUsersFromRequest($request, 'authors'));
 
     $saved->setParameter(
       'auditStatus',
@@ -81,14 +85,14 @@ final class PhabricatorCommitSearchEngine
     $form
       ->appendChild(
         id(new AphrontFormTokenizerControl())
-          ->setDatasource('/typeahead/common/usersprojectsorpackages/')
+          ->setDatasource(new DiffusionAuditorDatasource())
           ->setName('auditorPHIDs')
           ->setLabel(pht('Auditors'))
           ->setValue(array_select_keys($handles, $auditor_phids)))
       ->appendChild(
         id(new AphrontFormTokenizerControl())
-          ->setDatasource('/typeahead/common/users/')
-          ->setName('commitAuthorPHIDs')
+          ->setDatasource(new PhabricatorPeopleDatasource())
+          ->setName('authors')
           ->setLabel(pht('Commit Authors'))
           ->setValue(array_select_keys($handles, $commit_author_phids)))
        ->appendChild(
@@ -112,6 +116,10 @@ final class PhabricatorCommitSearchEngine
     }
 
     $names['open'] = pht('Open Audits');
+
+    if ($this->requireViewer()->isLoggedIn()) {
+      $names['authored'] = pht('Authored Commits');
+    }
 
     $names['all'] = pht('All Commits');
 
@@ -140,6 +148,9 @@ final class PhabricatorCommitSearchEngine
           'auditorPHIDs',
           PhabricatorAuditCommentEditor::loadAuditPHIDsForUser($viewer));
         return $query;
+      case 'authored':
+        $query->setParameter('commitAuthorPHIDs', array($viewer->getPHID()));
+        return $query;
       case 'problem':
         $query->setParameter('commitAuthorPHIDs', array($viewer->getPHID()));
         $query->setParameter(
@@ -157,6 +168,37 @@ final class PhabricatorCommitSearchEngine
       DiffusionCommitQuery::AUDIT_STATUS_OPEN => pht('Open'),
       DiffusionCommitQuery::AUDIT_STATUS_CONCERN => pht('Concern Raised'),
     );
+  }
+
+  protected function renderResultList(
+    array $commits,
+    PhabricatorSavedQuery $query,
+    array $handles) {
+
+    assert_instances_of($commits, 'PhabricatorRepositoryCommit');
+
+    $viewer = $this->requireViewer();
+    $nodata = pht('No matching audits.');
+    $view = id(new PhabricatorAuditListView())
+      ->setUser($viewer)
+      ->setCommits($commits)
+      ->setAuthorityPHIDs(
+        PhabricatorAuditCommentEditor::loadAuditPHIDsForUser($viewer))
+      ->setNoDataString($nodata);
+
+    $phids = $view->getRequiredHandlePHIDs();
+    if ($phids) {
+      $handles = id(new PhabricatorHandleQuery())
+        ->setViewer($viewer)
+        ->withPHIDs($phids)
+        ->execute();
+    } else {
+      $handles = array();
+    }
+
+    $view->setHandles($handles);
+
+    return $view->buildList();
   }
 
 }

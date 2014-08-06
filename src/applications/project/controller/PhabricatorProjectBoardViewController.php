@@ -4,58 +4,138 @@ final class PhabricatorProjectBoardViewController
   extends PhabricatorProjectBoardController {
 
   private $id;
+  private $slug;
   private $handles;
+  private $queryKey;
+  private $filter;
 
   public function shouldAllowPublic() {
     return true;
   }
 
   public function willProcessRequest(array $data) {
-    $this->id = $data['id'];
+    $this->id = idx($data, 'id');
+    $this->slug = idx($data, 'slug');
+    $this->queryKey = idx($data, 'queryKey');
+    $this->filter = (bool)idx($data, 'filter');
   }
 
   public function processRequest() {
     $request = $this->getRequest();
     $viewer = $request->getUser();
 
+    $show_hidden = $request->getBool('hidden');
+
     $project = id(new PhabricatorProjectQuery())
       ->setViewer($viewer)
-      ->needImages(true)
-      ->withIDs(array($this->id))
-      ->executeOne();
+      ->needImages(true);
+    if ($this->slug) {
+      $project->withSlugs(array($this->slug));
+    } else {
+      $project->withIDs(array($this->id));
+    }
+    $project = $project->executeOne();
     if (!$project) {
       return new Aphront404Response();
     }
+
     $this->setProject($project);
+    $this->id = $project->getID();
 
-    $columns = id(new PhabricatorProjectColumnQuery())
+    $column_query = id(new PhabricatorProjectColumnQuery())
       ->setViewer($viewer)
-      ->withProjectPHIDs(array($project->getPHID()))
-      ->withStatuses(array(PhabricatorProjectColumn::STATUS_ACTIVE))
-      ->execute();
+      ->withProjectPHIDs(array($project->getPHID()));
 
+    if (!$show_hidden) {
+      $column_query->withStatuses(
+        array(PhabricatorProjectColumn::STATUS_ACTIVE));
+    }
+
+    $columns = $column_query->execute();
     $columns = mpull($columns, null, 'getSequence');
 
-    // If there's no default column, create one now.
     if (empty($columns[0])) {
-      $unguarded = AphrontWriteGuard::beginScopedUnguardedWrites();
-        $column = PhabricatorProjectColumn::initializeNewColumn($viewer)
-          ->setSequence(0)
-          ->setProjectPHID($project->getPHID())
-          ->save();
-        $column->attachProject($project);
-        $columns[0] = $column;
-      unset($unguarded);
+      switch ($request->getStr('initialize-type')) {
+        case 'backlog-only':
+          $unguarded = AphrontWriteGuard::beginScopedUnguardedWrites();
+            $column = PhabricatorProjectColumn::initializeNewColumn($viewer)
+              ->setSequence(0)
+              ->setProjectPHID($project->getPHID())
+              ->save();
+            $column->attachProject($project);
+            $columns[0] = $column;
+          unset($unguarded);
+          break;
+        case 'import':
+          return id(new AphrontRedirectResponse())
+            ->setURI(
+              $this->getApplicationURI('board/'.$project->getID().'/import/'));
+          break;
+        default:
+          return $this->initializeWorkboardDialog($project);
+          break;
+      }
     }
 
     ksort($columns);
 
-    $tasks = id(new ManiphestTaskQuery())
+    $board_uri = $this->getApplicationURI('board/'.$project->getID().'/');
+
+    $engine = id(new ManiphestTaskSearchEngine())
       ->setViewer($viewer)
-      ->withAllProjects(array($project->getPHID()))
-      ->withStatuses(ManiphestTaskStatus::getOpenStatusConstants())
+      ->setBaseURI($board_uri)
+      ->setIsBoardView(true);
+
+    if ($request->isFormPost()) {
+      $saved = $engine->buildSavedQueryFromRequest($request);
+      $engine->saveQuery($saved);
+      return id(new AphrontRedirectResponse())->setURI(
+        $engine->getQueryResultsPageURI($saved->getQueryKey()));
+    }
+
+    $query_key = $this->queryKey;
+    if (!$query_key) {
+      $query_key = 'open';
+    }
+
+    $custom_query = null;
+    if ($engine->isBuiltinQuery($query_key)) {
+      $saved = $engine->buildSavedQueryFromBuiltin($query_key);
+    } else {
+      $saved = id(new PhabricatorSavedQueryQuery())
+        ->setViewer($viewer)
+        ->withQueryKeys(array($query_key))
+        ->executeOne();
+
+      if (!$saved) {
+        return new Aphront404Response();
+      }
+
+      $custom_query = $saved;
+    }
+
+    if ($this->filter) {
+      $filter_form = id(new AphrontFormView())
+        ->setUser($viewer);
+      $engine->buildSearchForm($filter_form, $saved);
+
+      return $this->newDialog()
+        ->setWidth(AphrontDialogView::WIDTH_FULL)
+        ->setTitle(pht('Advanced Filter'))
+        ->appendChild($filter_form->buildLayoutView())
+        ->setSubmitURI($board_uri)
+        ->addSubmitButton(pht('Apply Filter'))
+        ->addCancelButton($board_uri);
+    }
+
+    $task_query = $engine->buildQueryFromSavedQuery($saved);
+
+    $tasks = $task_query
+      ->addWithAllProjects(array($project->getPHID()))
       ->setOrderBy(ManiphestTaskQuery::ORDER_PRIORITY)
+      ->setViewer($viewer)
       ->execute();
+
     $tasks = mpull($tasks, null, 'getPHID');
     $task_phids = array_keys($tasks);
 
@@ -89,7 +169,6 @@ final class PhabricatorProjectBoardViewController
 
     $board = id(new PHUIWorkboardView())
       ->setUser($viewer)
-      ->setFluidishLayout(true)
       ->setID($board_id);
 
     $this->initBehavior(
@@ -107,12 +186,11 @@ final class PhabricatorProjectBoardViewController
       $panel = id(new PHUIWorkpanelView())
         ->setHeader($column->getDisplayName())
         ->setHeaderColor($column->getHeaderColor());
-      if (!$column->isDefaultColumn()) {
-        $panel->setEditURI('column/'.$column->getID().'/');
-      }
+
+      $panel->setEditURI($board_uri.'column/'.$column->getID().'/');
+
       $panel->setHeaderAction(id(new PHUIIconView())
-        ->setSpriteSheet(PHUIIconView::SPRITE_ACTIONS)
-        ->setSpriteIcon('new-grey')
+        ->setIconFont('fa-plus')
         ->setHref('/maniphest/task/create/')
         ->addSigil('column-add-task')
         ->setMetadata(
@@ -120,7 +198,6 @@ final class PhabricatorProjectBoardViewController
 
       $cards = id(new PHUIObjectItemListView())
         ->setUser($viewer)
-        ->setCards(true)
         ->setFlush(true)
         ->setAllowEmptyList(true)
         ->addSigil('project-column')
@@ -128,6 +205,7 @@ final class PhabricatorProjectBoardViewController
           array(
             'columnPHID' => $column->getPHID(),
           ));
+
       $task_phids = idx($task_map, $column->getPHID(), array());
       foreach (array_select_keys($tasks, $task_phids) as $task) {
         $owner = null;
@@ -151,61 +229,219 @@ final class PhabricatorProjectBoardViewController
       $board->addPanel($panel);
     }
 
-    $crumbs = $this->buildApplicationCrumbs();
-    $crumbs->addTextCrumb(pht('Board'));
+    Javelin::initBehavior(
+      'boards-dropdown',
+      array());
+
+    $filter_menu = $this->buildFilterMenu(
+      $viewer,
+      $custom_query,
+      $engine,
+      $query_key);
+
+    $manage_menu = $this->buildManageMenu($project, $show_hidden);
+
+    $header_link = phutil_tag(
+      'a',
+      array(
+        'href' => $this->getApplicationURI('view/'.$project->getID().'/')
+      ),
+      $project->getName());
+
+    $header = id(new PHUIHeaderView())
+      ->setHeader($header_link)
+      ->setUser($viewer)
+      ->setNoBackground(true)
+      ->setImage($project->getProfileImageURI())
+      ->setImageURL($this->getApplicationURI('view/'.$project->getID().'/'))
+      ->addActionLink($filter_menu)
+      ->addActionLink($manage_menu)
+      ->setPolicyObject($project);
+
+    $board_box = id(new PHUIBoxView())
+      ->appendChild($board)
+      ->addClass('project-board-wrapper');
+
+    return $this->buildApplicationPage(
+      array(
+        $header,
+        $board_box,
+      ),
+      array(
+        'title' => pht('%s Board', $project->getName()),
+      ));
+  }
+
+  private function buildFilterMenu(
+    PhabricatorUser $viewer,
+    $custom_query,
+    PhabricatorApplicationSearchEngine $engine,
+    $query_key) {
+
+    $filter_icon = id(new PHUIIconView())
+      ->setIconFont('fa-search-plus bluegrey');
+
+    $named = array(
+      'open' => pht('Open Tasks'),
+      'all' => pht('All Tasks'),
+    );
+
+    if ($viewer->isLoggedIn()) {
+      $named['assigned'] = pht('Assigned to Me');
+    }
+
+    if ($custom_query) {
+      $named[$custom_query->getQueryKey()] = pht('Custom Filter');
+    }
+
+    $items = array();
+    foreach ($named as $key => $name) {
+      $is_selected = ($key == $query_key);
+      if ($is_selected) {
+        $active_filter = $name;
+      }
+
+      $is_custom = false;
+      if ($custom_query) {
+        $is_custom = ($key == $custom_query->getQueryKey());
+      }
+
+      $item = id(new PhabricatorActionView())
+        ->setIcon('fa-search')
+        ->setSelected($is_selected)
+        ->setName($name);
+
+      if ($is_custom) {
+        $item->setHref(
+          $this->getApplicationURI(
+          'board/'.$this->id.'/filter/query/'.$key.'/'));
+        $item->setWorkflow(true);
+      } else {
+        $item->setHref($engine->getQueryResultsPageURI($key));
+      }
+
+      $items[] = $item;
+    }
+
+    $items[] = id(new PhabricatorActionView())
+      ->setIcon('fa-cog')
+      ->setHref($this->getApplicationURI('board/'.$this->id.'/filter/'))
+      ->setWorkflow(true)
+      ->setName(pht('Advanced Filter...'));
+
+    $filter_menu = id(new PhabricatorActionListView())
+        ->setUser($viewer);
+    foreach ($items as $item) {
+      $filter_menu->addAction($item);
+    }
+
+    $filter_button = id(new PHUIButtonView())
+      ->setText(pht('Filter: %s', $active_filter))
+      ->setIcon($filter_icon)
+      ->setTag('a')
+      ->setHref('#')
+      ->addSigil('boards-dropdown-menu')
+      ->setMetadata(
+        array(
+          'items' => hsprintf('%s', $filter_menu),
+        ));
+
+    return $filter_button;
+  }
+
+  private function buildManageMenu(
+    PhabricatorProject $project,
+    $show_hidden) {
+
+    $request = $this->getRequest();
+    $viewer = $request->getUser();
 
     $can_edit = PhabricatorPolicyFilter::hasCapability(
       $viewer,
       $project,
       PhabricatorPolicyCapability::CAN_EDIT);
 
-    $actions = id(new PhabricatorActionListView())
-      ->setUser($viewer)
-      ->addAction(
-        id(new PhabricatorActionView())
-          ->setName(pht('Add Column'))
-          ->setHref($this->getApplicationURI('board/'.$this->id.'/edit/'))
-          ->setIcon('create')
-          ->setDisabled(!$can_edit)
-          ->setWorkflow(!$can_edit));
+    $manage_icon = id(new PHUIIconView())
+      ->setIconFont('fa-cog bluegrey');
 
-    $plist = id(new PHUIPropertyListView());
+    $manage_items = array();
 
-    // TODO: Need this to get actions to render.
-    $plist->addProperty(
-      pht('Project Boards'),
-      phutil_tag(
-        'em',
-        array(),
-        pht(
-          'This feature is beta, but should mostly work.')));
-    $plist->setActionList($actions);
+    $manage_items[] = id(new PhabricatorActionView())
+      ->setIcon('fa-plus')
+      ->setName(pht('Add Column'))
+      ->setHref($this->getApplicationURI('board/'.$this->id.'/edit/'))
+      ->setDisabled(!$can_edit)
+      ->setWorkflow(!$can_edit);
 
-    $header = id(new PHUIHeaderView())
-      ->setHeader($project->getName())
-      ->setUser($viewer)
-      ->setImage($project->getProfileImageURI())
-      ->setPolicyObject($project);
+    $manage_items[] = id(new PhabricatorActionView())
+      ->setIcon('fa-exchange')
+      ->setName(pht('Reorder Columns'))
+      ->setHref($this->getApplicationURI('board/'.$this->id.'/reorder/'))
+      ->setDisabled(!$can_edit)
+      ->setWorkflow(true);
 
-    $box = id(new PHUIObjectBoxView())
-      ->setHeader($header)
-      ->addPropertyList($plist);
+    if ($show_hidden) {
+      $hidden_uri = $request->getRequestURI()
+        ->setQueryParam('hidden', null);
+      $hidden_icon = 'fa-eye-slash';
+      $hidden_text = pht('Hide Hidden Columns');
+    } else {
+      $hidden_uri = $request->getRequestURI()
+        ->setQueryParam('hidden', 'true');
+      $hidden_icon = 'fa-eye';
+      $hidden_text = pht('Show Hidden Columns');
+    }
 
-    $board_box = id(new PHUIBoxView())
-      ->appendChild($board)
-      ->addClass('project-board-wrapper')
-      ->addMargin(PHUI::MARGIN_LARGE);
+    $manage_items[] = id(new PhabricatorActionView())
+      ->setIcon($hidden_icon)
+      ->setName($hidden_text)
+      ->setHref($hidden_uri);
 
-    return $this->buildApplicationPage(
-      array(
-        $crumbs,
-        $box,
-        $board_box,
-      ),
-      array(
-        'title' => pht('%s Board', $project->getName()),
-        'device' => true,
-      ));
+    $manage_menu = id(new PhabricatorActionListView())
+        ->setUser($viewer);
+    foreach ($manage_items as $item) {
+      $manage_menu->addAction($item);
+    }
+
+    $manage_button = id(new PHUIButtonView())
+      ->setText(pht('Manage Board'))
+      ->setIcon($manage_icon)
+      ->setTag('a')
+      ->setHref('#')
+      ->addSigil('boards-dropdown-menu')
+      ->setMetadata(
+        array(
+          'items' => hsprintf('%s', $manage_menu),
+        ));
+
+    return $manage_button;
+  }
+
+  private function initializeWorkboardDialog(PhabricatorProject $project) {
+
+    $instructions = pht('This workboard has not been setup yet.');
+    $new_selector = id(new AphrontFormRadioButtonControl())
+      ->setName('initialize-type')
+      ->setValue('backlog-only')
+      ->addButton(
+        'backlog-only',
+        pht('New Empty Board'),
+        pht('Create a new board with just a backlog column.'))
+      ->addButton(
+        'import',
+        pht('Import Columns'),
+        pht('Import board columns from another project.'));
+
+    $dialog = id(new AphrontDialogView())
+      ->setUser($this->getRequest()->getUser())
+      ->setTitle(pht('New Workboard'))
+      ->addSubmitButton('Continue')
+      ->addCancelButton($this->getApplicationURI('view/'.$project->getID().'/'))
+      ->appendParagraph($instructions)
+      ->appendChild($new_selector);
+
+    return id(new AphrontDialogResponse())
+      ->setDialog($dialog);
   }
 
 }

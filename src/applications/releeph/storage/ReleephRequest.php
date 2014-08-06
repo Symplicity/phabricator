@@ -50,7 +50,7 @@ final class ReleephRequest extends ReleephDAO
       $this->getPusherIntent() == self::INTENT_WANT &&
       /**
        * We use "!= pass" instead of "== want" in case the requestor intent is
-       * not present.  In other words, only revert if the requestor explicitly
+       * not present. In other words, only revert if the requestor explicitly
        * passed.
        */
       $this->getRequestorIntent() != self::INTENT_PASS;
@@ -131,10 +131,10 @@ final class ReleephRequest extends ReleephDAO
         // was once in the branch.
         if ($has_been_in_branch) {
           return ReleephRequestStatus::STATUS_REVERTED;
-        } elseif ($this->getPusherIntent() === ReleephRequest::INTENT_PASS) {
+        } else if ($this->getPusherIntent() === ReleephRequest::INTENT_PASS) {
           // Otherwise, if it has never been in the branch, explicitly say why:
           return ReleephRequestStatus::STATUS_REJECTED;
-        } elseif ($this->getRequestorIntent() === ReleephRequest::INTENT_WANT) {
+        } else if ($this->getRequestorIntent() === ReleephRequest::INTENT_WANT) {
           return ReleephRequestStatus::STATUS_REQUESTED;
         } else {
           return ReleephRequestStatus::STATUS_ABANDONED;
@@ -158,7 +158,7 @@ final class ReleephRequest extends ReleephDAO
 
   public function generatePHID() {
     return PhabricatorPHID::generateNewPHID(
-      ReleephPHIDTypeRequest::TYPECONST);
+      ReleephRequestPHIDType::TYPECONST);
   }
 
   public function save() {

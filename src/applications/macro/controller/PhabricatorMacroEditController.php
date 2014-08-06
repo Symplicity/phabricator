@@ -1,7 +1,6 @@
 <?php
 
-final class PhabricatorMacroEditController
-  extends PhabricatorMacroController {
+final class PhabricatorMacroEditController extends PhabricatorMacroController {
 
   private $id;
 
@@ -10,9 +9,8 @@ final class PhabricatorMacroEditController
   }
 
   public function processRequest() {
-
     $this->requireApplicationCapability(
-      PhabricatorMacroCapabilityManage::CAPABILITY);
+      PhabricatorMacroManageCapability::CAPABILITY);
 
     $request = $this->getRequest();
     $user = $request->getUser();
@@ -127,7 +125,7 @@ final class PhabricatorMacroEditController
 
           $view_uri = $this->getApplicationURI('/view/'.$original->getID().'/');
           return id(new AphrontRedirectResponse())->setURI($view_uri);
-        } catch (AphrontQueryDuplicateKeyException $ex) {
+        } catch (AphrontDuplicateKeyQueryException $ex) {
           throw $ex;
           $errors[] = pht('Macro name is not unique!');
           $e_name = pht('Duplicate');
@@ -260,7 +258,7 @@ final class PhabricatorMacroEditController
       ),
       array(
         'title' => $title,
-        'device' => true,
       ));
   }
+
 }

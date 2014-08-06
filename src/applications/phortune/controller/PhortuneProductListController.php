@@ -22,10 +22,7 @@ final class PhortuneProductListController extends PhabricatorController {
       id(new PHUIListItemView())
         ->setName(pht('Create Product'))
         ->setHref($this->getApplicationURI('product/edit/'))
-        ->setIcon('create'));
-
-    $header = id(new PHUIHeaderView())
-      ->setHeader(pht('Product List'));
+        ->setIcon('fa-plus-square'));
 
     $product_list = id(new PHUIObjectItemListView())
       ->setUser($user)
@@ -51,13 +48,11 @@ final class PhortuneProductListController extends PhabricatorController {
     return $this->buildApplicationPage(
       array(
         $crumbs,
-        $header,
         $product_list,
         $pager,
       ),
       array(
         'title' => $title,
-        'device' => true,
       ));
   }
 

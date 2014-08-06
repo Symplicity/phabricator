@@ -1,10 +1,6 @@
 <?php
 
-/**
- * @group conpherence
- */
-final class ConpherenceListController
-  extends ConpherenceController {
+final class ConpherenceListController extends ConpherenceController {
 
   const SELECTED_MODE = 'selected';
   const UNSELECTED_MODE = 'unselected';
@@ -166,7 +162,6 @@ final class ConpherenceListController
           $layout,
           array(
             'title' => $title,
-            'device' => true,
           ));
         break;
     }
@@ -228,7 +223,8 @@ final class ConpherenceListController
     return array(
       'scroll_up_participant' => $scroll_up_participant,
       'scroll_down_participant' => $scroll_down_participant,
-      'participation' => $participation);
+      'participation' => $participation,
+    );
   }
 
   private function loadConpherenceThreadData($participation) {

@@ -17,7 +17,7 @@ abstract class PhabricatorRepositoryCommitMessageParserWorker
       $data = new PhabricatorRepositoryCommitData();
     }
     $data->setCommitID($commit->getID());
-    $data->setAuthorName($author);
+    $data->setAuthorName((string)$author);
     $data->setCommitDetail(
       'authorPHID',
       $this->resolveUserPHID($commit, $author));
@@ -90,7 +90,6 @@ abstract class PhabricatorRepositoryCommitMessageParserWorker
       if ($revision) {
         $commit_drev = PhabricatorEdgeConfig::TYPE_COMMIT_HAS_DREV;
         id(new PhabricatorEdgeEditor())
-          ->setActor($user)
           ->addEdge($commit->getPHID(), $commit_drev, $revision->getPHID())
           ->save();
 
@@ -294,12 +293,22 @@ abstract class PhabricatorRepositoryCommitMessageParserWorker
 
     $repository = $this->repository;
 
+    $vs_diff = id(new DifferentialDiffQuery())
+      ->setViewer(PhabricatorUser::getOmnipotentUser())
+      ->withRevisionIDs(array($revision->getID()))
+      ->needChangesets(true)
+      ->setLimit(1)
+      ->executeOne();
+    if (!$vs_diff) {
+      return null;
+    }
+
+    if ($vs_diff->getCreationMethod() == 'commit') {
+      return null;
+    }
+
     $vs_changesets = array();
-    $vs_diff = id(new DifferentialDiff())->loadOneWhere(
-      'revisionID = %d AND creationMethod != %s ORDER BY id DESC LIMIT 1',
-      $revision->getID(),
-      'commit');
-    foreach ($vs_diff->loadChangesets() as $changeset) {
+    foreach ($vs_diff->getChangesets() as $changeset) {
       $path = $changeset->getAbsoluteRepositoryPath($repository, $vs_diff);
       $path = ltrim($path, '/');
       $vs_changesets[$path] = $changeset;
@@ -315,14 +324,6 @@ abstract class PhabricatorRepositoryCommitMessageParserWorker
     if (array_fill_keys(array_keys($changesets), true) !=
         array_fill_keys(array_keys($vs_changesets), true)) {
       return $vs_diff;
-    }
-
-    $hunks = id(new DifferentialHunk())->loadAllWhere(
-      'changesetID IN (%Ld)',
-      mpull($vs_changesets, 'getID'));
-    $hunks = mgroup($hunks, 'getChangesetID');
-    foreach ($vs_changesets as $changeset) {
-      $changeset->attachHunks(idx($hunks, $changeset->getID(), array()));
     }
 
     $file_phids = array();
@@ -380,8 +381,8 @@ abstract class PhabricatorRepositoryCommitMessageParserWorker
         //   -echo "test";
         //   -(empty line)
 
-        $hunk = id(new DifferentialHunk())->setChanges($context);
-        $vs_hunk = id(new DifferentialHunk())->setChanges($vs_context);
+        $hunk = id(new DifferentialHunkModern())->setChanges($context);
+        $vs_hunk = id(new DifferentialHunkModern())->setChanges($vs_context);
         if ($hunk->makeOldFile() != $vs_hunk->makeOldFile() ||
             $hunk->makeNewFile() != $vs_hunk->makeNewFile()) {
           return $vs_diff;
@@ -408,7 +409,7 @@ abstract class PhabricatorRepositoryCommitMessageParserWorker
     PhabricatorRepositoryCommit $commit,
     $message) {
 
-    $maniphest = 'PhabricatorApplicationManiphest';
+    $maniphest = 'PhabricatorManiphestApplication';
     if (!PhabricatorApplication::isClassInstalled($maniphest)) {
       return;
     }
@@ -447,29 +448,16 @@ abstract class PhabricatorRepositoryCommitMessageParserWorker
     foreach ($tasks as $task_id => $task) {
       $xactions = array();
 
-      // TODO: Swap this for a real edge transaction once the weirdness in
-      // Maniphest edges is sorted out. Currently, Maniphest reacts to an edge
-      // edit on this edge.
-      id(new PhabricatorEdgeEditor())
-        ->setActor($actor)
-        ->addEdge(
-          $task->getPHID(),
-          PhabricatorEdgeConfig::TYPE_TASK_HAS_COMMIT,
-          $commit->getPHID())
-        ->save();
-
-      /* TODO: Do this instead of the above.
-
+      $edge_type = ManiphestTaskHasCommitEdgeType::EDGECONST;
       $xactions[] = id(new ManiphestTransaction())
         ->setTransactionType(PhabricatorTransactions::TYPE_EDGE)
-        ->setMetadataValue('edge:type', $edge_task_has_commit)
+        ->setMetadataValue('edge:type', $edge_type)
         ->setNewValue(
           array(
             '+' => array(
               $commit->getPHID() => $commit->getPHID(),
             ),
           ));
-      */
 
       $status = $task_statuses[$task_id];
       if ($status) {

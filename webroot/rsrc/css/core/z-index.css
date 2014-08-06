@@ -96,10 +96,6 @@
   z-index: 8;
 }
 
-div.jx-typeahead-results {
-  z-index: 8;
-}
-
 .differential-haunt-mode-1 .differential-add-comment-panel,
 .differential-haunt-mode-2 .differential-add-comment-panel {
   z-index: 8;
@@ -121,6 +117,10 @@ div.jx-typeahead-results {
   z-index: 12;
 }
 
+div.jx-typeahead-results {
+  z-index: 13;
+}
+
 .jx-client-dialog {
   z-index: 14;
 }
@@ -133,7 +133,7 @@ div.jx-typeahead-results {
   z-index: 20;
 }
 
-.dropdown-menu-frame {
+.phuix-dropdown-menu {
   z-index: 32;
 }
 
@@ -147,4 +147,8 @@ div.jx-typeahead-results {
 
 .jx-tooltip-container {
   z-index: 51;
+}
+
+.audible .aural-only {
+  z-index: 100;
 }

@@ -3,6 +3,14 @@
 final class PhabricatorCalendarEventSearchEngine
   extends PhabricatorApplicationSearchEngine {
 
+  public function getResultTypeDescription() {
+    return pht('Calendar Events');
+  }
+
+  public function getApplicationClassName() {
+    return 'PhabricatorCalendarApplication';
+  }
+
   public function buildSavedQueryFromRequest(AphrontRequest $request) {
     $saved = new PhabricatorSavedQuery();
 
@@ -98,13 +106,13 @@ final class PhabricatorCalendarEventSearchEngine
     $form
       ->appendChild(
         id(new AphrontFormTokenizerControl())
-          ->setDatasource('/typeahead/common/accounts/')
+          ->setDatasource(new PhabricatorPeopleDatasource())
           ->setName('creators')
           ->setLabel(pht('Created By'))
           ->setValue($creator_handles))
       ->appendChild(
         id(new AphrontFormTokenizerControl())
-          ->setDatasource('/typeahead/common/accounts/')
+          ->setDatasource(new PhabricatorPeopleDatasource())
           ->setName('invited')
           ->setLabel(pht('Invited'))
           ->setValue($invited_handles))
@@ -129,7 +137,6 @@ final class PhabricatorCalendarEventSearchEngine
             1,
             pht('Show only upcoming events.'),
             $upcoming));
-
   }
 
   protected function getURI($path) {
@@ -139,14 +146,13 @@ final class PhabricatorCalendarEventSearchEngine
   public function getBuiltinQueryNames() {
     $names = array(
       'upcoming' => pht('Upcoming Events'),
-      'all' => pht('All Events'),
+      'all'      => pht('All Events'),
     );
 
     return $names;
   }
 
   public function buildSavedQueryFromBuiltin($query_key) {
-
     $query = $this->newSavedQuery();
     $query->setQueryKey($query_key);
 
@@ -158,6 +164,51 @@ final class PhabricatorCalendarEventSearchEngine
     }
 
     return parent::buildSavedQueryFromBuiltin($query_key);
+  }
+
+  protected function renderResultList(
+    array $events,
+    PhabricatorSavedQuery $query,
+    array $handles) {
+    assert_instances_of($events, 'PhabricatorCalendarEvent');
+
+    $viewer = $this->requireViewer();
+
+    $list = new PHUIObjectItemListView();
+    foreach ($events as $event) {
+      if ($event->getUserPHID() == $viewer->getPHID()) {
+        $href = $this->getApplicationURI('/event/edit/'.$event->getID().'/');
+      } else {
+        $from  = $event->getDateFrom();
+        $month = phabricator_format_local_time($from, $viewer, 'm');
+        $year  = phabricator_format_local_time($from, $viewer, 'Y');
+        $uri   = new PhutilURI($this->getApplicationURI());
+        $uri->setQueryParams(
+          array(
+            'month' => $month,
+            'year'  => $year,
+          ));
+        $href = (string) $uri;
+      }
+      $from = phabricator_datetime($event->getDateFrom(), $viewer);
+      $to   = phabricator_datetime($event->getDateTo(), $viewer);
+
+      $color = ($event->getStatus() == PhabricatorCalendarEvent::STATUS_AWAY)
+        ? 'red'
+        : 'yellow';
+
+      $item = id(new PHUIObjectItemView())
+        ->setHeader($event->getTerseSummary($viewer))
+        ->setHref($href)
+        ->setBarColor($color)
+        ->addAttribute(pht('From %s to %s', $from, $to))
+        ->addAttribute(
+            phutil_utf8_shorten($event->getDescription(), 64));
+
+      $list->addItem($item);
+    }
+
+    return $list;
   }
 
 }

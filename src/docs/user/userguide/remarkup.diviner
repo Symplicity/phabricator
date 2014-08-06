@@ -22,7 +22,9 @@ These are inline styles, and can be applied to most text:
   D123 T123 rX123           # Link to Objects
   {D123} {T123}             # Link to Objects (Full Name)
   {F123}                    # Embed Images
-  @username                 # Mention a user
+  {M123}                    # Embed Pholio Mock
+  @username                 # Mention a User
+  #project                  # Mention a Project
   [[wiki page]]             # Link to Phriction
   [[wiki page | name]]      # Named link to Phriction
   http://xyz/               # Link to web
@@ -35,6 +37,8 @@ empty lines:
   = Large Header =
 
   == Smaller Header ==
+
+  ## This is a Header As Well
 
   Also a Large Header
   ===================
@@ -158,6 +162,19 @@ As expected, this produces:
 -- Branch
 --- Twig
 
+You can add checkboxes to items by prefacing them with `[ ]` or `[X]`, like
+this:
+
+```
+  - [X] Preheat oven to 450 degrees.
+  - [ ] Zest 35 lemons.
+```
+
+When rendered, this produces:
+
+  - [X] Preheat oven to 450 degrees.
+  - [ ] Zest 35 lemons.
+
 Make **code blocks** by indenting two spaces:
 
   f(x, y);
@@ -250,9 +267,9 @@ WARNING: Crossing the streams can result in total protonic reversal!
 
 IMPORTANT: Don't cross the streams!
 
-You can also use "(NOTE)", "(WARNING)", or "(IMPORTANT)" to get the same
- effect but without "(NOTE"), "(WARNING)", or "(IMPORTANT)" appearing in the
- rendered result. For example
+In addition, you can use "(NOTE)", "(WARNING)", or "(IMPORTANT)" to get the
+same effect but without "(NOTE)", "(WARNING)", or "(IMPORTANT)" appearing in
+the rendered result. For example
 
 (NOTE) Dr. Egon Spengler is the best resource for additional proton pack
  questions.
@@ -303,6 +320,14 @@ You can also generate full-name references to some objects by using braces:
 These references will also show when an object changes state (for instance, a
 task or revision is closed). Some types of objects support rich embedding.
 
+== Linking to Project Tags
+
+Projects can be linked to with the use of a hashtag (#). This works by default
+using the name of the Project (lowercase, underscored). Additionally you
+can set multiple additional hashtags by editing the Project details.
+
+  #qa, #quality_assurance
+
 == Embedding Mocks (Pholio)
 
 You can embed a Pholio mock by using braces to refer to it:
@@ -347,7 +372,7 @@ from clipboard into the text area.
 
 You can set file display options like this:
 
-  {F123, layout=left, float, size=full}
+  {F123, layout=left, float, size=full, alt="a duckling"}
 
 Valid options are:
 
@@ -360,6 +385,7 @@ Valid options are:
     text
   - **width** Scale image to a specific width.
   - **height** Scale image to a specific height.
+  - **alt** Provide alternate text for assistive technologies.
 
 == Embedding Countdowns
 
@@ -417,6 +443,26 @@ In Differential and Maniphest, you can mention another user by writing:
 
 When you submit your comment, this will add them as a CC on the revision or task
 if they aren't already CC'd.
+
+Icons
+=====
+
+You can add icons to comments using the `{icon ...}` syntax. For example:
+
+  {icon camera}
+
+This renders: {icon camera}
+
+You can select a color for icons:
+
+  {icon camera color=blue}
+
+This renders: {icon camera color=blue}
+
+For a list of available icons and colors, check the UIExamples application.
+(The icons are sourced from
+[[ http://fortawesome.github.io/Font-Awesome/ | FontAwesome ]], so you can also
+browse the collection there.)
 
 = Phriction Documents =
 
@@ -512,6 +558,6 @@ Some general notes about this syntax:
 
 = Fullscreen Mode =
 
-Remarkup editors provide a fullscreen composition mode.  This can make it easier
+Remarkup editors provide a fullscreen composition mode. This can make it easier
 to edit large blocks of text, or improve focus by removing distractions. You can
 exit **Fullscreen** mode by clicking the button again or by pressing escape.

@@ -7,7 +7,9 @@ final class PhabricatorRepository extends PhabricatorRepositoryDAO
   implements
     PhabricatorPolicyInterface,
     PhabricatorFlaggableInterface,
-    PhabricatorMarkupInterface {
+    PhabricatorMarkupInterface,
+    PhabricatorDestructibleInterface,
+    PhabricatorProjectInterface {
 
   /**
    * Shortest hash we'll recognize in raw "a829f32" form.
@@ -25,6 +27,7 @@ final class PhabricatorRepository extends PhabricatorRepositoryDAO
   const TABLE_SUMMARY = 'repository_summary';
   const TABLE_BADCOMMIT = 'repository_badcommit';
   const TABLE_LINTMESSAGE = 'repository_lintmessage';
+  const TABLE_PARENTS = 'repository_parents';
 
   const SERVE_OFF = 'off';
   const SERVE_READONLY = 'readonly';
@@ -48,12 +51,12 @@ final class PhabricatorRepository extends PhabricatorRepositoryDAO
   public static function initializeNewRepository(PhabricatorUser $actor) {
     $app = id(new PhabricatorApplicationQuery())
       ->setViewer($actor)
-      ->withClasses(array('PhabricatorApplicationDiffusion'))
+      ->withClasses(array('PhabricatorDiffusionApplication'))
       ->executeOne();
 
-    $view_policy = $app->getPolicy(DiffusionCapabilityDefaultView::CAPABILITY);
-    $edit_policy = $app->getPolicy(DiffusionCapabilityDefaultEdit::CAPABILITY);
-    $push_policy = $app->getPolicy(DiffusionCapabilityDefaultPush::CAPABILITY);
+    $view_policy = $app->getPolicy(DiffusionDefaultViewCapability::CAPABILITY);
+    $edit_policy = $app->getPolicy(DiffusionDefaultEditCapability::CAPABILITY);
+    $push_policy = $app->getPolicy(DiffusionDefaultPushCapability::CAPABILITY);
 
     return id(new PhabricatorRepository())
       ->setViewPolicy($view_policy)
@@ -72,7 +75,7 @@ final class PhabricatorRepository extends PhabricatorRepositoryDAO
 
   public function generatePHID() {
     return PhabricatorPHID::generateNewPHID(
-      PhabricatorRepositoryPHIDTypeRepository::TYPECONST);
+      PhabricatorRepositoryRepositoryPHIDType::TYPECONST);
   }
 
   public function toDictionary() {
@@ -174,7 +177,7 @@ final class PhabricatorRepository extends PhabricatorRepositoryDAO
   public function getSubversionPathURI($path = null, $commit = null) {
     $vcs = $this->getVersionControlSystem();
     if ($vcs != PhabricatorRepositoryType::REPOSITORY_TYPE_SVN) {
-      throw new Exception("Not a subversion repository!");
+      throw new Exception('Not a subversion repository!');
     }
 
     if ($this->isHosted()) {
@@ -370,7 +373,7 @@ final class PhabricatorRepository extends PhabricatorRepositoryDAO
         $env['HGPLAIN'] = 1;
         break;
       default:
-        throw new Exception("Unrecognized version control system.");
+        throw new Exception('Unrecognized version control system.');
     }
 
     return $env;
@@ -401,7 +404,7 @@ final class PhabricatorRepository extends PhabricatorRepositoryDAO
           // command-line flag instead of an environmental variable.
           break;
         default:
-          throw new Exception("Unrecognized version control system.");
+          throw new Exception('Unrecognized version control system.');
       }
     }
 
@@ -455,7 +458,7 @@ final class PhabricatorRepository extends PhabricatorRepositoryDAO
         }
         break;
       default:
-        throw new Exception("Unrecognized version control system.");
+        throw new Exception('Unrecognized version control system.');
     }
 
     array_unshift($args, $pattern);
@@ -478,7 +481,7 @@ final class PhabricatorRepository extends PhabricatorRepositoryDAO
         $pattern = "hg {$pattern}";
         break;
       default:
-        throw new Exception("Unrecognized version control system.");
+        throw new Exception('Unrecognized version control system.');
     }
 
     array_unshift($args, $pattern);
@@ -533,7 +536,7 @@ final class PhabricatorRepository extends PhabricatorRepositoryDAO
           $uri);
         break;
       default:
-        throw new Exception("Unrecognized version control system.");
+        throw new Exception('Unrecognized version control system.');
     }
 
     return $normalized_uri->getNormalizedPath();
@@ -615,7 +618,7 @@ final class PhabricatorRepository extends PhabricatorRepositoryDAO
       case PhabricatorRepositoryType::REPOSITORY_TYPE_MERCURIAL:
         return true;
       default:
-        throw new Exception("Unrecognized version control system.");
+        throw new Exception('Unrecognized version control system.');
     }
 
     $closeable_flag = PhabricatorRepositoryCommit::IMPORTED_CLOSEABLE;
@@ -1190,6 +1193,10 @@ final class PhabricatorRepository extends PhabricatorRepositoryDAO
     return Filesystem::isDescendant($this->getLocalPath(), $default_path);
   }
 
+  public function canUsePathTree() {
+    return !$this->isSVN();
+  }
+
   public function canMirror() {
     if ($this->isGit() || $this->isHg()) {
       return true;
@@ -1251,6 +1258,66 @@ final class PhabricatorRepository extends PhabricatorRepositoryDAO
     return $this;
   }
 
+  public static function getRemoteURIProtocol($raw_uri) {
+    $uri = new PhutilURI($raw_uri);
+    if ($uri->getProtocol()) {
+      return strtolower($uri->getProtocol());
+    }
+
+    $git_uri = new PhutilGitURI($raw_uri);
+    if (strlen($git_uri->getDomain()) && strlen($git_uri->getPath())) {
+      return 'ssh';
+    }
+
+    return null;
+  }
+
+  public static function assertValidRemoteURI($uri) {
+    if (trim($uri) != $uri) {
+      throw new Exception(
+        pht(
+          'The remote URI has leading or trailing whitespace.'));
+    }
+
+    $protocol = self::getRemoteURIProtocol($uri);
+
+    // Catch confusion between Git/SCP-style URIs and normal URIs. See T3619
+    // for discussion. This is usually a user adding "ssh://" to an implicit
+    // SSH Git URI.
+    if ($protocol == 'ssh') {
+      if (preg_match('(^[^:@]+://[^/:]+:[^\d])', $uri)) {
+        throw new Exception(
+          pht(
+            "The remote URI is not formatted correctly. Remote URIs ".
+            "with an explicit protocol should be in the form ".
+            "'proto://domain/path', not 'proto://domain:/path'. ".
+            "The ':/path' syntax is only valid in SCP-style URIs."));
+      }
+    }
+
+    switch ($protocol) {
+      case 'ssh':
+      case 'http':
+      case 'https':
+      case 'git':
+      case 'svn':
+      case 'svn+ssh':
+        break;
+      default:
+        // NOTE: We're explicitly rejecting 'file://' because it can be
+        // used to clone from the working copy of another repository on disk
+        // that you don't normally have permission to access.
+
+        throw new Exception(
+          pht(
+            "The URI protocol is unrecognized. It should begin ".
+            "'ssh://', 'http://', 'https://', 'git://', 'svn://', ".
+            "'svn+ssh://', or be in the form 'git@domain.com:path'."));
+    }
+
+    return true;
+  }
+
 
 /* -(  PhabricatorPolicyInterface  )----------------------------------------- */
 
@@ -1259,7 +1326,7 @@ final class PhabricatorRepository extends PhabricatorRepositoryDAO
     return array(
       PhabricatorPolicyCapability::CAN_VIEW,
       PhabricatorPolicyCapability::CAN_EDIT,
-      DiffusionCapabilityPush::CAPABILITY,
+      DiffusionPushCapability::CAPABILITY,
     );
   }
 
@@ -1269,7 +1336,7 @@ final class PhabricatorRepository extends PhabricatorRepositoryDAO
         return $this->getViewPolicy();
       case PhabricatorPolicyCapability::CAN_EDIT:
         return $this->getEditPolicy();
-      case DiffusionCapabilityPush::CAPABILITY:
+      case DiffusionPushCapability::CAPABILITY:
         return $this->getPushPolicy();
     }
   }
@@ -1315,6 +1382,17 @@ final class PhabricatorRepository extends PhabricatorRepositoryDAO
 
   public function shouldUseMarkupCache($field) {
     return true;
+  }
+
+
+/* -(  PhabricatorDestructibleInterface  )----------------------------------- */
+
+  public function destroyObjectPermanently(
+    PhabricatorDestructionEngine $engine) {
+
+    $this->openTransaction();
+    $this->delete();
+    $this->saveTransaction();
   }
 
 }

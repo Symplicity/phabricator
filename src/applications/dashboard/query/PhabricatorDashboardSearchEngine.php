@@ -3,16 +3,20 @@
 final class PhabricatorDashboardSearchEngine
   extends PhabricatorApplicationSearchEngine {
 
-  public function buildSavedQueryFromRequest(AphrontRequest $request) {
-    $saved = new PhabricatorSavedQuery();
+  public function getResultTypeDescription() {
+    return pht('Dashboards');
+  }
 
-    return $saved;
+  public function getApplicationClassName() {
+    return 'PhabricatorDashboardApplication';
+  }
+
+  public function buildSavedQueryFromRequest(AphrontRequest $request) {
+    return new PhabricatorSavedQuery();
   }
 
   public function buildQueryFromSavedQuery(PhabricatorSavedQuery $saved) {
-    $query = id(new PhabricatorDashboardQuery());
-
-    return $query;
+    return new PhabricatorDashboardQuery();
   }
 
   public function buildSearchForm(
@@ -26,11 +30,9 @@ final class PhabricatorDashboardSearchEngine
   }
 
   public function getBuiltinQueryNames() {
-    $names = array(
+    return array(
       'all' => pht('All Dashboards'),
     );
-
-    return $names;
   }
 
   public function buildSavedQueryFromBuiltin($query_key) {
@@ -44,6 +46,30 @@ final class PhabricatorDashboardSearchEngine
     }
 
     return parent::buildSavedQueryFromBuiltin($query_key);
+  }
+
+  protected function renderResultList(
+    array $dashboards,
+    PhabricatorSavedQuery $query,
+    array $handles) {
+
+    $viewer = $this->requireViewer();
+
+    $list = new PHUIObjectItemListView();
+    $list->setUser($viewer);
+    foreach ($dashboards as $dashboard) {
+      $id = $dashboard->getID();
+
+      $item = id(new PHUIObjectItemView())
+        ->setObjectName(pht('Dashboard %d', $id))
+        ->setHeader($dashboard->getName())
+        ->setHref($this->getApplicationURI("view/{$id}/"))
+        ->setObject($dashboard);
+
+      $list->addItem($item);
+    }
+
+    return $list;
   }
 
 }

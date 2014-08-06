@@ -31,7 +31,6 @@ final class DiffusionBrowseSearchController extends DiffusionBrowseController {
         $content,
       ),
       array(
-        'device' => true,
         'title' => array(
           nonempty(basename($drequest->getPath()), '/'),
           $drequest->getRepository()->getCallsign().' Repository',
@@ -61,7 +60,7 @@ final class DiffusionBrowseSearchController extends DiffusionBrowseController {
           'diffusion.searchquery',
           array(
             'grep' => $query_string,
-            'stableCommitName' => $drequest->getStableCommitName(),
+            'commit' => $drequest->getStableCommit(),
             'path' => $drequest->getPath(),
             'limit' => $limit + 1,
             'offset' => $page,
@@ -73,7 +72,7 @@ final class DiffusionBrowseSearchController extends DiffusionBrowseController {
           'diffusion.querypaths',
           array(
             'pattern' => $query_string,
-            'commit' => $drequest->getStableCommitName(),
+            'commit' => $drequest->getStableCommit(),
             'path' => $drequest->getPath(),
             'limit' => $limit + 1,
             'offset' => $page,

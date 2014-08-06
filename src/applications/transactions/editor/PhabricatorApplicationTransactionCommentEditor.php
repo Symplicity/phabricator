@@ -72,20 +72,20 @@ final class PhabricatorApplicationTransactionCommentEditor
 
     if (!$xaction->getPHID()) {
       throw new Exception(
-        "Transaction must have a PHID before calling applyEdit()!");
+        'Transaction must have a PHID before calling applyEdit()!');
     }
 
     $type_comment = PhabricatorTransactions::TYPE_COMMENT;
     if ($xaction->getTransactionType() == $type_comment) {
       if ($comment->getPHID()) {
         throw new Exception(
-        "Transaction comment must not yet have a PHID!");
+          'Transaction comment must not yet have a PHID!');
       }
     }
 
     if (!$this->getContentSource()) {
       throw new Exception(
-        "Call setContentSource() before applyEdit()!");
+        'Call setContentSource() before applyEdit()!');
     }
 
     $actor = $this->requireActor();
@@ -95,10 +95,15 @@ final class PhabricatorApplicationTransactionCommentEditor
       $xaction,
       PhabricatorPolicyCapability::CAN_VIEW);
 
-    PhabricatorPolicyFilter::requireCapability(
-      $actor,
-      $xaction,
-      PhabricatorPolicyCapability::CAN_EDIT);
+    if ($comment->getIsRemoved() && $actor->getIsAdmin()) {
+      // NOTE: Administrators can remove comments by any user, and don't need
+      // to pass the edit check.
+    } else {
+      PhabricatorPolicyFilter::requireCapability(
+        $actor,
+        $xaction,
+        PhabricatorPolicyCapability::CAN_EDIT);
+    }
   }
 
 

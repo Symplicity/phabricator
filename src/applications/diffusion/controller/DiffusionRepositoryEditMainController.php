@@ -39,9 +39,9 @@ final class DiffusionRepositoryEditMainController
     $header = id(new PHUIHeaderView())
       ->setHeader($title);
     if ($repository->isTracked()) {
-      $header->setStatus('oh-ok', '', pht('Active'));
+      $header->setStatus('fa-check', 'bluegrey', pht('Active'));
     } else {
-      $header->setStatus('policy-noone', '', pht('Inactive'));
+      $header->setStatus('fa-ban', 'dark', pht('Inactive'));
     }
 
     $basic_actions = $this->buildBasicActions($repository);
@@ -191,7 +191,6 @@ final class DiffusionRepositoryEditMainController
       ),
       array(
         'title' => $title,
-        'device' => true,
       ));
   }
 
@@ -203,7 +202,7 @@ final class DiffusionRepositoryEditMainController
       ->setUser($viewer);
 
     $edit = id(new PhabricatorActionView())
-      ->setIcon('edit')
+      ->setIcon('fa-pencil')
       ->setName(pht('Edit Basic Information'))
       ->setHref($this->getRepositoryControllerURI($repository, 'edit/basic/'));
     $view->addAction($edit);
@@ -215,11 +214,11 @@ final class DiffusionRepositoryEditMainController
 
     if ($repository->isTracked()) {
       $activate
-        ->setIcon('disable')
+        ->setIcon('fa-pause')
         ->setName(pht('Deactivate Repository'));
     } else {
       $activate
-        ->setIcon('enable')
+        ->setIcon('fa-play')
         ->setName(pht('Activate Repository'));
     }
 
@@ -228,7 +227,7 @@ final class DiffusionRepositoryEditMainController
     $view->addAction(
       id(new PhabricatorActionView())
         ->setName(pht('Delete Repository'))
-        ->setIcon('delete')
+        ->setIcon('fa-times')
         ->setHref(
           $this->getRepositoryControllerURI($repository, 'edit/delete/'))
         ->setDisabled(true)
@@ -266,7 +265,7 @@ final class DiffusionRepositoryEditMainController
 
     $project_phids = PhabricatorEdgeQuery::loadDestinationPHIDs(
       $repository->getPHID(),
-      PhabricatorEdgeConfig::TYPE_OBJECT_HAS_PROJECT);
+      PhabricatorProjectObjectHasProjectEdgeType::EDGECONST);
     if ($project_phids) {
       $this->loadHandles($project_phids);
       $project_text = $this->renderHandlesForPHIDs($project_phids);
@@ -304,7 +303,7 @@ final class DiffusionRepositoryEditMainController
       ->setUser($viewer);
 
     $edit = id(new PhabricatorActionView())
-      ->setIcon('edit')
+      ->setIcon('fa-pencil')
       ->setName(pht('Edit Text Encoding'))
       ->setHref(
         $this->getRepositoryControllerURI($repository, 'edit/encoding/'));
@@ -341,7 +340,7 @@ final class DiffusionRepositoryEditMainController
       ->setUser($viewer);
 
     $edit = id(new PhabricatorActionView())
-      ->setIcon('edit')
+      ->setIcon('fa-pencil')
       ->setName(pht('Edit Policies'))
       ->setHref(
         $this->getRepositoryControllerURI($repository, 'edit/policy/'));
@@ -373,7 +372,7 @@ final class DiffusionRepositoryEditMainController
       $descriptions[PhabricatorPolicyCapability::CAN_EDIT]);
 
     $pushable = $repository->isHosted()
-      ? $descriptions[DiffusionCapabilityPush::CAPABILITY]
+      ? $descriptions[DiffusionPushCapability::CAPABILITY]
       : phutil_tag('em', array(), pht('Not a Hosted Repository'));
     $view->addProperty(pht('Pushable By'), $pushable);
 
@@ -388,7 +387,7 @@ final class DiffusionRepositoryEditMainController
       ->setUser($viewer);
 
     $edit = id(new PhabricatorActionView())
-      ->setIcon('edit')
+      ->setIcon('fa-pencil')
       ->setName(pht('Edit Branches'))
       ->setHref(
         $this->getRepositoryControllerURI($repository, 'edit/branches/'));
@@ -438,7 +437,7 @@ final class DiffusionRepositoryEditMainController
       ->setUser($viewer);
 
     $edit = id(new PhabricatorActionView())
-      ->setIcon('edit')
+      ->setIcon('fa-pencil')
       ->setName(pht('Edit Subversion Info'))
       ->setHref(
         $this->getRepositoryControllerURI($repository, 'edit/subversion/'));
@@ -478,7 +477,7 @@ final class DiffusionRepositoryEditMainController
       ->setUser($viewer);
 
     $edit = id(new PhabricatorActionView())
-      ->setIcon('edit')
+      ->setIcon('fa-pencil')
       ->setName(pht('Edit Actions'))
       ->setHref(
         $this->getRepositoryControllerURI($repository, 'edit/actions/'));
@@ -520,7 +519,7 @@ final class DiffusionRepositoryEditMainController
       ->setUser($viewer);
 
     $edit = id(new PhabricatorActionView())
-      ->setIcon('edit')
+      ->setIcon('fa-pencil')
       ->setName(pht('Edit Remote'))
       ->setHref(
         $this->getRepositoryControllerURI($repository, 'edit/remote/'));
@@ -562,7 +561,7 @@ final class DiffusionRepositoryEditMainController
       ->setUser($viewer);
 
     $edit = id(new PhabricatorActionView())
-      ->setIcon('edit')
+      ->setIcon('fa-pencil')
       ->setName(pht('Edit Local'))
       ->setHref(
         $this->getRepositoryControllerURI($repository, 'edit/local/'));
@@ -596,7 +595,7 @@ final class DiffusionRepositoryEditMainController
       ->setUser($user);
 
     $edit = id(new PhabricatorActionView())
-      ->setIcon('edit')
+      ->setIcon('fa-pencil')
       ->setName(pht('Edit Hosting'))
       ->setHref(
         $this->getRepositoryControllerURI($repository, 'edit/hosting/'));
@@ -605,14 +604,14 @@ final class DiffusionRepositoryEditMainController
     if ($repository->canAllowDangerousChanges()) {
       if ($repository->shouldAllowDangerousChanges()) {
         $changes = id(new PhabricatorActionView())
-          ->setIcon('blame')
+          ->setIcon('fa-shield')
           ->setName(pht('Prevent Dangerous Changes'))
           ->setHref(
             $this->getRepositoryControllerURI($repository, 'edit/dangerous/'))
           ->setWorkflow(true);
       } else {
         $changes = id(new PhabricatorActionView())
-          ->setIcon('warning')
+          ->setIcon('fa-bullseye')
           ->setName(pht('Allow Dangerous Changes'))
           ->setHref(
             $this->getRepositoryControllerURI($repository, 'edit/dangerous/'))
@@ -684,12 +683,12 @@ final class DiffusionRepositoryEditMainController
     if ($repository->isTracked()) {
       $view->addItem(
         id(new PHUIStatusItemView())
-          ->setIcon('accept-green')
+          ->setIcon(PHUIStatusItemView::ICON_ACCEPT, 'green')
           ->setTarget(pht('Repository Active')));
     } else {
       $view->addItem(
         id(new PHUIStatusItemView())
-          ->setIcon('warning')
+          ->setIcon(PHUIStatusItemView::ICON_WARNING, 'bluegrey')
           ->setTarget(pht('Repository Inactive'))
           ->setNote(
             pht('Activate this repository to begin or resume import.')));
@@ -752,7 +751,7 @@ final class DiffusionRepositoryEditMainController
       if (!$where) {
         $view->addItem(
           id(new PHUIStatusItemView())
-            ->setIcon('warning-red')
+            ->setIcon(PHUIStatusItemView::ICON_WARNING, 'red')
             ->setTarget(
               pht('Missing Binary %s', phutil_tag('tt', array(), $binary)))
             ->setNote(pht(
@@ -762,7 +761,7 @@ final class DiffusionRepositoryEditMainController
       } else {
         $view->addItem(
           id(new PHUIStatusItemView())
-            ->setIcon('accept-green')
+            ->setIcon(PHUIStatusItemView::ICON_ACCEPT, 'green')
             ->setTarget(
               pht('Found Binary %s', phutil_tag('tt', array(), $binary)))
             ->setNote(phutil_tag('tt', array(), $where)));
@@ -787,7 +786,7 @@ final class DiffusionRepositoryEditMainController
         if (!$in_path) {
           $view->addItem(
             id(new PHUIStatusItemView())
-            ->setIcon('warning-red')
+            ->setIcon(PHUIStatusItemView::ICON_WARNING, 'red')
             ->setTarget(
               pht('Missing Binary %s', phutil_tag('tt', array(), $binary)))
             ->setNote(pht(
@@ -822,12 +821,12 @@ final class DiffusionRepositoryEditMainController
     if ($pull_daemon) {
       $view->addItem(
         id(new PHUIStatusItemView())
-          ->setIcon('accept-green')
+          ->setIcon(PHUIStatusItemView::ICON_ACCEPT, 'green')
           ->setTarget(pht('Pull Daemon Running')));
     } else {
       $view->addItem(
         id(new PHUIStatusItemView())
-          ->setIcon('warning-red')
+          ->setIcon(PHUIStatusItemView::ICON_WARNING, 'red')
           ->setTarget(pht('Pull Daemon Not Running'))
           ->setNote($daemon_instructions));
     }
@@ -842,12 +841,12 @@ final class DiffusionRepositoryEditMainController
     if ($task_daemon) {
       $view->addItem(
         id(new PHUIStatusItemView())
-          ->setIcon('accept-green')
+          ->setIcon(PHUIStatusItemView::ICON_ACCEPT, 'green')
           ->setTarget(pht('Task Daemon Running')));
     } else {
       $view->addItem(
         id(new PHUIStatusItemView())
-          ->setIcon('warning-red')
+          ->setIcon(PHUIStatusItemView::ICON_WARNING, 'red')
           ->setTarget(pht('Task Daemon Not Running'))
           ->setNote($daemon_instructions));
     }
@@ -857,13 +856,13 @@ final class DiffusionRepositoryEditMainController
       if (Filesystem::pathExists($local_parent)) {
         $view->addItem(
           id(new PHUIStatusItemView())
-            ->setIcon('accept-green')
+            ->setIcon(PHUIStatusItemView::ICON_ACCEPT, 'green')
             ->setTarget(pht('Storage Directory OK'))
             ->setNote(phutil_tag('tt', array(), $local_parent)));
       } else {
         $view->addItem(
           id(new PHUIStatusItemView())
-            ->setIcon('warning-red')
+            ->setIcon(PHUIStatusItemView::ICON_WARNING, 'red')
             ->setTarget(pht('No Storage Directory'))
             ->setNote(
               pht(
@@ -880,7 +879,7 @@ final class DiffusionRepositoryEditMainController
           case PhabricatorRepositoryStatusMessage::CODE_ERROR:
             $view->addItem(
               id(new PHUIStatusItemView())
-                ->setIcon('warning-red')
+              ->setIcon(PHUIStatusItemView::ICON_WARNING, 'red')
                 ->setTarget(pht('Initialization Error'))
                 ->setNote($message->getParameter('message')));
             return $view;
@@ -888,13 +887,13 @@ final class DiffusionRepositoryEditMainController
               if (Filesystem::pathExists($local_path)) {
                 $view->addItem(
                   id(new PHUIStatusItemView())
-                    ->setIcon('accept-green')
+                    ->setIcon(PHUIStatusItemView::ICON_ACCEPT, 'green')
                     ->setTarget(pht('Working Copy OK'))
                     ->setNote(phutil_tag('tt', array(), $local_path)));
               } else {
                 $view->addItem(
                   id(new PHUIStatusItemView())
-                    ->setIcon('warning-red')
+                    ->setIcon(PHUIStatusItemView::ICON_WARNING, 'red')
                     ->setTarget(pht('Working Copy Error'))
                     ->setNote(
                       pht(
@@ -909,14 +908,14 @@ final class DiffusionRepositoryEditMainController
           case PhabricatorRepositoryStatusMessage::CODE_WORKING:
             $view->addItem(
               id(new PHUIStatusItemView())
-                ->setIcon('time-green')
+                ->setIcon(PHUIStatusItemView::ICON_CLOCK, 'green')
                 ->setTarget(pht('Initializing Working Copy'))
                 ->setNote(pht('Daemons are initializing the working copy.')));
             return $view;
           default:
             $view->addItem(
               id(new PHUIStatusItemView())
-                ->setIcon('warning-red')
+                ->setIcon(PHUIStatusItemView::ICON_WARNING, 'red')
                 ->setTarget(pht('Unknown Init Status'))
                 ->setNote($message->getStatusCode()));
             return $view;
@@ -924,7 +923,7 @@ final class DiffusionRepositoryEditMainController
       } else {
         $view->addItem(
           id(new PHUIStatusItemView())
-            ->setIcon('time-orange')
+            ->setIcon(PHUIStatusItemView::ICON_CLOCK, 'orange')
             ->setTarget(pht('No Working Copy Yet'))
             ->setNote(
               pht('Waiting for daemons to build a working copy.')));
@@ -938,14 +937,14 @@ final class DiffusionRepositoryEditMainController
         case PhabricatorRepositoryStatusMessage::CODE_ERROR:
           $view->addItem(
             id(new PHUIStatusItemView())
-              ->setIcon('warning-red')
+              ->setIcon(PHUIStatusItemView::ICON_WARNING, 'red')
               ->setTarget(pht('Update Error'))
               ->setNote($message->getParameter('message')));
           return $view;
         case PhabricatorRepositoryStatusMessage::CODE_OKAY:
           $view->addItem(
             id(new PHUIStatusItemView())
-              ->setIcon('accept-green')
+              ->setIcon(PHUIStatusItemView::ICON_ACCEPT, 'green')
               ->setTarget(pht('Updates OK'))
               ->setNote(
                 pht(
@@ -956,7 +955,7 @@ final class DiffusionRepositoryEditMainController
     } else {
       $view->addItem(
         id(new PHUIStatusItemView())
-          ->setIcon('time-orange')
+          ->setIcon(PHUIStatusItemView::ICON_CLOCK, 'orange')
           ->setTarget(pht('Waiting For Update'))
           ->setNote(
             pht('Waiting for daemons to read updates.')));
@@ -1005,21 +1004,21 @@ final class DiffusionRepositoryEditMainController
 
       $view->addItem(
         id(new PHUIStatusItemView())
-          ->setIcon('time-green')
+          ->setIcon(PHUIStatusItemView::ICON_CLOCK, 'green')
           ->setTarget(pht('Importing'))
           ->setNote(
             pht('%s Complete', $percentage)));
     } else {
       $view->addItem(
         id(new PHUIStatusItemView())
-          ->setIcon('accept-green')
+          ->setIcon(PHUIStatusItemView::ICON_ACCEPT, 'green')
           ->setTarget(pht('Fully Imported')));
     }
 
     if (idx($messages, PhabricatorRepositoryStatusMessage::TYPE_NEEDS_UPDATE)) {
       $view->addItem(
         id(new PHUIStatusItemView())
-          ->setIcon('up')
+          ->setIcon(PHUIStatusItemView::ICON_UP, 'indigo')
           ->setTarget(pht('Prioritized'))
           ->setNote(pht('This repository will be updated soon.')));
     }
@@ -1043,7 +1042,7 @@ final class DiffusionRepositoryEditMainController
     $mirror_actions->addAction(
       id(new PhabricatorActionView())
         ->setName(pht('Add Mirror'))
-        ->setIcon('new')
+        ->setIcon('fa-plus')
         ->setHref($new_mirror_uri)
         ->setWorkflow(true));
 
@@ -1092,13 +1091,13 @@ final class DiffusionRepositoryEditMainController
 
       $item->addAction(
         id(new PHUIListItemView())
-          ->setIcon('edit')
+          ->setIcon('fa-pencil')
           ->setHref($edit_uri)
           ->setWorkflow(true));
 
       $item->addAction(
         id(new PHUIListItemView())
-          ->setIcon('delete')
+          ->setIcon('fa-times')
           ->setHref($delete_uri)
           ->setWorkflow(true));
 

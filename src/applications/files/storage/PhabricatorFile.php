@@ -1,8 +1,5 @@
 <?php
 
-/**
- * @group file
- */
 final class PhabricatorFile extends PhabricatorFileDAO
   implements
     PhabricatorTokenReceiverInterface,
@@ -46,7 +43,7 @@ final class PhabricatorFile extends PhabricatorFileDAO
 
   public function generatePHID() {
     return PhabricatorPHID::generateNewPHID(
-      PhabricatorFilePHIDTypeFile::TYPECONST);
+      PhabricatorFileFilePHIDType::TYPECONST);
   }
 
   public function save() {
@@ -59,9 +56,13 @@ final class PhabricatorFile extends PhabricatorFileDAO
     return parent::save();
   }
 
+  public function getMonogram() {
+    return 'F'.$this->getID();
+  }
+
   public static function readUploadedFileData($spec) {
     if (!$spec) {
-      throw new Exception("No file was uploaded!");
+      throw new Exception('No file was uploaded!');
     }
 
     $err = idx($spec, 'error');
@@ -72,14 +73,14 @@ final class PhabricatorFile extends PhabricatorFileDAO
     $tmp_name = idx($spec, 'tmp_name');
     $is_valid = @is_uploaded_file($tmp_name);
     if (!$is_valid) {
-      throw new Exception("File is not an uploaded file.");
+      throw new Exception('File is not an uploaded file.');
     }
 
     $file_data = Filesystem::readFile($tmp_name);
     $file_size = idx($spec, 'size');
 
     if (strlen($file_data) != $file_size) {
-      throw new Exception("File size disagrees with uploaded size.");
+      throw new Exception('File size disagrees with uploaded size.');
     }
 
     self::validateFileSize(strlen($file_data));
@@ -111,7 +112,7 @@ final class PhabricatorFile extends PhabricatorFileDAO
       return;
     }
 
-    $limit = phabricator_parse_bytes($limit);
+    $limit = phutil_parse_bytes($limit);
     if ($size > $limit) {
       throw new PhabricatorFileUploadException(-1000);
     }
@@ -157,7 +158,6 @@ final class PhabricatorFile extends PhabricatorFileDAO
   }
 
   public static function newFileFromContentHash($hash, $params) {
-
     // Check to see if a file with same contentHash exist
     $file = id(new PhabricatorFile())->loadOneWhere(
       'contentHash = %s LIMIT 1', $hash);
@@ -214,7 +214,7 @@ final class PhabricatorFile extends PhabricatorFileDAO
 
     assert_instances_of($engines, 'PhabricatorFileStorageEngine');
     if (!$engines) {
-      throw new Exception("No valid storage engines are available!");
+      throw new Exception('No valid storage engines are available!');
     }
 
     $file = new PhabricatorFile();
@@ -248,7 +248,7 @@ final class PhabricatorFile extends PhabricatorFileDAO
 
     if (!$data_handle) {
       throw new PhutilAggregateException(
-        "All storage engines failed to write file:",
+        'All storage engines failed to write file:',
         $exceptions);
     }
 
@@ -368,7 +368,7 @@ final class PhabricatorFile extends PhabricatorFileDAO
   public static function newFromFileDownload($uri, array $params = array()) {
     // Make sure we're allowed to make a request first
     if (!PhabricatorEnv::getEnvConfig('security.allow-outbound-http')) {
-      throw new Exception("Outbound HTTP requests are disabled!");
+      throw new Exception('Outbound HTTP requests are disabled!');
     }
 
     $uri = new PhutilURI($uri);
@@ -413,7 +413,6 @@ final class PhabricatorFile extends PhabricatorFileDAO
   }
 
   public function delete() {
-
     // We want to delete all the rows which mark this file as the transformation
     // of some other file (since we're getting rid of it). We also delete all
     // the transformations of this file, so that a user who deletes an image
@@ -484,7 +483,7 @@ final class PhabricatorFile extends PhabricatorFileDAO
         $data = $data;
         break;
       default:
-        throw new Exception("Unknown storage format.");
+        throw new Exception('Unknown storage format.');
     }
 
     return $data;
@@ -493,7 +492,7 @@ final class PhabricatorFile extends PhabricatorFileDAO
   public function getViewURI() {
     if (!$this->getPHID()) {
       throw new Exception(
-        "You must save a file before you can generate a view URI.");
+        'You must save a file before you can generate a view URI.');
     }
 
     $name = phutil_escape_uri($this->getName());
@@ -538,8 +537,8 @@ final class PhabricatorFile extends PhabricatorFileDAO
     return PhabricatorEnv::getCDNURI($path);
   }
 
-  public function getPreview140URI() {
-    $path = '/file/xform/preview-140/'.$this->getPHID().'/'
+  public function getPreview100URI() {
+    $path = '/file/xform/preview-100/'.$this->getPHID().'/'
       .$this->getSecretKey().'/';
     return PhabricatorEnv::getCDNURI($path);
   }
@@ -587,7 +586,6 @@ final class PhabricatorFile extends PhabricatorFileDAO
   }
 
   public function isTransformableImage() {
-
     // NOTE: The way the 'gd' extension works in PHP is that you can install it
     // with support for only some file types, so it might be able to handle
     // PNG but not JPEG. Try to generate thumbnails for whatever we can. Setup
@@ -694,12 +692,12 @@ final class PhabricatorFile extends PhabricatorFileDAO
   public function updateDimensions($save = true) {
     if (!$this->isViewableImage()) {
       throw new Exception(
-        "This file is not a viewable image.");
+        'This file is not a viewable image.');
     }
 
-    if (!function_exists("imagecreatefromstring")) {
+    if (!function_exists('imagecreatefromstring')) {
       throw new Exception(
-        "Cannot retrieve image information.");
+        'Cannot retrieve image information.');
     }
 
     $data = $this->loadFileData();
@@ -707,7 +705,7 @@ final class PhabricatorFile extends PhabricatorFileDAO
     $img = imagecreatefromstring($data);
     if ($img === false) {
       throw new Exception(
-        "Error when decoding image.");
+        'Error when decoding image.');
     }
 
     $this->metadata[self::METADATA_IMAGE_WIDTH] = imagesx($img);
@@ -865,8 +863,6 @@ final class PhabricatorFile extends PhabricatorFileDAO
     $edge_type = PhabricatorEdgeConfig::TYPE_OBJECT_HAS_FILE;
 
     id(new PhabricatorEdgeEditor())
-      ->setActor($actor)
-      ->setSuppressEvents(true)
       ->addEdge($phid, $edge_type, $this->getPHID())
       ->save();
 

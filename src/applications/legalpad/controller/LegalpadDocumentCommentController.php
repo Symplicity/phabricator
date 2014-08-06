@@ -1,8 +1,5 @@
 <?php
 
-/**
- * @group legalpad
- */
 final class LegalpadDocumentCommentController extends LegalpadController {
 
   private $id;
@@ -68,7 +65,7 @@ final class LegalpadDocumentCommentController extends LegalpadController {
       $draft->replaceOrDelete();
     }
 
-    if ($request->isAjax()) {
+    if ($request->isAjax() && $is_preview) {
       return id(new PhabricatorApplicationTransactionResponse())
         ->setViewer($user)
         ->setTransactions($xactions)

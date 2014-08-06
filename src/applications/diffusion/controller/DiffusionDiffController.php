@@ -51,7 +51,7 @@ final class DiffusionDiffController extends DiffusionController {
       array(
         'commit' => $drequest->getCommit(),
         'path' => $drequest->getPath()));
-    $drequest->setCommit($data['effectiveCommit']);
+    $drequest->updateSymbolicCommit($data['effectiveCommit']);
     $raw_changes = ArcanistDiffChange::newFromConduit($data['changes']);
     $diff = DifferentialDiff::newFromRawChanges($raw_changes);
     $changesets = $diff->getChangesets();
@@ -68,6 +68,14 @@ final class DiffusionDiffController extends DiffusionController {
       array(
         'action' => 'rendering-ref')));
 
+    $parser->setCharacterEncoding($request->getStr('encoding'));
+    $parser->setHighlightAs($request->getStr('highlight'));
+
+    $coverage = $drequest->loadCoverage();
+    if ($coverage) {
+      $parser->setCoverage($coverage);
+    }
+
     $pquery = new DiffusionPathIDQuery(array($changeset->getFilename()));
     $ids = $pquery->loadPathIDs();
     $path_id = $ids[$changeset->getFilename()];
@@ -78,12 +86,10 @@ final class DiffusionDiffController extends DiffusionController {
     $parser->setWhitespaceMode(
       DifferentialChangesetParser::WHITESPACE_SHOW_ALL);
 
-    $inlines = id(new PhabricatorAuditInlineComment())->loadAllWhere(
-      'commitPHID = %s AND pathID = %d AND
-        (authorPHID = %s OR auditCommentID IS NOT NULL)',
+    $inlines = PhabricatorAuditInlineComment::loadDraftAndPublishedComments(
+      $user,
       $drequest->loadCommit()->getPHID(),
-      $path_id,
-      $user->getPHID());
+      $path_id);
 
     if ($inlines) {
       foreach ($inlines as $inline) {

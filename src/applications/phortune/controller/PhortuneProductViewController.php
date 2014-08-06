@@ -39,14 +39,14 @@ final class PhortuneProductViewController extends PhortuneController {
         id(new PhabricatorActionView())
           ->setName(pht('Edit Product'))
           ->setHref($edit_uri)
-          ->setIcon('edit'))
+          ->setIcon('fa-pencil'))
       ->addAction(
         id(new PhabricatorActionView())
           ->setUser($user)
           ->setName(pht('Purchase'))
           ->setHref($cart_uri)
-          ->setIcon('new')
-          ->setRenderAsForm(true));
+          ->setIcon('fa-shopping-cart')
+          ->setWorkflow(true));
 
     $crumbs = $this->buildApplicationCrumbs();
     $crumbs->setActionList($actions);
@@ -92,7 +92,6 @@ final class PhortuneProductViewController extends PhortuneController {
       ),
       array(
         'title' => $title,
-        'device' => true,
       ));
   }
 

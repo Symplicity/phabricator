@@ -38,8 +38,8 @@ final class HarbormasterCommandBuildStepImplementation
 
     $future = $interface->getExecFuture('%C', $command);
 
-    $log_stdout = $build->createLog($build_target, "remote", "stdout");
-    $log_stderr = $build->createLog($build_target, "remote", "stderr");
+    $log_stdout = $build->createLog($build_target, 'remote', 'stdout');
+    $log_stderr = $build->createLog($build_target, 'remote', 'stderr');
 
     $start_stdout = $log_stdout->start();
     $start_stderr = $log_stderr->start();
@@ -68,7 +68,7 @@ final class HarbormasterCommandBuildStepImplementation
     $log_stderr->finalize($start_stderr);
 
     if ($err) {
-      throw new Exception(pht('Command failed with error %d.', $err));
+      throw new HarbormasterBuildFailureException();
     }
   }
 

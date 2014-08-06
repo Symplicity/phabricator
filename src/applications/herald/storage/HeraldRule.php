@@ -3,7 +3,8 @@
 final class HeraldRule extends HeraldDAO
   implements
     PhabricatorFlaggableInterface,
-    PhabricatorPolicyInterface {
+    PhabricatorPolicyInterface,
+    PhabricatorDestructibleInterface {
 
   const TABLE_RULE_APPLIED = 'herald_ruleapplied';
 
@@ -17,9 +18,9 @@ final class HeraldRule extends HeraldDAO
   protected $isDisabled = 0;
   protected $triggerObjectPHID;
 
-  protected $configVersion = 36;
+  protected $configVersion = 37;
 
-  // phids for which this rule has been applied
+  // PHIDs for which this rule has been applied
   private $ruleApplied = self::ATTACHABLE;
   private $validAuthor = self::ATTACHABLE;
   private $author = self::ATTACHABLE;
@@ -34,7 +35,7 @@ final class HeraldRule extends HeraldDAO
   }
 
   public function generatePHID() {
-    return PhabricatorPHID::generateNewPHID(HeraldPHIDTypeRule::TYPECONST);
+    return PhabricatorPHID::generateNewPHID(HeraldRulePHIDType::TYPECONST);
   }
 
   public function getRuleApplied($phid) {
@@ -127,7 +128,7 @@ final class HeraldRule extends HeraldDAO
     assert_instances_of($children, 'HeraldDAO');
 
     if (!$this->getID()) {
-      throw new Exception("Save rule before saving children.");
+      throw new Exception('Save rule before saving children.');
     }
 
     foreach ($children as $child) {
@@ -220,9 +221,9 @@ final class HeraldRule extends HeraldDAO
         case PhabricatorPolicyCapability::CAN_VIEW:
           return PhabricatorPolicies::POLICY_USER;
         case PhabricatorPolicyCapability::CAN_EDIT:
-          $app = 'PhabricatorApplicationHerald';
+          $app = 'PhabricatorHeraldApplication';
           $herald = PhabricatorApplication::getByClass($app);
-          $global = HeraldCapabilityManageGlobalRules::CAPABILITY;
+          $global = HeraldManageGlobalRulesCapability::CAPABILITY;
           return $herald->getPolicy($global);
       }
     } else if ($this->isObjectRule()) {
@@ -244,10 +245,21 @@ final class HeraldRule extends HeraldDAO
     if ($this->isPersonalRule()) {
       return pht("A personal rule's owner can always view and edit it.");
     } else if ($this->isObjectRule()) {
-      return pht("Object rules inherit the policies of their objects.");
+      return pht('Object rules inherit the policies of their objects.');
     }
 
     return null;
+  }
+
+
+/* -(  PhabricatorDestructibleInterface  )----------------------------------- */
+
+  public function destroyObjectPermanently(
+    PhabricatorDestructionEngine $engine) {
+
+    $this->openTransaction();
+    $this->delete();
+    $this->saveTransaction();
   }
 
 }

@@ -1,8 +1,5 @@
 <?php
 
-/**
- * @group conpherence
- */
 final class ConpherenceThread extends ConpherenceDAO
   implements PhabricatorPolicyInterface {
 
@@ -35,7 +32,7 @@ final class ConpherenceThread extends ConpherenceDAO
 
   public function generatePHID() {
     return PhabricatorPHID::generateNewPHID(
-      PhabricatorConpherencePHIDTypeThread::TYPECONST);
+      PhabricatorConpherenceThreadPHIDType::TYPECONST);
   }
 
   public function save() {
@@ -194,7 +191,7 @@ final class ConpherenceThread extends ConpherenceDAO
   }
 
   public function describeAutomaticCapability($capability) {
-    return pht("Participants in a thread can always view and edit it.");
+    return pht('Participants in a thread can always view and edit it.');
   }
 
 }

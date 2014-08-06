@@ -113,10 +113,10 @@ final class AphrontFormPolicyControl extends AphrontFormControl {
 
   protected function renderInput() {
     if (!$this->object) {
-      throw new Exception(pht("Call setPolicyObject() before rendering!"));
+      throw new Exception(pht('Call setPolicyObject() before rendering!'));
     }
     if (!$this->capability) {
-      throw new Exception(pht("Call setCapability() before rendering!"));
+      throw new Exception(pht('Call setCapability() before rendering!'));
     }
 
     $policy = $this->object->getPolicy($this->capability);
@@ -161,8 +161,7 @@ final class AphrontFormPolicyControl extends AphrontFormControl {
     $icons = array();
     foreach (igroup($flat_options, 'icon') as $icon => $ignored) {
       $icons[$icon] = id(new PHUIIconView())
-        ->setSpriteSheet(PHUIIconView::SPRITE_STATUS)
-        ->setSpriteIcon($icon);
+        ->setIconFont($icon);
     }
 
 
