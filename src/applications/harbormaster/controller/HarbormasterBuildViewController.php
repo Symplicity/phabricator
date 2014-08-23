@@ -14,6 +14,7 @@ final class HarbormasterBuildViewController
     $viewer = $request->getUser();
 
     $id = $this->id;
+    $generation = $request->getInt('g');
 
     $build = id(new HarbormasterBuildQuery())
       ->setViewer($viewer)
@@ -35,7 +36,7 @@ final class HarbormasterBuildViewController
     if ($build->isRestarting()) {
       $header->setStatus('fa-exclamation-triangle', 'red', pht('Restarting'));
     } else if ($build->isStopping()) {
-      $header->setStatus('fa-exclamation-triangle', 'red', pht('Stopping'));
+      $header->setStatus('fa-exclamation-triangle', 'red', pht('Pausing'));
     } else if ($build->isResuming()) {
       $header->setStatus('fa-exclamation-triangle', 'red', pht('Resuming'));
     }
@@ -52,12 +53,17 @@ final class HarbormasterBuildViewController
       '/'.$build->getBuildable()->getMonogram());
     $crumbs->addTextCrumb($title);
 
+    if ($generation === null || $generation > $build->getBuildGeneration() ||
+      $generation < 0) {
+      $generation = $build->getBuildGeneration();
+    }
+
     $build_targets = id(new HarbormasterBuildTargetQuery())
       ->setViewer($viewer)
       ->needBuildSteps(true)
       ->withBuildPHIDs(array($build->getPHID()))
+      ->withBuildGenerations(array($generation))
       ->execute();
-
 
     if ($build_targets) {
       $messages = id(new HarbormasterBuildMessageQuery())
@@ -94,6 +100,28 @@ final class HarbormasterBuildViewController
       $status_view->addItem($item);
 
       $properties->addProperty(pht('Name'), $build_target->getName());
+
+      if ($build_target->getDateStarted() !== null) {
+        $properties->addProperty(
+          pht('Started'),
+          phabricator_datetime($build_target->getDateStarted(), $viewer));
+        if ($build_target->isComplete()) {
+          $properties->addProperty(
+            pht('Completed'),
+            phabricator_datetime($build_target->getDateCompleted(), $viewer));
+          $properties->addProperty(
+            pht('Duration'),
+            phutil_format_relative_time_detailed(
+              $build_target->getDateCompleted() -
+              $build_target->getDateStarted()));
+        } else {
+          $properties->addProperty(
+            pht('Elapsed'),
+            phutil_format_relative_time_detailed(
+              time() - $build_target->getDateStarted()));
+        }
+      }
+
       $properties->addProperty(pht('Status'), $status_view);
 
       $target_box->addPropertyList($properties, pht('Overview'));
@@ -192,7 +220,10 @@ final class HarbormasterBuildViewController
       ->setFlush(true);
 
     foreach ($artifacts as $artifact) {
-      $list->addItem($artifact->getObjectItemView($viewer));
+      $item = $artifact->getObjectItemView($viewer);
+      if ($item !== null) {
+        $list->addItem($item);
+      }
     }
 
     return $list;
@@ -355,26 +386,28 @@ final class HarbormasterBuildViewController
     $list->addAction(
       id(new PhabricatorActionView())
         ->setName(pht('Restart Build'))
-        ->setIcon('fa-backward')
+        ->setIcon('fa-repeat')
         ->setHref($this->getApplicationURI('/build/restart/'.$id.'/'))
         ->setDisabled(!$can_restart)
         ->setWorkflow(true));
 
-    $list->addAction(
-      id(new PhabricatorActionView())
-        ->setName(pht('Stop Build'))
-        ->setIcon('fa-stop')
-        ->setHref($this->getApplicationURI('/build/stop/'.$id.'/'))
-        ->setDisabled(!$can_stop)
-        ->setWorkflow(true));
-
-    $list->addAction(
-      id(new PhabricatorActionView())
-        ->setName(pht('Resume Build'))
-        ->setIcon('fa-play')
-        ->setHref($this->getApplicationURI('/build/resume/'.$id.'/'))
-        ->setDisabled(!$can_resume)
-        ->setWorkflow(true));
+    if ($build->canResumeBuild()) {
+      $list->addAction(
+        id(new PhabricatorActionView())
+          ->setName(pht('Resume Build'))
+          ->setIcon('fa-play')
+          ->setHref($this->getApplicationURI('/build/resume/'.$id.'/'))
+          ->setDisabled(!$can_resume)
+          ->setWorkflow(true));
+    } else {
+      $list->addAction(
+        id(new PhabricatorActionView())
+          ->setName(pht('Pause Build'))
+          ->setIcon('fa-pause')
+          ->setHref($this->getApplicationURI('/build/stop/'.$id.'/'))
+          ->setDisabled(!$can_stop)
+          ->setWorkflow(true));
+    }
 
     return $list;
   }
@@ -408,9 +441,12 @@ final class HarbormasterBuildViewController
       $handles[$build->getBuildPlanPHID()]->renderLink());
 
     $properties->addProperty(
+      pht('Restarts'),
+      $build->getBuildGeneration());
+
+    $properties->addProperty(
       pht('Status'),
       $this->getStatus($build));
-
   }
 
   private function getStatus(HarbormasterBuild $build) {
@@ -419,7 +455,7 @@ final class HarbormasterBuildViewController
     $item = new PHUIStatusItemView();
 
     if ($build->isStopping()) {
-      $status_name = pht('Stopping');
+      $status_name = pht('Pausing');
       $icon = PHUIStatusItemView::ICON_RIGHT;
       $color = 'dark';
     } else {
