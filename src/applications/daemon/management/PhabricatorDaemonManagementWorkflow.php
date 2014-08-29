@@ -286,12 +286,26 @@ abstract class PhabricatorDaemonManagementWorkflow
     return 0;
   }
 
-  protected final function executeStopCommand(array $pids, $grace_period) {
+  protected final function executeStopCommand(
+    array $pids,
+    $grace_period,
+    $force) {
+
     $console = PhutilConsole::getConsole();
 
     $daemons = $this->loadRunningDaemons();
     if (!$daemons) {
-      $console->writeErr(pht('There are no running Phabricator daemons.')."\n");
+      $rogue_daemons = PhutilDaemonOverseer::findRunningDaemons();
+      if ($force && $rogue_daemons) {
+        $stop_rogue_daemons = $this->buildRogueDaemons($rogue_daemons);
+        $this->sendStopSignals($stop_rogue_daemons, $grace_period);
+      } else {
+        $console->writeErr(pht(
+          'There are no running Phabricator daemons.')."\n");
+        if ($rogue_daemons && !$pids) {
+          $console->writeErr($this->getForceStopHint($rogue_daemons)."\n");
+        }
+      }
       return 0;
     }
 
@@ -325,21 +339,7 @@ abstract class PhabricatorDaemonManagementWorkflow
     }
 
     $all_daemons = $running;
-
-    // If we're doing a graceful shutdown, try SIGINT first.
-    if ($grace_period) {
-      $running = $this->sendSignal($running, SIGINT, $grace_period);
-    }
-
-    // If we still have daemons, SIGTERM them.
-    if ($running) {
-      $running = $this->sendSignal($running, SIGTERM, 15);
-    }
-
-    // If the overseer is still alive, SIGKILL it.
-    if ($running) {
-      $this->sendSignal($running, SIGKILL, 0);
-    }
+    $this->sendStopSignals($running, $grace_period);
 
     foreach ($all_daemons as $daemon) {
       if ($daemon->getPIDFile()) {
@@ -347,7 +347,56 @@ abstract class PhabricatorDaemonManagementWorkflow
       }
     }
 
+    $rogue_daemons = PhutilDaemonOverseer::findRunningDaemons();
+    if ($rogue_daemons) {
+      if ($force) {
+        $stop_rogue_daemons = $this->buildRogueDaemons($rogue_daemons);
+        $this->sendStopSignals($stop_rogue_daemons, $grace_period);
+      } else if (!$pids) {
+        $console->writeErr($this->getForceStopHint($rogue_daemons)."\n");
+      }
+    }
+
     return 0;
+  }
+
+  private function getForceStopHint($rogue_daemons) {
+    $debug_output = '';
+    foreach ($rogue_daemons as $rogue) {
+      $debug_output .= $rogue['pid'].' '.$rogue['command']."\n";
+    }
+    return pht(
+      'There are processes running that look like Phabricator daemons but '.
+      'have no corresponding PID files:'."\n\n".'%s'."\n\n".
+      'Stop these processes by re-running this command with the --force '.
+      'parameter.',
+      $debug_output);
+  }
+
+  private function buildRogueDaemons(array $daemons) {
+    $rogue_daemons = array();
+    foreach ($daemons as $pid => $data) {
+      $rogue_daemons[] =
+        PhabricatorDaemonReference::newFromRogueDictionary($data);
+    }
+    return $rogue_daemons;
+  }
+
+  private function sendStopSignals($daemons, $grace_period) {
+    // If we're doing a graceful shutdown, try SIGINT first.
+    if ($grace_period) {
+      $daemons = $this->sendSignal($daemons, SIGINT, $grace_period);
+    }
+
+    // If we still have daemons, SIGTERM them.
+    if ($daemons) {
+      $daemons = $this->sendSignal($daemons, SIGTERM, 15);
+    }
+
+    // If the overseer is still alive, SIGKILL it.
+    if ($daemons) {
+      $this->sendSignal($daemons, SIGKILL, 0);
+    }
   }
 
   private function sendSignal(array $daemons, $signo, $wait) {
