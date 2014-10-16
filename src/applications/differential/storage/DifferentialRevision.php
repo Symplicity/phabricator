@@ -10,6 +10,7 @@ final class DifferentialRevision extends DifferentialDAO
     PhabricatorSubscribableInterface,
     PhabricatorCustomFieldInterface,
     PhabricatorApplicationTransactionInterface,
+    PhabricatorMentionableInterface,
     PhabricatorDestructibleInterface,
     PhabricatorProjectInterface {
 
@@ -72,6 +73,33 @@ final class DifferentialRevision extends DifferentialDAO
       self::CONFIG_SERIALIZATION => array(
         'attached'      => self::SERIALIZATION_JSON,
         'unsubscribed'  => self::SERIALIZATION_JSON,
+      ),
+      self::CONFIG_COLUMN_SCHEMA => array(
+        'title' => 'text255',
+        'originalTitle' => 'text255',
+        'status' => 'text32',
+        'summary' => 'text',
+        'testPlan' => 'text',
+        'authorPHID' => 'phid?',
+        'lastReviewerPHID' => 'phid?',
+        'lineCount' => 'uint32?',
+        'mailKey' => 'bytes40',
+        'branchName' => 'text255?',
+        'arcanistProjectPHID' => 'phid?',
+        'repositoryPHID' => 'phid?',
+      ),
+      self::CONFIG_KEY_SCHEMA => array(
+        'key_phid' => null,
+        'phid' => array(
+          'columns' => array('phid'),
+          'unique' => true,
+        ),
+        'authorPHID' => array(
+          'columns' => array('authorPHID', 'status'),
+        ),
+        'repositoryPHID' => array(
+          'columns' => array('repositoryPHID'),
+        ),
       ),
     ) + parent::getConfiguration();
   }

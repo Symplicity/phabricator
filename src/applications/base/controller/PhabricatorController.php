@@ -296,6 +296,7 @@ abstract class PhabricatorController extends AphrontController {
       $page->setDeviceReady(true);
     }
 
+    $page->setShowFooter(idx($options, 'showFooter', true));
     $page->setShowChrome(idx($options, 'chrome', true));
 
     $application_menu = $this->buildApplicationMenu();
@@ -517,7 +518,7 @@ abstract class PhabricatorController extends AphrontController {
    *
    * @return AphrontDialogView New dialog.
    */
-  protected function newDialog() {
+  public function newDialog() {
     $submit_uri = new PhutilURI($this->getRequest()->getRequestURI());
     $submit_uri = $submit_uri->getPath();
 

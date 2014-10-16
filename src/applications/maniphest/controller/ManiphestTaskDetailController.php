@@ -525,7 +525,7 @@ final class ManiphestTaskDetailController extends ManiphestController {
         phutil_tag(
           'a',
           array(
-            'href' => 'mailto:'.$source.'?subject='.$subject
+            'href' => 'mailto:'.$source.'?subject='.$subject,
           ),
           $source));
     }
@@ -606,12 +606,12 @@ final class ManiphestTaskDetailController extends ManiphestController {
         $file_view->render());
     }
 
+    $view->invokeWillRenderEvent();
+
     $field_list->appendFieldsToPropertyList(
       $task,
       $viewer,
       $view);
-
-    $view->invokeWillRenderEvent();
 
     return $view;
   }

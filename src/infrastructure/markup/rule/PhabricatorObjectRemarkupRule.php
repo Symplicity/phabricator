@@ -100,7 +100,7 @@ abstract class PhabricatorObjectRemarkupRule extends PhutilRemarkupRule {
     $id = $this->getObjectIDPattern();
 
     $text = preg_replace_callback(
-      '@\B{'.$prefix.'('.$id.')((?:[^}\\\\]|\\\\.)*)}\B@',
+      '@\B{'.$prefix.'('.$id.')((?:[^}\\\\]|\\\\.)*)}\B@u',
       array($this, 'markupObjectEmbed'),
       $text);
 
@@ -115,12 +115,14 @@ abstract class PhabricatorObjectRemarkupRule extends PhutilRemarkupRule {
       $boundary = '\\B';
     }
 
-    // NOTE: The "(?<!#)" prevents us from linking "#abcdef" or similar.
+    // The "(?<![#-])" prevents us from linking "#abcdef" or similar, and
+    // "ABC-T1" (see T5714).
+
     // The "\b" allows us to link "(abcdef)" or similar without linking things
     // in the middle of words.
 
     $text = preg_replace_callback(
-      '((?<!#)'.$boundary.$prefix.'('.$id.')(?:#([-\w\d]+))?\b)',
+      '((?<![#-])'.$boundary.$prefix.'('.$id.')(?:#([-\w\d]+))?(?!\w))u',
       array($this, 'markupObjectReference'),
       $text);
 

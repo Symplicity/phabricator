@@ -341,6 +341,20 @@ abstract class PhabricatorBaseEnglishTranslation
         ),
       ),
 
+      '%s merged %d task(s): %s.' => array(
+        array(
+          '%s merged a task: %3$s.',
+          '%s merged tasks: %3$s.',
+        ),
+      ),
+
+      '%s merged %d task(s) %s into %s.' => array(
+        array(
+          '%s merged %3$s into %4$s.',
+          '%s merged tasks %3$s into %4$s.',
+        ),
+      ),
+
       '%s edited voting user(s), added %d: %s; removed %d: %s.' =>
         '%s edited voting users, added: %3$s; removed: %5$s',
 
@@ -361,29 +375,29 @@ abstract class PhabricatorBaseEnglishTranslation
       '%s added %d blocking task(s): %s.' => array(
         array(
           '%s added a blocking task: %3$s.',
-          '%s added blocking tasks: %3$s.'
+          '%s added blocking tasks: %3$s.',
         ),
       ),
 
       '%s added %d blocked task(s): %s.' => array(
         array(
           '%s added a blocked task: %3$s.',
-          '%s added blocked tasks: %3$s.'
-        )
+          '%s added blocked tasks: %3$s.',
+        ),
       ),
 
       '%s removed %d blocking task(s): %s.' => array(
         array(
           '%s removed a blocking task: %3$s.',
-          '%s removed blocking tasks: %3$s.'
+          '%s removed blocking tasks: %3$s.',
         ),
       ),
 
       '%s removed %d blocked task(s): %s.' => array(
         array(
           '%s removed a blocked task: %3$s.',
-          '%s removed blocked tasks: %3$s.'
-        )
+          '%s removed blocked tasks: %3$s.',
+        ),
       ),
 
       '%s edited answer(s), added %d: %s; removed %d: %s.' =>
@@ -1016,7 +1030,7 @@ abstract class PhabricatorBaseEnglishTranslation
       '%s added %s revision(s): %s.' => array(
         array(
           '%s added a revision: %3$s.',
-          '%s added revisionss: %3$s.',
+          '%s added revisions: %3$s.',
         ),
       ),
 

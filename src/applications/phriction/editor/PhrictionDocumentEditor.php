@@ -243,7 +243,8 @@ final class PhrictionDocumentEditor extends PhabricatorEditor {
       $project = id(new PhabricatorProjectQuery())
         ->setViewer($this->requireActor())
         ->withPhrictionSlugs(array(
-          PhrictionDocument::getProjectSlugIdentifier($slug)))
+          PhrictionDocument::getProjectSlugIdentifier($slug),
+        ))
         ->executeOne();
       if ($project) {
         $project_phid = $project->getPHID();
@@ -264,6 +265,9 @@ final class PhrictionDocumentEditor extends PhabricatorEditor {
     }
 
     if ($feed_action) {
+      $content_str = id(new PhutilUTF8StringTruncator())
+        ->setMaximumGlyphs(140)
+        ->truncateString($new_content->getContent());
       id(new PhabricatorFeedStoryPublisher())
         ->setRelatedPHIDs($related_phids)
         ->setStoryAuthorPHID($this->getActor()->getPHID())
@@ -273,7 +277,7 @@ final class PhrictionDocumentEditor extends PhabricatorEditor {
           array(
             'phid'      => $document->getPHID(),
             'action'    => $feed_action,
-            'content'   => phutil_utf8_shorten($new_content->getContent(), 140),
+            'content'   => $content_str,
             'project'   => $project_phid,
             'movedFromPHID' => $this->fromDocumentPHID,
           ))

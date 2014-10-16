@@ -20,6 +20,7 @@ final class PhabricatorProject extends PhabricatorProjectDAO
   protected $viewPolicy;
   protected $editPolicy;
   protected $joinPolicy;
+  protected $isMembershipLocked;
 
   private $memberPHIDs = self::ATTACHABLE;
   private $watcherPHIDs = self::ATTACHABLE;
@@ -43,7 +44,9 @@ final class PhabricatorProject extends PhabricatorProjectDAO
       ->setViewPolicy(PhabricatorPolicies::POLICY_USER)
       ->setEditPolicy(PhabricatorPolicies::POLICY_USER)
       ->setJoinPolicy(PhabricatorPolicies::POLICY_USER)
-      ->attachMemberPHIDs(array());
+      ->setIsMembershipLocked(0)
+      ->attachMemberPHIDs(array())
+      ->attachSlugs(array());
   }
 
   public function getCapabilities() {
@@ -118,6 +121,42 @@ final class PhabricatorProject extends PhabricatorProjectDAO
       self::CONFIG_AUX_PHID => true,
       self::CONFIG_SERIALIZATION => array(
         'subprojectPHIDs' => self::SERIALIZATION_JSON,
+      ),
+      self::CONFIG_COLUMN_SCHEMA => array(
+        'name' => 'sort128',
+        'status' => 'text32',
+        'phrictionSlug' => 'text128?',
+        'isMembershipLocked' => 'bool',
+        'profileImagePHID' => 'phid?',
+        'icon' => 'text32',
+        'color' => 'text32',
+
+        // T6203/NULLABILITY
+        // These are definitely wrong and should always exist.
+        'editPolicy' => 'policy?',
+        'viewPolicy' => 'policy?',
+        'joinPolicy' => 'policy?',
+      ),
+      self::CONFIG_KEY_SCHEMA => array(
+        'key_phid' => null,
+        'phid' => array(
+          'columns' => array('phid'),
+          'unique' => true,
+        ),
+        'key_icon' => array(
+          'columns' => array('icon'),
+        ),
+        'key_color' => array(
+          'columns' => array('color'),
+        ),
+        'phrictionSlug' => array(
+          'columns' => array('phrictionSlug'),
+          'unique' => true,
+        ),
+        'name' => array(
+          'columns' => array('name'),
+          'unique' => true,
+        ),
       ),
     ) + parent::getConfiguration();
   }

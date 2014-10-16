@@ -143,6 +143,21 @@ final class HarbormasterBuild extends HarbormasterDAO
   public function getConfiguration() {
     return array(
       self::CONFIG_AUX_PHID => true,
+      self::CONFIG_COLUMN_SCHEMA => array(
+        'buildStatus' => 'text32',
+        'buildGeneration' => 'uint32',
+      ),
+      self::CONFIG_KEY_SCHEMA => array(
+        'key_buildable' => array(
+          'columns' => array('buildablePHID'),
+        ),
+        'key_plan' => array(
+          'columns' => array('buildPlanPHID'),
+        ),
+        'key_status' => array(
+          'columns' => array('buildStatus'),
+        ),
+      ),
     ) + parent::getConfiguration();
   }
 
@@ -196,7 +211,9 @@ final class HarbormasterBuild extends HarbormasterDAO
     $log_source,
     $log_type) {
 
-    $log_source = phutil_utf8_shorten($log_source, 250);
+    $log_source = id(new PhutilUTF8StringTruncator())
+      ->setMaximumCodepoints(250)
+      ->truncateString($log_source);
 
     $log = HarbormasterBuildLog::initializeNewBuildLog($build_target)
       ->setLogSource($log_source)

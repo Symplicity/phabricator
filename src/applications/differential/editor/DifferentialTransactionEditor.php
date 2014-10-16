@@ -1040,8 +1040,7 @@ final class DifferentialTransactionEditor
     PhabricatorLiskDAO $object,
     PhabricatorApplicationTransaction $xaction) {
 
-    switch ($xaction->getTransactionType()) {
-    }
+    switch ($xaction->getTransactionType()) {}
 
     return parent::requireCapabilities($object, $xaction);
   }
@@ -1271,8 +1270,10 @@ final class DifferentialTransactionEditor
         ->execute();
 
       if ($tasks) {
+        $phid_map = mpull($tasks, 'getPHID', 'getPHID');
         $edge_related = DifferentialRevisionHasTaskEdgeType::EDGECONST;
-        $edges[$edge_related] = mpull($tasks, 'getPHID', 'getPHID');
+        $edges[$edge_related] = $phid_map;
+        $this->setUnmentionablePHIDMap($phid_map);
       }
     }
 
