@@ -22,7 +22,12 @@ final class PhabricatorAuditEditor
     if (isset($this->auditReasonMap[$phid])) {
       return $this->auditReasonMap[$phid];
     }
-    return array('Added by '.$this->getActor()->getUsername().'.');
+    if ($this->getIsHeraldEditor()) {
+      $name = 'herald';
+    } else {
+      $name = $this->getActor()->getUsername();
+    }
+    return array('Added by '.$name.'.');
   }
 
   public function setRawPatch($patch) {
@@ -155,12 +160,19 @@ final class PhabricatorAuditEditor
             continue;
           }
 
-          $audit_requested = PhabricatorAuditStatusConstants::AUDIT_REQUESTED;
+          if ($this->getIsHeraldEditor()) {
+            $audit_requested = $xaction->getMetadataValue('auditStatus');
+            $audit_reason_map = $xaction->getMetadataValue('auditReasonMap');
+            $audit_reason = $audit_reason_map[$phid];
+          } else {
+            $audit_requested = PhabricatorAuditStatusConstants::AUDIT_REQUESTED;
+            $audit_reason = $this->getAuditReasons($phid);
+          }
           $requests[] = id (new PhabricatorRepositoryAuditRequest())
             ->setCommitPHID($object->getPHID())
             ->setAuditorPHID($phid)
             ->setAuditStatus($audit_requested)
-            ->setAuditReasons($this->getAuditReasons($phid))
+            ->setAuditReasons($audit_reason)
             ->save();
         }
 
@@ -321,6 +333,7 @@ final class PhabricatorAuditEditor
           $object);
         if ($request) {
           $xactions[] = $request;
+          $this->setUnmentionablePHIDMap($request->getNewValue());
         }
         break;
       default:
@@ -448,9 +461,75 @@ final class PhabricatorAuditEditor
     return true;
   }
 
+  protected function expandCustomRemarkupBlockTransactions(
+    PhabricatorLiskDAO $object,
+    array $xactions,
+    $blocks,
+    PhutilMarkupEngine $engine) {
+
+    // we are only really trying to find unmentionable phids here...
+    // don't bother with this outside initial commit (i.e. create)
+    // transaction
+    $is_commit = false;
+    foreach ($xactions as $xaction) {
+      switch ($xaction->getTransactionType()) {
+        case PhabricatorAuditTransaction::TYPE_COMMIT:
+          $is_commit = true;
+          break;
+      }
+    }
+
+    // "result" is always an array....
+    $result = array();
+    if (!$is_commit) {
+      return $result;
+    }
+
+    $flat_blocks = array_mergev($blocks);
+    $huge_block = implode("\n\n", $flat_blocks);
+    $phid_map = array();
+    $phid_map[] = $this->getUnmentionablePHIDMap();
+    $monograms = array();
+
+    $task_refs = id(new ManiphestCustomFieldStatusParser())
+      ->parseCorpus($huge_block);
+    foreach ($task_refs as $match) {
+      foreach ($match['monograms'] as $monogram) {
+        $monograms[] = $monogram;
+      }
+    }
+
+    $rev_refs = id(new DifferentialCustomFieldDependsOnParser())
+      ->parseCorpus($huge_block);
+    foreach ($rev_refs as $match) {
+      foreach ($match['monograms'] as $monogram) {
+        $monograms[] = $monogram;
+      }
+    }
+
+    $objects = id(new PhabricatorObjectQuery())
+      ->setViewer($this->getActor())
+      ->withNames($monograms)
+      ->execute();
+    $phid_map[] = mpull($objects, 'getPHID', 'getPHID');
+    $phid_map = array_mergev($phid_map);
+    $this->setUnmentionablePHIDMap($phid_map);
+
+    return $result;
+  }
+
+
   protected function shouldSendMail(
     PhabricatorLiskDAO $object,
     array $xactions) {
+
+    // not every code path loads the repository so tread carefully
+    if ($object->getRepository($assert_attached = false)) {
+      $repository = $object->getRepository();
+      if ($repository->isImporting()) {
+        return false;
+      }
+    }
     return $this->isCommitMostlyImported($object);
   }
 
@@ -702,10 +781,37 @@ final class PhabricatorAuditEditor
     return implode("\n", $block);
   }
 
+  public function getMailTagsMap() {
+    return array(
+      PhabricatorAuditTransaction::MAILTAG_COMMIT =>
+        pht('A commit is created.'),
+      PhabricatorAuditTransaction::MAILTAG_ACTION_CONCERN =>
+        pht('A commit has a concerned raised against it.'),
+      PhabricatorAuditTransaction::MAILTAG_ACTION_ACCEPT =>
+        pht('A commit is accepted.'),
+      PhabricatorAuditTransaction::MAILTAG_ACTION_RESIGN =>
+        pht('A commit has an auditor resign.'),
+      PhabricatorAuditTransaction::MAILTAG_ACTION_CLOSE =>
+        pht('A commit is closed.'),
+      PhabricatorAuditTransaction::MAILTAG_ADD_AUDITORS =>
+        pht('A commit has auditors added.'),
+      PhabricatorAuditTransaction::MAILTAG_ADD_CCS =>
+        pht("A commit's subscribers change."),
+      PhabricatorAuditTransaction::MAILTAG_PROJECTS =>
+        pht("A commit's projects change."),
+      PhabricatorAuditTransaction::MAILTAG_COMMENT =>
+        pht('Someone comments on a commit.'),
+      PhabricatorAuditTransaction::MAILTAG_OTHER =>
+        pht('Other commit activity not listed above occurs.'),
+    );
+  }
+
+
+
   protected function shouldPublishFeedStory(
     PhabricatorLiskDAO $object,
     array $xactions) {
-    return $this->isCommitMostlyImported($object);
+    return $this->shouldSendMail($object, $xactions);
   }
 
   protected function shouldApplyHeraldRules(
@@ -758,7 +864,12 @@ final class PhabricatorAuditEditor
     if ($audit_phids) {
       $xactions[] = id(new PhabricatorAuditTransaction())
         ->setTransactionType(PhabricatorAuditActionConstants::ADD_AUDITORS)
-        ->setNewValue(array_fuse(array_keys($audit_phids)));
+        ->setNewValue(array_fuse(array_keys($audit_phids)))
+        ->setMetadataValue(
+          'auditStatus',
+          PhabricatorAuditStatusConstants::AUDIT_REQUIRED)
+        ->setMetadataValue(
+          'auditReasonMap', $this->auditReasonMap);
     }
 
     $cc_phids = $adapter->getAddCCMap();

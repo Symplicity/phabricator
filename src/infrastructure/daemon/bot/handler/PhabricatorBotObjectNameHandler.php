@@ -66,7 +66,7 @@ final class PhabricatorBotObjectNameHandler extends PhabricatorBotHandler {
         foreach ($matches as $match) {
           switch ($match[1]) {
             case 'R2D2':
-              $output[$match[1]] = pht('beep hoop bop');
+              $output[$match[1]] = pht('beep boop bop');
               break;
             case 'Chewbacca':
               $output[$match[1]] = pht('Uuuuuur Ahhhhhrrr Uhrrr Ahhhrrr Aaargh');
@@ -88,10 +88,10 @@ final class PhabricatorBotObjectNameHandler extends PhabricatorBotHandler {
         }
 
         $pattern =
-          '@' .
-          '(?<!/)(?:^|\b)' . // Negative lookbehind prevent matching "/D123".
-          '([A-Z])(\d+)' .
-          '(?:\b|$)' .
+          '@'.
+          '(?<!/)(?:^|\b)'. // Negative lookbehind prevent matching "/D123".
+          '([A-Z])(\d+)'.
+          '(?:\b|$)'.
           '@';
 
         if (preg_match_all($pattern, $message, $matches, PREG_SET_ORDER)) {
@@ -124,10 +124,10 @@ final class PhabricatorBotObjectNameHandler extends PhabricatorBotHandler {
         }
 
         $pattern =
-          '@' .
-          '(?<!/)(?:^|\b)' .
-          '(r[A-Z]+)([0-9a-z]{0,40})' .
-          '(?:\b|$)' .
+          '@'.
+          '(?<!/)(?:^|\b)'.
+          '(r[A-Z]+)([0-9a-z]{0,40})'.
+          '(?:\b|$)'.
           '@';
         if (preg_match_all($pattern, $message, $matches, PREG_SET_ORDER)) {
           foreach ($matches as $match) {
