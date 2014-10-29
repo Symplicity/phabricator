@@ -22,7 +22,7 @@ final class PhabricatorFileDropUploadController
 
     $view_policy = $request->getStr('viewPolicy');
     if (!$view_policy) {
-      $view_policy = $viewer->getPHID();
+      $view_policy = PhabricatorPolicies::getMostOpenPolicy();
     }
 
     $file = PhabricatorFile::newFromXHRUpload(
