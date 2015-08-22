@@ -3,20 +3,14 @@
 final class PhortuneProviderEditController
   extends PhortuneMerchantController {
 
-  private $id;
+  public function handleRequest(AphrontRequest $request) {
+    $viewer = $request->getViewer();
+    $id = $request->getURIData('id');
 
-  public function willProcessRequest(array $data) {
-    $this->id = idx($data, 'id');
-  }
-
-  public function processRequest() {
-    $request = $this->getRequest();
-    $viewer = $request->getUser();
-
-    if ($this->id) {
+    if ($id) {
       $provider_config = id(new PhortunePaymentProviderConfigQuery())
         ->setViewer($viewer)
-        ->withIDs(array($this->id))
+        ->withIDs(array($id))
         ->requireCapabilities(
           array(
             PhabricatorPolicyCapability::CAN_VIEW,
@@ -260,8 +254,7 @@ final class PhortuneProviderEditController
       ->setUser($viewer)
       ->addHiddenInput('merchantID', $merchant->getID())
       ->appendRemarkupInstructions(
-        pht(
-          'Choose the type of payment provider to add:'))
+        pht('Choose the type of payment provider to add:'))
       ->appendChild($panel_classes)
       ->appendChild(
         id(new AphrontFormSubmitControl())

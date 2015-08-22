@@ -56,7 +56,7 @@ final class DrydockResourceSearchEngine
     return '/drydock/resource/'.$path;
   }
 
-  public function getBuiltinQueryNames() {
+  protected function getBuiltinQueryNames() {
     return array(
       'active' => pht('Active Resources'),
       'all' => pht('All Resources'),
@@ -87,10 +87,14 @@ final class DrydockResourceSearchEngine
     PhabricatorSavedQuery $query,
     array $handles) {
 
-    return id(new DrydockResourceListView())
+    $list = id(new DrydockResourceListView())
       ->setUser($this->requireViewer())
-      ->setResources($resources)
-      ->render();
+      ->setResources($resources);
+
+    $result = new PhabricatorApplicationSearchResultView();
+    $result->setTable($list);
+
+    return $result;
   }
 
 }

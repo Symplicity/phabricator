@@ -3,26 +3,27 @@
 final class PhabricatorProjectListController
   extends PhabricatorProjectController {
 
-  private $queryKey;
-
   public function shouldAllowPublic() {
     return true;
   }
 
-  public function willProcessRequest(array $data) {
-    $this->queryKey = idx($data, 'queryKey');
-  }
+  public function handleRequest(AphrontRequest $request) {
+    $viewer = $request->getViewer();
+    $query_key = $request->getURIData('queryKey');
 
-  public function processRequest() {
     $controller = id(new PhabricatorApplicationSearchController())
-      ->setQueryKey($this->queryKey)
+      ->setQueryKey($query_key)
       ->setSearchEngine(new PhabricatorProjectSearchEngine())
       ->setNavigation($this->buildSideNavView());
 
     return $this->delegateToController($controller);
   }
 
-  public function buildApplicationCrumbs() {
+  public function buildApplicationMenu() {
+    return $this->buildSideNavView(true)->getMenu();
+  }
+
+  protected function buildApplicationCrumbs() {
     $crumbs = parent::buildApplicationCrumbs();
 
     $can_create = $this->hasApplicationCapability(

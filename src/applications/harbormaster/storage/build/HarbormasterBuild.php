@@ -1,12 +1,15 @@
 <?php
 
 final class HarbormasterBuild extends HarbormasterDAO
-  implements PhabricatorPolicyInterface {
+  implements
+    PhabricatorApplicationTransactionInterface,
+    PhabricatorPolicyInterface {
 
   protected $buildablePHID;
   protected $buildPlanPHID;
   protected $buildStatus;
   protected $buildGeneration;
+  protected $planAutoKey;
 
   private $buildable = self::ATTACHABLE;
   private $buildPlan = self::ATTACHABLE;
@@ -140,12 +143,13 @@ final class HarbormasterBuild extends HarbormasterDAO
     return $result;
   }
 
-  public function getConfiguration() {
+  protected function getConfiguration() {
     return array(
       self::CONFIG_AUX_PHID => true,
       self::CONFIG_COLUMN_SCHEMA => array(
         'buildStatus' => 'text32',
         'buildGeneration' => 'uint32',
+        'planAutoKey' => 'text32?',
       ),
       self::CONFIG_KEY_SCHEMA => array(
         'key_buildable' => array(
@@ -156,6 +160,10 @@ final class HarbormasterBuild extends HarbormasterDAO
         ),
         'key_status' => array(
           'columns' => array('buildStatus'),
+        ),
+        'key_planautokey' => array(
+          'columns' => array('buildablePHID', 'planAutoKey'),
+          'unique' => true,
         ),
       ),
     ) + parent::getConfiguration();
@@ -206,13 +214,17 @@ final class HarbormasterBuild extends HarbormasterDAO
       $this->getBuildStatus() === self::STATUS_BUILDING;
   }
 
+  public function isAutobuild() {
+    return ($this->getPlanAutoKey() !== null);
+  }
+
   public function createLog(
     HarbormasterBuildTarget $build_target,
     $log_source,
     $log_type) {
 
     $log_source = id(new PhutilUTF8StringTruncator())
-      ->setMaximumCodepoints(250)
+      ->setMaximumBytes(250)
       ->truncateString($log_source);
 
     $log = HarbormasterBuildLog::initializeNewBuildLog($build_target)
@@ -221,36 +233,6 @@ final class HarbormasterBuild extends HarbormasterDAO
       ->save();
 
     return $log;
-  }
-
-  public function createArtifact(
-    HarbormasterBuildTarget $build_target,
-    $artifact_key,
-    $artifact_type) {
-
-    $artifact =
-      HarbormasterBuildArtifact::initializeNewBuildArtifact($build_target);
-    $artifact->setArtifactKey(
-      $this->getPHID(),
-      $this->getBuildGeneration(),
-      $artifact_key);
-    $artifact->setArtifactType($artifact_type);
-    $artifact->save();
-    return $artifact;
-  }
-
-  public function loadArtifact($name) {
-    $artifact = id(new HarbormasterBuildArtifactQuery())
-      ->setViewer(PhabricatorUser::getOmnipotentUser())
-      ->withArtifactKeys(
-        $this->getPHID(),
-        $this->getBuildGeneration(),
-        array($name))
-      ->executeOne();
-    if ($artifact === null) {
-      throw new Exception('Artifact not found!');
-    }
-    return $artifact;
   }
 
   public function retrieveVariablesFromBuild() {
@@ -279,9 +261,9 @@ final class HarbormasterBuild extends HarbormasterDAO
   }
 
   public static function getAvailableBuildVariables() {
-    $objects = id(new PhutilSymbolLoader())
+    $objects = id(new PhutilClassMapQuery())
       ->setAncestorClass('HarbormasterBuildableInterface')
-      ->loadObjects();
+      ->execute();
 
     $variables = array();
     $variables[] = array(
@@ -328,16 +310,28 @@ final class HarbormasterBuild extends HarbormasterDAO
   }
 
   public function canRestartBuild() {
+    if ($this->isAutobuild()) {
+      return false;
+    }
+
     return !$this->isRestarting();
   }
 
   public function canStopBuild() {
+    if ($this->isAutobuild()) {
+      return false;
+    }
+
     return !$this->isComplete() &&
            !$this->isStopped() &&
            !$this->isStopping();
   }
 
   public function canResumeBuild() {
+    if ($this->isAutobuild()) {
+      return false;
+    }
+
     return $this->isStopped() &&
            !$this->isResuming();
   }
@@ -399,6 +393,29 @@ final class HarbormasterBuild extends HarbormasterDAO
     }
 
     return $this;
+  }
+
+
+/* -(  PhabricatorApplicationTransactionInterface  )------------------------- */
+
+
+  public function getApplicationTransactionEditor() {
+    return new HarbormasterBuildTransactionEditor();
+  }
+
+  public function getApplicationTransactionObject() {
+    return $this;
+  }
+
+  public function getApplicationTransactionTemplate() {
+    return new HarbormasterBuildTransaction();
+  }
+
+  public function willRenderTimeline(
+    PhabricatorApplicationTransactionView $timeline,
+    AphrontRequest $request) {
+
+    return $timeline;
   }
 
 

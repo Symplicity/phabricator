@@ -3,16 +3,10 @@
 final class PhabricatorDaemonLogEventViewController
   extends PhabricatorDaemonController {
 
-  private $id;
+  public function handleRequest(AphrontRequest $request) {
+    $id = $request->getURIData('id');
 
-  public function willProcessRequest(array $data) {
-    $this->id = $data['id'];
-  }
-
-  public function processRequest() {
-    $request = $this->getRequest();
-
-    $event = id(new PhabricatorDaemonLogEvent())->load($this->id);
+    $event = id(new PhabricatorDaemonLogEvent())->load($id);
     if (!$event) {
       return new Aphront404Response();
     }
@@ -23,9 +17,9 @@ final class PhabricatorDaemonLogEventViewController
       ->setCombinedLog(true)
       ->setShowFullMessage(true);
 
-    $log_panel = new AphrontPanelView();
+    $log_panel = new PHUIObjectBoxView();
+    $log_panel->setHeaderText(pht('Combined Log'));
     $log_panel->appendChild($event_view);
-    $log_panel->setNoBackground();
 
     $daemon_id = $event->getLogID();
 
@@ -43,7 +37,6 @@ final class PhabricatorDaemonLogEventViewController
       ),
       array(
         'title' => pht('Combined Daemon Log'),
-        'device' => false,
       ));
   }
 

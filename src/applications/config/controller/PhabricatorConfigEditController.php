@@ -3,25 +3,19 @@
 final class PhabricatorConfigEditController
   extends PhabricatorConfigController {
 
-  private $key;
-
-  public function willProcessRequest(array $data) {
-    $this->key = $data['key'];
-  }
-
-  public function processRequest() {
-    $request = $this->getRequest();
-    $user = $request->getUser();
+  public function handleRequest(AphrontRequest $request) {
+    $viewer = $request->getViewer();
+    $key = $request->getURIData('key');
 
 
     $options = PhabricatorApplicationConfigOptions::loadAllOptions();
-    if (empty($options[$this->key])) {
-      $ancient = PhabricatorSetupCheckExtraConfig::getAncientConfig();
-      if (isset($ancient[$this->key])) {
+    if (empty($options[$key])) {
+      $ancient = PhabricatorExtraConfigSetupCheck::getAncientConfig();
+      if (isset($ancient[$key])) {
         $desc = pht(
           "This configuration has been removed. You can safely delete ".
           "it.\n\n%s",
-          $ancient[$this->key]);
+          $ancient[$key]);
       } else {
         $desc = pht(
           'This configuration option is unknown. It may be misspelled, '.
@@ -32,14 +26,14 @@ final class PhabricatorConfigEditController
       // longer exists. Allow it to be edited so it can be reviewed and
       // deleted.
       $option = id(new PhabricatorConfigOption())
-        ->setKey($this->key)
+        ->setKey($key)
         ->setType('wild')
         ->setDefault(null)
         ->setDescription($desc);
       $group = null;
       $group_uri = $this->getApplicationURI();
     } else {
-      $option = $options[$this->key];
+      $option = $options[$key];
       $group = $option->getGroup();
       $group_uri = $this->getApplicationURI('group/'.$group->getKey().'/');
     }
@@ -57,11 +51,11 @@ final class PhabricatorConfigEditController
     $config_entry = id(new PhabricatorConfigEntry())
       ->loadOneWhere(
         'configKey = %s AND namespace = %s',
-        $this->key,
+        $key,
         'default');
     if (!$config_entry) {
       $config_entry = id(new PhabricatorConfigEntry())
-        ->setConfigKey($this->key)
+        ->setConfigKey($key)
         ->setNamespace('default')
         ->setIsDeleted(true);
       $config_entry->setPHID($config_entry->generatePHID());
@@ -81,7 +75,7 @@ final class PhabricatorConfigEditController
       if (!$errors) {
 
         $editor = id(new PhabricatorConfigEditor())
-          ->setActor($user)
+          ->setActor($viewer)
           ->setContinueOnNoEffect(true)
           ->setContentSourceFromRequest($request);
 
@@ -108,25 +102,23 @@ final class PhabricatorConfigEditController
 
     $error_view = null;
     if ($errors) {
-      $error_view = id(new AphrontErrorView())
+      $error_view = id(new PHUIInfoView())
         ->setErrors($errors);
     } else if ($option->getHidden()) {
       $msg = pht(
         'This configuration is hidden and can not be edited or viewed from '.
         'the web interface.');
 
-      $error_view = id(new AphrontErrorView())
+      $error_view = id(new PHUIInfoView())
         ->setTitle(pht('Configuration Hidden'))
-        ->setSeverity(AphrontErrorView::SEVERITY_WARNING)
+        ->setSeverity(PHUIInfoView::SEVERITY_WARNING)
         ->appendChild(phutil_tag('p', array(), $msg));
     } else if ($option->getLocked()) {
-      $msg = pht(
-        'This configuration is locked and can not be edited from the web '.
-        'interface. Use `./bin/config` in `phabricator/` to edit it.');
 
-      $error_view = id(new AphrontErrorView())
+      $msg = $option->getLockedMessage();
+      $error_view = id(new PHUIInfoView())
         ->setTitle(pht('Configuration Locked'))
-        ->setSeverity(AphrontErrorView::SEVERITY_NOTICE)
+        ->setSeverity(PHUIInfoView::SEVERITY_NOTICE)
         ->appendChild(phutil_tag('p', array(), $msg));
     }
 
@@ -140,7 +132,7 @@ final class PhabricatorConfigEditController
     }
 
     $engine = new PhabricatorMarkupEngine();
-    $engine->setViewer($user);
+    $engine->setViewer($viewer);
     $engine->addObject($option, 'description');
     $engine->process();
     $description = phutil_tag(
@@ -151,7 +143,7 @@ final class PhabricatorConfigEditController
       $engine->getOutput($option, 'description'));
 
     $form
-      ->setUser($user)
+      ->setUser($viewer)
       ->addHiddenInput('issue', $request->getStr('issue'))
       ->appendChild(
         id(new AphrontFormMarkupControl())
@@ -196,7 +188,7 @@ final class PhabricatorConfigEditController
           ->setValue($this->renderDefaults($option, $config_entry)));
     }
 
-    $title = pht('Edit %s', $this->key);
+    $title = pht('Edit %s', $key);
     $short = pht('Edit');
 
     $form_box = id(new PHUIObjectBoxView())
@@ -204,7 +196,7 @@ final class PhabricatorConfigEditController
       ->setForm($form);
 
     if ($error_view) {
-       $form_box->setErrorView($error_view);
+       $form_box->setInfoView($error_view);
     }
 
     $crumbs = $this->buildApplicationCrumbs();
@@ -214,23 +206,18 @@ final class PhabricatorConfigEditController
       $crumbs->addTextCrumb($group->getName(), $group_uri);
     }
 
-    $crumbs->addTextCrumb($this->key, '/config/edit/'.$this->key);
+    $crumbs->addTextCrumb($key, '/config/edit/'.$key);
 
-    $xactions = id(new PhabricatorConfigTransactionQuery())
-      ->withObjectPHIDs(array($config_entry->getPHID()))
-      ->setViewer($user)
-      ->execute();
-
-    $xaction_view = id(new PhabricatorApplicationTransactionView())
-      ->setUser($user)
-      ->setObjectPHID($config_entry->getPHID())
-      ->setTransactions($xactions);
+    $timeline = $this->buildTransactionTimeline(
+      $config_entry,
+      new PhabricatorConfigTransactionQuery());
+    $timeline->setShouldTerminate(true);
 
     return $this->buildApplicationPage(
       array(
         $crumbs,
         $form_box,
-        $xaction_view,
+        $timeline,
       ),
       array(
         'title' => $title,

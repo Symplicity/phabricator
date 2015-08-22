@@ -2,14 +2,13 @@
 
 final class PhrictionNewController extends PhrictionController {
 
-  public function processRequest() {
-    $request = $this->getRequest();
-    $user    = $request->getUser();
-    $slug    = PhabricatorSlug::normalize($request->getStr('slug'));
+  public function handleRequest(AphrontRequest $request) {
+    $viewer = $request->getViewer();
+    $slug = PhabricatorSlug::normalize($request->getStr('slug'));
 
     if ($request->isFormPost()) {
       $document = id(new PhrictionDocumentQuery())
-        ->setViewer($user)
+        ->setViewer($viewer)
         ->withSlugs(array($slug))
         ->executeOne();
       $prompt = $request->getStr('prompt', 'no');
@@ -20,7 +19,7 @@ final class PhrictionNewController extends PhrictionController {
         $dialog = new AphrontDialogView();
         $dialog->setSubmitURI('/phriction/new/')
           ->setTitle(pht('Edit Existing Document?'))
-          ->setUser($user)
+          ->setUser($viewer)
           ->appendChild(pht(
             'The document %s already exists. Do you want to edit it instead?',
             phutil_tag('tt', array(), $slug)))
@@ -30,25 +29,6 @@ final class PhrictionNewController extends PhrictionController {
           ->addSubmitButton(pht('Edit Document'));
 
         return id(new AphrontDialogResponse())->setDialog($dialog);
-      } else if (PhrictionDocument::isProjectSlug($slug)) {
-        $project = id(new PhabricatorProjectQuery())
-          ->setViewer($user)
-          ->withPhrictionSlugs(array(
-            PhrictionDocument::getProjectSlugIdentifier($slug),
-          ))
-          ->executeOne();
-        if (!$project) {
-          $dialog = new AphrontDialogView();
-          $dialog->setSubmitURI('/w/')
-              ->setTitle(pht('Oops!'))
-              ->setUser($user)
-              ->appendChild(pht(
-                  'You cannot create wiki pages under "projects/",
-                  because they are reserved as project pages.
-                  Create a new project with this name first.'))
-              ->addCancelButton('/w/', 'Okay');
-          return id(new AphrontDialogResponse())->setDialog($dialog);
-        }
       }
 
       $uri  = '/phriction/edit/?slug='.$slug;
@@ -67,7 +47,7 @@ final class PhrictionNewController extends PhrictionController {
                        ->setName('slug'));
 
     $dialog = id(new AphrontDialogView())
-      ->setUser($user)
+      ->setUser($viewer)
       ->setTitle(pht('New Document'))
       ->setSubmitURI('/phriction/new/')
       ->appendChild(phutil_tag('p',

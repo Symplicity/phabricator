@@ -11,7 +11,7 @@ final class PhabricatorConfigSchemaQuery extends Phobject {
 
   protected function getAPI() {
     if (!$this->api) {
-      throw new Exception(pht('Call setAPI() before issuing a query!'));
+      throw new PhutilInvalidStateException('setAPI');
     }
     return $this->api;
   }
@@ -153,22 +153,21 @@ final class PhabricatorConfigSchemaQuery extends Phobject {
 
   public function loadExpectedSchema() {
     $databases = $this->getDatabaseNames();
+    $info = $this->getAPI()->getCharsetInfo();
 
-    $api = $this->getAPI();
-
-    $charset_info = $api->getCharsetInfo();
-    list($charset, $collate_text, $collate_sort) = $charset_info;
-
-    $specs = id(new PhutilSymbolLoader())
+    $specs = id(new PhutilClassMapQuery())
       ->setAncestorClass('PhabricatorConfigSchemaSpec')
-      ->loadObjects();
+      ->execute();
 
     $server_schema = new PhabricatorConfigServerSchema();
     foreach ($specs as $spec) {
       $spec
-        ->setUTF8Charset($charset)
-        ->setUTF8BinaryCollation($collate_text)
-        ->setUTF8SortingCollation($collate_sort)
+        ->setUTF8Charset(
+          $info[PhabricatorStorageManagementAPI::CHARSET_DEFAULT])
+        ->setUTF8BinaryCollation(
+          $info[PhabricatorStorageManagementAPI::COLLATE_TEXT])
+        ->setUTF8SortingCollation(
+          $info[PhabricatorStorageManagementAPI::COLLATE_SORT])
         ->setServer($server_schema)
         ->buildSchemata($server_schema);
     }

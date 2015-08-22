@@ -40,21 +40,17 @@ final class PhabricatorConduitMethodQuery
     return $this;
   }
 
-  public function loadPage() {
+  protected function loadPage() {
     $methods = $this->getAllMethods();
     $methods = $this->filterMethods($methods);
     return $methods;
   }
 
   private function getAllMethods() {
-    static $methods;
-    if ($methods === null) {
-      $methods = id(new PhutilSymbolLoader())
-        ->setAncestorClass('ConduitAPIMethod')
-        ->loadObjects();
-      $methods = msort($methods, 'getSortOrder');
-    }
-    return $methods;
+    return id(new PhutilClassMapQuery())
+      ->setAncestorClass('ConduitAPIMethod')
+      ->setSortMethod('getSortOrder')
+      ->execute();
   }
 
   private function filterMethods(array $methods) {

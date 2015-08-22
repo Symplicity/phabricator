@@ -3,19 +3,13 @@
 final class PhortuneCartCheckoutController
   extends PhortuneCartController {
 
-  private $id;
-
-  public function willProcessRequest(array $data) {
-    $this->id = $data['id'];
-  }
-
-  public function processRequest() {
-    $request = $this->getRequest();
-    $viewer = $request->getUser();
+  public function handleRequest(AphrontRequest $request) {
+    $viewer = $request->getViewer();
+    $id = $request->getURIData('id');
 
     $cart = id(new PhortuneCartQuery())
       ->setViewer($viewer)
-      ->withIDs(array($this->id))
+      ->withIDs(array($id))
       ->needPurchases(true)
       ->executeOne();
     if (!$cart) {
@@ -113,7 +107,7 @@ final class PhortuneCartCheckoutController
     $cart_box = id(new PHUIObjectBoxView())
       ->setFormErrors($errors)
       ->setHeaderText(pht('Cart Contents'))
-      ->appendChild($cart_table);
+      ->setTable($cart_table);
 
     $title = $cart->getName();
 
@@ -159,7 +153,6 @@ final class PhortuneCartCheckoutController
         array(
           'class' => 'button grey',
           'href'  => $payment_method_uri,
-          'sigil' => 'workflow',
         ),
         pht('Add New Payment Method'));
       $form->appendChild(
@@ -201,7 +194,7 @@ final class PhortuneCartCheckoutController
       $provider_form = new PHUIFormLayoutView();
       $provider_form->appendChild(
         id(new AphrontFormMarkupControl())
-          ->setLabel('Pay With')
+          ->setLabel(pht('Pay With'))
           ->setValue($one_time_options));
     }
 
@@ -209,6 +202,8 @@ final class PhortuneCartCheckoutController
       ->setHeaderText(pht('Choose Payment Method'))
       ->appendChild($form)
       ->appendChild($provider_form);
+
+    $description_box = $this->renderCartDescription($cart);
 
     $crumbs = $this->buildApplicationCrumbs();
     $crumbs->addTextCrumb(pht('Checkout'));
@@ -218,6 +213,7 @@ final class PhortuneCartCheckoutController
       array(
         $crumbs,
         $cart_box,
+        $description_box,
         $payment_box,
       ),
       array(

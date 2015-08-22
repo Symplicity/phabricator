@@ -7,99 +7,80 @@ final class PhabricatorPasteSearchEngine
     return pht('Pastes');
   }
 
-  public function buildSavedQueryFromRequest(AphrontRequest $request) {
-    $saved = new PhabricatorSavedQuery();
-    $saved->setParameter(
-      'authorPHIDs',
-      $this->readUsersFromRequest($request, 'authors'));
-
-    $languages = $request->getStrList('languages');
-    if ($request->getBool('noLanguage')) {
-      $languages[] = null;
-    }
-    $saved->setParameter('languages', $languages);
-
-    $saved->setParameter('createdStart', $request->getStr('createdStart'));
-    $saved->setParameter('createdEnd', $request->getStr('createdEnd'));
-
-    return $saved;
+  public function getApplicationClassName() {
+    return 'PhabricatorPasteApplication';
   }
 
-  public function buildQueryFromSavedQuery(PhabricatorSavedQuery $saved) {
-    $query = id(new PhabricatorPasteQuery())
-      ->needContent(true)
-      ->withAuthorPHIDs($saved->getParameter('authorPHIDs', array()))
-      ->withLanguages($saved->getParameter('languages', array()));
+  public function newQuery() {
+    return id(new PhabricatorPasteQuery())
+      ->needContent(true);
+  }
 
-    $start = $this->parseDateTime($saved->getParameter('createdStart'));
-    $end = $this->parseDateTime($saved->getParameter('createdEnd'));
+  protected function buildQueryFromParameters(array $map) {
+    $query = $this->newQuery();
 
-    if ($start) {
-      $query->withDateCreatedAfter($start);
+    if ($map['authorPHIDs']) {
+      $query->withAuthorPHIDs($map['authorPHIDs']);
     }
 
-    if ($end) {
-      $query->withDateCreatedBefore($end);
+    if ($map['languages']) {
+      $query->withLanguages($map['languages']);
+    }
+
+    if ($map['createdStart']) {
+      $query->withDateCreatedAfter($map['createdStart']);
+    }
+
+    if ($map['createdEnd']) {
+      $query->withDateCreatedBefore($map['createdEnd']);
+    }
+
+    if ($map['statuses']) {
+      $query->withStatuses($map['statuses']);
     }
 
     return $query;
   }
 
-  public function buildSearchForm(
-    AphrontFormView $form,
-    PhabricatorSavedQuery $saved_query) {
-    $phids = $saved_query->getParameter('authorPHIDs', array());
-    $author_handles = id(new PhabricatorHandleQuery())
-      ->setViewer($this->requireViewer())
-      ->withPHIDs($phids)
-      ->execute();
+  protected function buildCustomSearchFields() {
+    return array(
+      id(new PhabricatorUsersSearchField())
+        ->setAliases(array('authors'))
+        ->setKey('authorPHIDs')
+        ->setLabel(pht('Authors')),
+      id(new PhabricatorSearchStringListField())
+        ->setKey('languages')
+        ->setLabel(pht('Languages')),
+      id(new PhabricatorSearchDateField())
+        ->setKey('createdStart')
+        ->setLabel(pht('Created After')),
+      id(new PhabricatorSearchDateField())
+        ->setKey('createdEnd')
+        ->setLabel(pht('Created Before')),
+      id(new PhabricatorSearchCheckboxesField())
+        ->setKey('statuses')
+        ->setLabel(pht('Status'))
+        ->setOptions(
+          id(new PhabricatorPaste())
+            ->getStatusNameMap()),
+    );
+  }
 
-    $languages = $saved_query->getParameter('languages', array());
-    $no_language = false;
-    foreach ($languages as $key => $language) {
-      if ($language === null) {
-        $no_language = true;
-        unset($languages[$key]);
-        continue;
-      }
-    }
-
-    $form
-      ->appendChild(
-        id(new AphrontFormTokenizerControl())
-          ->setDatasource(new PhabricatorPeopleDatasource())
-          ->setName('authors')
-          ->setLabel(pht('Authors'))
-          ->setValue($author_handles))
-      ->appendChild(
-        id(new AphrontFormTextControl())
-          ->setName('languages')
-          ->setLabel(pht('Languages'))
-          ->setValue(implode(', ', $languages)))
-      ->appendChild(
-        id(new AphrontFormCheckboxControl())
-          ->addCheckbox(
-            'noLanguage',
-            1,
-            pht('Find Pastes with no specified language.'),
-            $no_language));
-
-    $this->buildDateRange(
-      $form,
-      $saved_query,
+  protected function getDefaultFieldOrder() {
+    return array(
+      '...',
       'createdStart',
-      pht('Created After'),
       'createdEnd',
-      pht('Created Before'));
-
+    );
   }
 
   protected function getURI($path) {
     return '/paste/'.$path;
   }
 
-  public function getBuiltinQueryNames() {
+  protected function getBuiltinQueryNames() {
     $names = array(
+      'active' => pht('Active Pastes'),
       'all' => pht('All Pastes'),
     );
 
@@ -116,6 +97,12 @@ final class PhabricatorPasteSearchEngine
     $query->setQueryKey($query_key);
 
     switch ($query_key) {
+      case 'active':
+        return $query->setParameter(
+          'statuses',
+          array(
+            PhabricatorPaste::STATUS_ACTIVE,
+          ));
       case 'all':
         return $query;
       case 'authored':
@@ -181,6 +168,10 @@ final class PhabricatorPasteSearchEngine
         ->addIcon('none', $line_count)
         ->appendChild($source_code);
 
+      if ($paste->isArchived()) {
+        $item->setDisabled(true);
+      }
+
       $lang_name = $paste->getLanguage();
       if ($lang_name) {
         $lang_name = idx($lang_map, $lang_name, $lang_name);
@@ -190,6 +181,10 @@ final class PhabricatorPasteSearchEngine
       $list->addItem($item);
     }
 
-    return $list;
+    $result = new PhabricatorApplicationSearchResultView();
+    $result->setObjectList($list);
+    $result->setNoDataString(pht('No pastes found.'));
+
+    return $result;
   }
 }

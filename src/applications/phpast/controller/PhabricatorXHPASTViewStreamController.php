@@ -3,7 +3,7 @@
 final class PhabricatorXHPASTViewStreamController
   extends PhabricatorXHPASTViewPanelController {
 
-  public function processRequest() {
+  public function handleRequest(AphrontRequest $request) {
     $storage = $this->getStorageTree();
     $input = $storage->getInput();
     $stdout = $storage->getStdout();
@@ -16,7 +16,7 @@ final class PhabricatorXHPASTViewStreamController
     foreach ($tree->getRawTokenStream() as $id => $token) {
       $seq = $id;
       $name = $token->getTypeName();
-      $title = "Token {$seq}: {$name}";
+      $title = pht('Token %s: %s', $seq, $name);
 
       $tokens[] = phutil_tag(
         'span',

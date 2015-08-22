@@ -2,20 +2,14 @@
 
 final class PhamePostEditController extends PhameController {
 
-  private $id;
+  public function handleRequest(AphrontRequest $request) {
+    $user = $request->getUser();
+    $id = $request->getURIData('id');
 
-  public function willProcessRequest(array $data) {
-    $this->id = idx($data, 'id');
-  }
-
-  public function processRequest() {
-    $request       = $this->getRequest();
-    $user          = $request->getUser();
-
-    if ($this->id) {
+    if ($id) {
       $post = id(new PhamePostQuery())
         ->setViewer($user)
-        ->withIDs(array($this->id))
+        ->withIDs(array($id))
         ->requireCapabilities(
           array(
             PhabricatorPolicyCapability::CAN_EDIT,
@@ -25,9 +19,14 @@ final class PhamePostEditController extends PhameController {
         return new Aphront404Response();
       }
 
-      $cancel_uri = $this->getApplicationURI('/post/view/'.$this->id.'/');
+      $cancel_uri = $this->getApplicationURI('/post/view/'.$id.'/');
       $submit_button = pht('Save Changes');
       $page_title = pht('Edit Post');
+
+      $v_projects = PhabricatorEdgeQuery::loadDestinationPHIDs(
+        $post->getPHID(),
+        PhabricatorProjectObjectHasProjectEdgeType::EDGECONST);
+      $v_projects = array_reverse($v_projects);
     } else {
       $blog = id(new PhameBlogQuery())
         ->setViewer($user)
@@ -41,6 +40,7 @@ final class PhamePostEditController extends PhameController {
       if (!$blog) {
         return new Aphront404Response();
       }
+      $v_projects = array();
 
       $post = PhamePost::initializePost($user, $blog);
       $cancel_uri = $this->getApplicationURI('/blog/view/'.$blog->getID().'/');
@@ -49,44 +49,59 @@ final class PhamePostEditController extends PhameController {
       $page_title    = pht('Create Post');
     }
 
-    $e_phame_title = null;
+    $title           = $post->getTitle();
+    $phame_title     = $post->getPhameTitle();
+    $body            = $post->getBody();
+    $comments_widget = $post->getCommentsWidget();
+
     $e_title       = true;
-    $errors        = array();
-
+    $e_phame_title = true;
+    $validation_exception = null;
     if ($request->isFormPost()) {
-      $comments    = $request->getStr('comments_widget');
-      $data        = array('comments_widget' => $comments);
-      $phame_title = $request->getStr('phame_title');
-      $phame_title = PhabricatorSlug::normalize($phame_title);
-      $title       = $request->getStr('title');
-      $post->setTitle($title);
-      $post->setPhameTitle($phame_title);
-      $post->setBody($request->getStr('body'));
-      $post->setConfigData($data);
+      $title           = $request->getStr('title');
+      $phame_title     = $request->getStr('phame_title');
+      $phame_title     = PhabricatorSlug::normalize($phame_title);
+      $body            = $request->getStr('body');
+      $comments_widget = $request->getStr('comments_widget');
+      $v_projects      = $request->getArr('projects');
 
-      if ($phame_title == '/') {
-        $errors[]      = pht('Phame title must be nonempty.');
-        $e_phame_title = pht('Required');
-      }
+      $xactions = array(
+        id(new PhamePostTransaction())
+          ->setTransactionType(PhamePostTransaction::TYPE_TITLE)
+          ->setNewValue($title),
+        id(new PhamePostTransaction())
+          ->setTransactionType(PhamePostTransaction::TYPE_PHAME_TITLE)
+          ->setNewValue($phame_title),
+        id(new PhamePostTransaction())
+          ->setTransactionType(PhamePostTransaction::TYPE_BODY)
+          ->setNewValue($body),
+        id(new PhamePostTransaction())
+          ->setTransactionType(PhamePostTransaction::TYPE_COMMENTS_WIDGET)
+          ->setNewValue($comments_widget),
+      );
 
-      if (!strlen($title)) {
-        $errors[] = pht('Title must be nonempty.');
-        $e_title  = pht('Required');
-      } else {
-        $e_title = null;
-      }
+      $proj_edge_type = PhabricatorProjectObjectHasProjectEdgeType::EDGECONST;
+      $xactions[] = id(new PhamePostTransaction())
+        ->setTransactionType(PhabricatorTransactions::TYPE_EDGE)
+        ->setMetadataValue('edge:type', $proj_edge_type)
+        ->setNewValue(array('=' => array_fuse($v_projects)));
 
-      if (!$errors) {
-        try {
-          $post->save();
+      $editor = id(new PhamePostEditor())
+        ->setActor($user)
+        ->setContentSourceFromRequest($request)
+        ->setContinueOnNoEffect(true);
 
-          $uri = $this->getApplicationURI('/post/view/'.$post->getID().'/');
-          return id(new AphrontRedirectResponse())->setURI($uri);
-        } catch (AphrontDuplicateKeyQueryException $e) {
-          $e_phame_title = pht('Not Unique');
-          $errors[]      = pht('Another post already uses this slug. '.
-                           'Each post must have a unique slug.');
-        }
+      try {
+        $editor->applyTransactions($post, $xactions);
+
+        $uri = $this->getApplicationURI('/post/view/'.$post->getID().'/');
+        return id(new AphrontRedirectResponse())->setURI($uri);
+      } catch (PhabricatorApplicationTransactionValidationException $ex) {
+        $validation_exception = $ex;
+        $e_title = $validation_exception->getShortMessage(
+          PhamePostTransaction::TYPE_TITLE);
+        $e_phame_title = $validation_exception->getShortMessage(
+          PhamePostTransaction::TYPE_PHAME_TITLE);
       }
     }
 
@@ -106,14 +121,14 @@ final class PhamePostEditController extends PhameController {
         id(new AphrontFormTextControl())
         ->setLabel(pht('Title'))
         ->setName('title')
-        ->setValue($post->getTitle())
+        ->setValue($title)
         ->setID('post-title')
         ->setError($e_title))
       ->appendChild(
         id(new AphrontFormTextControl())
         ->setLabel(pht('Phame Title'))
         ->setName('phame_title')
-        ->setValue(rtrim($post->getPhameTitle(), '/'))
+        ->setValue(rtrim($phame_title, '/'))
         ->setID('post-phame-title')
         ->setCaption(pht('Up to 64 alphanumeric characters '.
                      'with underscores for spaces. '.
@@ -123,16 +138,22 @@ final class PhamePostEditController extends PhameController {
         id(new PhabricatorRemarkupControl())
         ->setLabel(pht('Body'))
         ->setName('body')
-        ->setValue($post->getBody())
+        ->setValue($body)
         ->setHeight(AphrontFormTextAreaControl::HEIGHT_VERY_TALL)
         ->setID('post-body')
         ->setUser($user)
         ->setDisableMacros(true))
+      ->appendControl(
+        id(new AphrontFormTokenizerControl())
+          ->setLabel(pht('Projects'))
+          ->setName('projects')
+          ->setValue($v_projects)
+          ->setDatasource(new PhabricatorProjectDatasource()))
       ->appendChild(
         id(new AphrontFormSelectControl())
         ->setLabel(pht('Comments Widget'))
         ->setName('comments_widget')
-        ->setvalue($post->getCommentsWidget())
+        ->setvalue($comments_widget)
         ->setOptions($post->getCommentsWidgetOptionsForSelect()))
       ->appendChild(
         id(new AphrontFormSubmitControl())
@@ -148,7 +169,6 @@ final class PhamePostEditController extends PhameController {
       phutil_tag('div', array('id' => 'post-preview'), $loading),
     ));
 
-    require_celerity_resource('phame-css');
     Javelin::initBehavior(
       'phame-post-preview',
       array(
@@ -161,24 +181,20 @@ final class PhamePostEditController extends PhameController {
 
     $form_box = id(new PHUIObjectBoxView())
       ->setHeaderText($page_title)
-      ->setFormErrors($errors)
+      ->setValidationException($validation_exception)
       ->setForm($form);
 
     $crumbs = $this->buildApplicationCrumbs();
     $crumbs->addTextCrumb(
       $page_title,
-      $this->getApplicationURI('/post/view/'.$this->id.'/'));
+      $this->getApplicationURI('/post/view/'.$id.'/'));
 
-    $nav = $this->renderSideNavFilterView(null);
-    $nav->appendChild(
+    return $this->buildApplicationPage(
       array(
         $crumbs,
         $form_box,
         $preview_panel,
-      ));
-
-    return $this->buildApplicationPage(
-      $nav,
+      ),
       array(
         'title' => $page_title,
       ));

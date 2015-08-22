@@ -2,9 +2,9 @@
 
 final class DiffusionLintDetailsController extends DiffusionController {
 
-  public function processRequest() {
+  protected function processDiffusionRequest(AphrontRequest $request) {
     $limit = 500;
-    $offset = $this->getRequest()->getInt('offset', 0);
+    $offset = $request->getInt('offset', 0);
 
     $drequest = $this->getDiffusionRequest();
     $branch = $drequest->loadBranch();
@@ -66,16 +66,15 @@ final class DiffusionLintDetailsController extends DiffusionController {
 
     $content = array();
 
-    $pager = id(new AphrontPagerView())
+    $pager = id(new PHUIPagerView())
       ->setPageSize($limit)
       ->setOffset($offset)
       ->setHasMorePages(count($messages) >= $limit)
-      ->setURI($this->getRequest()->getRequestURI(), 'offset');
+      ->setURI($request->getRequestURI(), 'offset');
 
-    $content[] = id(new AphrontPanelView())
-      ->setNoBackground(true)
-      ->appendChild($table)
-      ->appendChild($pager);
+    $content[] = id(new PHUIObjectBoxView())
+      ->setHeaderText(pht('Lint Details'))
+      ->setTable($table);
 
     $crumbs = $this->buildCrumbs(
       array(
@@ -88,6 +87,7 @@ final class DiffusionLintDetailsController extends DiffusionController {
       array(
         $crumbs,
         $content,
+        $pager,
       ),
       array(
         'title' =>

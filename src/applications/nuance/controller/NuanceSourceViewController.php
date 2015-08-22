@@ -2,52 +2,23 @@
 
 final class NuanceSourceViewController extends NuanceController {
 
-  private $sourceID;
+  public function handleRequest(AphrontRequest $request) {
+    $viewer = $this->getViewer();
 
-  public function setSourceID($source_id) {
-    $this->sourceID = $source_id;
-    return $this;
-  }
-  public function getSourceID() {
-    return $this->sourceID;
-  }
-
-  public function willProcessRequest(array $data) {
-    $this->setSourceID($data['id']);
-  }
-
-  public function processRequest() {
-    $request = $this->getRequest();
-    $viewer = $request->getUser();
-
-    $source_id = $this->getSourceID();
     $source = id(new NuanceSourceQuery())
       ->setViewer($viewer)
-      ->withIDs(array($source_id))
+      ->withIDs(array($request->getURIData('id')))
       ->executeOne();
-
     if (!$source) {
       return new Aphront404Response();
     }
 
     $source_phid = $source->getPHID();
-    $xactions = id(new NuanceSourceTransactionQuery())
-      ->setViewer($viewer)
-      ->withObjectPHIDs(array($source_phid))
-      ->execute();
 
-    $engine = id(new PhabricatorMarkupEngine())
-      ->setViewer($viewer);
-
-    $timeline = id(new PhabricatorApplicationTransactionView())
-      ->setUser($viewer)
-      ->setObjectPHID($source_phid)
-      ->setMarkupEngine($engine)
-      ->setTransactions($xactions);
-
-    $title = pht('%s', $source->getName());
-    $crumbs = $this->buildApplicationCrumbs();
-    $crumbs->addTextCrumb($title);
+    $timeline = $this->buildTransactionTimeline(
+      $source,
+      new NuanceSourceTransactionQuery());
+    $timeline->setShouldTerminate(true);
 
     $header = $this->buildHeaderView($source);
     $actions = $this->buildActionView($source);
@@ -56,6 +27,12 @@ final class NuanceSourceViewController extends NuanceController {
     $box = id(new PHUIObjectBoxView())
       ->setHeader($header)
       ->addPropertyList($properties);
+
+    $title = $source->getName();
+    $crumbs = $this->buildApplicationCrumbs();
+    $crumbs->addTextCrumb(pht('Sources'), $this->getApplicationURI('source/'));
+
+    $crumbs->addTextCrumb($title);
 
     return $this->buildApplicationPage(
       array(
@@ -66,12 +43,10 @@ final class NuanceSourceViewController extends NuanceController {
       array(
         'title' => $title,
       ));
-
   }
 
-
- private function buildHeaderView(NuanceSource $source) {
-    $viewer = $this->getRequest()->getUser();
+  private function buildHeaderView(NuanceSource $source) {
+    $viewer = $this->getViewer();
 
     $header = id(new PHUIHeaderView())
       ->setUser($viewer)
@@ -82,7 +57,7 @@ final class NuanceSourceViewController extends NuanceController {
   }
 
   private function buildActionView(NuanceSource $source) {
-    $viewer = $this->getRequest()->getUser();
+    $viewer = $this->getViewer();
     $id = $source->getID();
 
     $actions = id(new PhabricatorActionListView())

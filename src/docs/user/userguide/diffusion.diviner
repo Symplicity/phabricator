@@ -67,7 +67,7 @@ abbreviate the hash, but note that hash collisions are probable for short prefix
 lengths. See this post on the LKML for a historical explanation of Git's
 occasional internal use of 7-character hashes:
 
-  https://lkml.org/lkml/2010/10/28/287
+https://lkml.org/lkml/2010/10/28/287
 
 Because 7-character hashes are likely to collide for even moderately large
 repositories, Diffusion generally uses either a 16-character prefix (which makes
@@ -94,9 +94,23 @@ repositories.
 
 = Next Steps =
 
-  - Learn about creating a symbol index at
+Continue by:
+
+  - learning how to creating a symbol index at
     @{article:Diffusion User Guide: Symbol Indexes}; or
-  - set up repository hosting with
+  - setting up repository hosting with
     @{article:Diffusion User Guide: Repository Hosting}; or
-  - understand daemons in detail with @{article:Managing Daemons with phd}; or
-  - give us feedback at @{article:Give Feedback! Get Support!}.
+  - managing repository hooks with
+    @{article:Diffusion User Guide: Commit Hooks}; or
+  - understanding daemons in more detail with
+    @{article:Managing Daemons with phd}.
+
+If you're having trouble getting things working, these topic guides may be
+helpful:
+
+  - get details about automatically closing tasks and revisions in response
+    to commits in @{article:Diffusion User Guide: Autoclose}; or
+  - understand how Phabricator updates repositories with
+    @{article:Diffusion User Guide: Repository Updates}; or
+  - fix issues with repository imports with
+    @{article:Troubleshooting Repository Imports}.

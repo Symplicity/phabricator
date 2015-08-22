@@ -7,7 +7,7 @@ final class AlmanacDeviceSearchEngine
     return pht('Almanac Devices');
   }
 
-  protected function getApplicationClassName() {
+  public function getApplicationClassName() {
     return 'PhabricatorAlmanacApplication';
   }
 
@@ -31,7 +31,7 @@ final class AlmanacDeviceSearchEngine
     return '/almanac/device/'.$path;
   }
 
-  public function getBuiltinQueryNames() {
+  protected function getBuiltinQueryNames() {
     $names = array(
       'all' => pht('All Devices'),
     );
@@ -78,7 +78,11 @@ final class AlmanacDeviceSearchEngine
       $list->addItem($item);
     }
 
-    return $list;
+    $result = new PhabricatorApplicationSearchResultView();
+    $result->setObjectList($list);
+    $result->setNoDataString(pht('No Almanac Devices found.'));
+
+    return $result;
   }
 
 }

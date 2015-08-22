@@ -7,31 +7,28 @@ final class ConduitQueryConduitAPIMethod extends ConduitAPIMethod {
   }
 
   public function getMethodDescription() {
-    return 'Returns the parameters of the Conduit methods.';
+    return pht('Returns the parameters of the Conduit methods.');
   }
 
-  public function defineParamTypes() {
+  protected function defineParamTypes() {
     return array();
   }
 
-  public function defineReturnType() {
+  protected function defineReturnType() {
     return 'dict<dict>';
   }
 
-  public function defineErrorTypes() {
-    return array();
-  }
-
   protected function execute(ConduitAPIRequest $request) {
-    $classes = id(new PhutilSymbolLoader())
+    $classes = id(new PhutilClassMapQuery())
       ->setAncestorClass('ConduitAPIMethod')
-      ->setType('class')
-      ->loadObjects();
+      ->execute();
 
     $names_to_params = array();
     foreach ($classes as $class) {
       $names_to_params[$class->getAPIMethodName()] = array(
-        'params' => $class->defineParamTypes(),
+        'description' => $class->getMethodDescription(),
+        'params' => $class->getParamTypes(),
+        'return' => $class->getReturnType(),
       );
     }
 

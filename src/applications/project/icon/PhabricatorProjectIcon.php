@@ -39,8 +39,12 @@ final class PhabricatorProjectIcon extends Phobject {
     return $map[$key];
   }
 
+  public static function getAPIName($key) {
+    return substr($key, 3);
+  }
+
   public static function renderIconForChooser($icon) {
-    $project_icons = PhabricatorProjectIcon::getIconMap();
+    $project_icons = self::getIconMap();
 
     return phutil_tag(
       'span',

@@ -13,6 +13,10 @@ final class HarbormasterWaitForPreviousBuildStepImplementation
       'before continuing.');
   }
 
+  public function getBuildStepGroupKey() {
+    return HarbormasterPrototypeBuildStepGroup::GROUPKEY;
+  }
+
   public function execute(
     HarbormasterBuild $build,
     HarbormasterBuildTarget $build_target) {
@@ -42,7 +46,7 @@ final class HarbormasterWaitForPreviousBuildStepImplementation
     $blockers = $this->getBlockers($object, $plan, $build);
     if ($blockers) {
       $log->start();
-      $log->append("Blocked by: ".implode(',', $blockers)."\n");
+      $log->append(pht("Blocked by: %s\n", implode(',', $blockers)));
       $log->finalize();
     }
 

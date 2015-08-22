@@ -22,7 +22,7 @@ final class PhabricatorRepositoryCommitSearchIndexer
       ->withIDs(array($commit->getRepositoryID()))
       ->executeOne();
     if (!$repository) {
-      throw new Exception('No such repository!');
+      throw new Exception(pht('No such repository!'));
     }
 
     $title = 'r'.$repository->getCallsign().$commit->getCommitIdentifier().
@@ -36,7 +36,7 @@ final class PhabricatorRepositoryCommitSearchIndexer
     $doc->setDocumentTitle($title);
 
     $doc->addField(
-      PhabricatorSearchField::FIELD_BODY,
+      PhabricatorSearchDocumentFieldType::FIELD_BODY,
       $commit_message);
 
     if ($author_phid) {
@@ -45,19 +45,6 @@ final class PhabricatorRepositoryCommitSearchIndexer
         $author_phid,
         PhabricatorPeopleUserPHIDType::TYPECONST,
         $date_created);
-    }
-
-    $project_phids = PhabricatorEdgeQuery::loadDestinationPHIDs(
-      $commit->getPHID(),
-      PhabricatorEdgeConfig::TYPE_COMMIT_HAS_PROJECT);
-    if ($project_phids) {
-      foreach ($project_phids as $project_phid) {
-        $doc->addRelationship(
-          PhabricatorSearchRelationship::RELATIONSHIP_PROJECT,
-          $project_phid,
-          PhabricatorProjectProjectPHIDType::TYPECONST,
-          $date_created);
-      }
     }
 
     $doc->addRelationship(

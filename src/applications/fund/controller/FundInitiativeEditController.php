@@ -3,20 +3,14 @@
 final class FundInitiativeEditController
   extends FundController {
 
-  private $id;
+  public function handleRequest(AphrontRequest $request) {
+    $viewer = $request->getViewer();
+    $id = $request->getURIData('id');
 
-  public function willProcessRequest(array $data) {
-    $this->id = idx($data, 'id');
-  }
-
-  public function processRequest() {
-    $request = $this->getRequest();
-    $viewer = $request->getUser();
-
-    if ($this->id) {
+    if ($id) {
       $initiative = id(new FundInitiativeQuery())
         ->setViewer($viewer)
-        ->withIDs(array($this->id))
+        ->withIDs(array($id))
         ->requireCapabilities(
           array(
             PhabricatorPolicyCapability::CAN_VIEW,
@@ -138,12 +132,6 @@ final class FundInitiativeEditController
       ->setObject($initiative)
       ->execute();
 
-    if ($v_projects) {
-      $project_handles = $this->loadViewerHandles($v_projects);
-    } else {
-      $project_handles = array();
-    }
-
     $merchants = id(new PhortuneMerchantQuery())
       ->setViewer($viewer)
       ->requireCapabilities(
@@ -200,19 +188,21 @@ final class FundInitiativeEditController
           ->setOptions($merchant_options))
       ->appendChild(
         id(new PhabricatorRemarkupControl())
+          ->setUser($viewer)
           ->setName('description')
           ->setLabel(pht('Description'))
           ->setValue($v_desc))
       ->appendChild(
         id(new PhabricatorRemarkupControl())
+          ->setUser($viewer)
           ->setName('risks')
           ->setLabel(pht('Risks/Challenges'))
           ->setValue($v_risk))
-      ->appendChild(
+      ->appendControl(
         id(new AphrontFormTokenizerControl())
           ->setLabel(pht('Projects'))
           ->setName('projects')
-          ->setValue($project_handles)
+          ->setValue($v_projects)
           ->setDatasource(new PhabricatorProjectDatasource()))
       ->appendChild(
         id(new AphrontFormPolicyControl())

@@ -3,14 +3,12 @@
 final class PhabricatorNotificationPanelController
   extends PhabricatorNotificationController {
 
-  public function processRequest() {
-
-    $request = $this->getRequest();
-    $user = $request->getUser();
+  public function handleRequest(AphrontRequest $request) {
+    $viewer = $request->getViewer();
 
     $query = id(new PhabricatorNotificationQuery())
-      ->setViewer($user)
-      ->withUserPHIDs(array($user->getPHID()))
+      ->setViewer($viewer)
+      ->withUserPHIDs(array($viewer->getPHID()))
       ->setLimit(15);
 
     $stories = $query->execute();
@@ -34,7 +32,7 @@ final class PhabricatorNotificationPanelController
       'a',
       array(
         'sigil' => 'workflow',
-        'href' => (string) $clear_uri,
+        'href' => (string)$clear_uri,
         'class' => $clear_ui_class,
       ),
       pht('Mark All Read'));
@@ -81,7 +79,7 @@ final class PhabricatorNotificationPanelController
       $connection_ui);
 
     $unread_count = id(new PhabricatorFeedStoryNotification())
-      ->countUnread($user);
+      ->countUnread($viewer);
 
     $json = array(
       'content' => $content,

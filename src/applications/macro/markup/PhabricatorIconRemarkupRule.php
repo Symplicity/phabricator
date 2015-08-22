@@ -13,8 +13,12 @@ final class PhabricatorIconRemarkupRule extends PhutilRemarkupRule {
       $text);
   }
 
-  public function markupIcon($matches) {
-    if (!$this->isFlatText($matches[0])) {
+  public function markupIcon(array $matches) {
+    $engine = $this->getEngine();
+    $text_mode = $engine->isTextMode();
+    $mail_mode = $engine->isHTMLMailMode();
+
+    if (!$this->isFlatText($matches[0]) || $text_mode || $mail_mode) {
       return $matches[0];
     }
 

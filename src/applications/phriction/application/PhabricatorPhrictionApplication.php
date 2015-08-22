@@ -14,16 +14,21 @@ final class PhabricatorPhrictionApplication extends PhabricatorApplication {
     return '/w/';
   }
 
-  public function getIconName() {
-    return 'phriction';
+  public function getFontIcon() {
+    return 'fa-book';
   }
 
   public function isPinnedByDefault(PhabricatorUser $viewer) {
     return true;
   }
 
-  public function getHelpURI() {
-    return PhabricatorEnv::getDoclink('Phriction User Guide');
+  public function getHelpDocumentationArticles(PhabricatorUser $viewer) {
+    return array(
+      array(
+        'name' => pht('Phriction User Guide'),
+        'href' => PhabricatorEnv::getDoclink('Phriction User Guide'),
+      ),
+    );
   }
 
   public function getTitleGlyph() {
@@ -33,12 +38,6 @@ final class PhabricatorPhrictionApplication extends PhabricatorApplication {
   public function getRemarkupRules() {
     return array(
       new PhrictionRemarkupRule(),
-    );
-  }
-
-  public function getEventListeners() {
-    return array(
-      new PhrictionActionMenuEventListener(),
     );
   }
 
@@ -58,7 +57,7 @@ final class PhabricatorPhrictionApplication extends PhabricatorApplication {
         'edit/(?:(?P<id>[1-9]\d*)/)?' => 'PhrictionEditController',
         'delete/(?P<id>[1-9]\d*)/'    => 'PhrictionDeleteController',
         'new/'                        => 'PhrictionNewController',
-        'move/(?:(?P<id>[1-9]\d*)/)?' => 'PhrictionMoveController',
+        'move/(?P<id>[1-9]\d*)/' => 'PhrictionMoveController',
 
         'preview/' => 'PhabricatorMarkupPreviewController',
         'diff/(?P<id>[1-9]\d*)/' => 'PhrictionDiffController',
@@ -68,6 +67,12 @@ final class PhabricatorPhrictionApplication extends PhabricatorApplication {
 
   public function getApplicationOrder() {
     return 0.140;
+  }
+
+  public function getApplicationSearchDocumentTypes() {
+    return array(
+      PhrictionDocumentPHIDType::TYPECONST,
+    );
   }
 
 }

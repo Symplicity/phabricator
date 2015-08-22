@@ -4,6 +4,7 @@ final class DifferentialRevision extends DifferentialDAO
   implements
     PhabricatorTokenReceiverInterface,
     PhabricatorPolicyInterface,
+    PhabricatorExtendedPolicyInterface,
     PhabricatorFlaggableInterface,
     PhrequentTrackableInterface,
     HarbormasterBuildableInterface,
@@ -29,7 +30,6 @@ final class DifferentialRevision extends DifferentialDAO
 
   protected $mailKey;
   protected $branchName;
-  protected $arcanistProjectPHID;
   protected $repositoryPHID;
   protected $viewPolicy = PhabricatorPolicies::POLICY_USER;
   protected $editPolicy = PhabricatorPolicies::POLICY_USER;
@@ -64,10 +64,11 @@ final class DifferentialRevision extends DifferentialDAO
       ->setViewPolicy($view_policy)
       ->setAuthorPHID($actor->getPHID())
       ->attachRelationships(array())
+      ->attachRepository(null)
       ->setStatus(ArcanistDifferentialRevisionStatus::NEEDS_REVIEW);
   }
 
-  public function getConfiguration() {
+  protected function getConfiguration() {
     return array(
       self::CONFIG_AUX_PHID => true,
       self::CONFIG_SERIALIZATION => array(
@@ -85,7 +86,6 @@ final class DifferentialRevision extends DifferentialDAO
         'lineCount' => 'uint32?',
         'mailKey' => 'bytes40',
         'branchName' => 'text255?',
-        'arcanistProjectPHID' => 'phid?',
         'repositoryPHID' => 'phid?',
       ),
       self::CONFIG_KEY_SCHEMA => array(
@@ -99,6 +99,14 @@ final class DifferentialRevision extends DifferentialDAO
         ),
         'repositoryPHID' => array(
           'columns' => array('repositoryPHID'),
+        ),
+        // If you (or a project you are a member of) is reviewing a significant
+        // fraction of the revisions on an install, the result set of open
+        // revisions may be smaller than the result set of revisions where you
+        // are a reviewer. In these cases, this key is better than keys on the
+        // edge table.
+        'key_status' => array(
+          'columns' => array('status', 'phid'),
         ),
       ),
     ) + parent::getConfiguration();
@@ -214,7 +222,7 @@ final class DifferentialRevision extends DifferentialDAO
 
     $subscriber_phids = PhabricatorEdgeQuery::loadDestinationPHIDs(
       $this->getPHID(),
-      PhabricatorEdgeConfig::TYPE_OBJECT_HAS_SUBSCRIBER);
+      PhabricatorObjectHasSubscriberEdgeType::EDGECONST);
     $subscriber_phids = array_reverse($subscriber_phids);
     foreach ($subscriber_phids as $phid) {
       $data[] = array(
@@ -226,7 +234,7 @@ final class DifferentialRevision extends DifferentialDAO
 
     $reviewer_phids = PhabricatorEdgeQuery::loadDestinationPHIDs(
       $this->getPHID(),
-      PhabricatorEdgeConfig::TYPE_DREV_HAS_REVIEWER);
+      DifferentialRevisionHasReviewerEdgeType::EDGECONST);
     $reviewer_phids = array_reverse($reviewer_phids);
     foreach ($reviewer_phids as $phid) {
       $data[] = array(
@@ -280,6 +288,10 @@ final class DifferentialRevision extends DifferentialDAO
     return $this;
   }
 
+
+/* -(  PhabricatorPolicyInterface  )----------------------------------------- */
+
+
   public function getCapabilities() {
     return array(
       PhabricatorPolicyCapability::CAN_VIEW,
@@ -316,8 +328,7 @@ final class DifferentialRevision extends DifferentialDAO
 
     switch ($capability) {
       case PhabricatorPolicyCapability::CAN_VIEW:
-        $description[] = pht(
-          "A revision's reviewers can always view it.");
+        $description[] = pht("A revision's reviewers can always view it.");
         $description[] = pht(
           'If a revision belongs to a repository, other users must be able '.
           'to view the repository in order to view the revision.');
@@ -326,6 +337,45 @@ final class DifferentialRevision extends DifferentialDAO
 
     return $description;
   }
+
+
+/* -(  PhabricatorExtendedPolicyInterface  )--------------------------------- */
+
+
+  public function getExtendedPolicy($capability, PhabricatorUser $viewer) {
+    $extended = array();
+
+    switch ($capability) {
+      case PhabricatorPolicyCapability::CAN_VIEW:
+        // NOTE: In Differential, an automatic capability on a revision (being
+        // an author) is sufficient to view it, even if you can not see the
+        // repository the revision belongs to. We can bail out early in this
+        // case.
+        if ($this->hasAutomaticCapability($capability, $viewer)) {
+          break;
+        }
+
+        $repository_phid = $this->getRepositoryPHID();
+        $repository = $this->getRepository();
+
+        // Try to use the object if we have it, since it will save us some
+        // data fetching later on. In some cases, we might not have it.
+        $repository_ref = nonempty($repository, $repository_phid);
+        if ($repository_ref) {
+          $extended[] = array(
+            $repository_ref,
+            PhabricatorPolicyCapability::CAN_VIEW,
+          );
+        }
+        break;
+    }
+
+    return $extended;
+  }
+
+
+/* -(  PhabricatorTokenReceiverInterface  )---------------------------------- */
+
 
   public function getUsersToNotifyOfTokenGiven() {
     return array(
@@ -475,6 +525,73 @@ final class DifferentialRevision extends DifferentialDAO
     return new DifferentialTransaction();
   }
 
+  public function willRenderTimeline(
+    PhabricatorApplicationTransactionView $timeline,
+    AphrontRequest $request) {
+    $viewer = $request->getViewer();
+
+    $render_data = $timeline->getRenderData();
+    $left = $request->getInt('left', idx($render_data, 'left'));
+    $right = $request->getInt('right', idx($render_data, 'right'));
+
+    $diffs = id(new DifferentialDiffQuery())
+      ->setViewer($request->getUser())
+      ->withIDs(array($left, $right))
+      ->execute();
+    $diffs = mpull($diffs, null, 'getID');
+    $left_diff = $diffs[$left];
+    $right_diff = $diffs[$right];
+
+    $old_ids = $request->getStr('old', idx($render_data, 'old'));
+    $new_ids = $request->getStr('new', idx($render_data, 'new'));
+    $old_ids = array_filter(explode(',', $old_ids));
+    $new_ids = array_filter(explode(',', $new_ids));
+
+    $type_inline = DifferentialTransaction::TYPE_INLINE;
+    $changeset_ids = array_merge($old_ids, $new_ids);
+    $inlines = array();
+    foreach ($timeline->getTransactions() as $xaction) {
+      if ($xaction->getTransactionType() == $type_inline) {
+        $inlines[] = $xaction->getComment();
+        $changeset_ids[] = $xaction->getComment()->getChangesetID();
+      }
+    }
+
+    if ($changeset_ids) {
+      $changesets = id(new DifferentialChangesetQuery())
+        ->setViewer($request->getUser())
+        ->withIDs($changeset_ids)
+        ->execute();
+      $changesets = mpull($changesets, null, 'getID');
+    } else {
+      $changesets = array();
+    }
+
+    foreach ($inlines as $key => $inline) {
+      $inlines[$key] = DifferentialInlineComment::newFromModernComment(
+        $inline);
+    }
+
+    $query = id(new DifferentialInlineCommentQuery())
+      ->needHidden(true)
+      ->setViewer($viewer);
+
+    // NOTE: This is a bit sketchy: this method adjusts the inlines as a
+    // side effect, which means it will ultimately adjust the transaction
+    // comments and affect timeline rendering.
+    $query->adjustInlinesForChangesets(
+      $inlines,
+      array_select_keys($changesets, $old_ids),
+      array_select_keys($changesets, $new_ids),
+      $this);
+
+    return $timeline
+      ->setChangesets($changesets)
+      ->setRevision($this)
+      ->setLeftDiff($left_diff)
+      ->setRightDiff($right_diff);
+  }
+
 
 /* -(  PhabricatorDestructibleInterface  )----------------------------------- */
 
@@ -484,7 +601,7 @@ final class DifferentialRevision extends DifferentialDAO
 
     $this->openTransaction();
       $diffs = id(new DifferentialDiffQuery())
-        ->setViewer(PhabricatorUser::getOmnipotentUser())
+        ->setViewer($engine->getViewer())
         ->withRevisionIDs(array($this->getID()))
         ->execute();
       foreach ($diffs as $diff) {
@@ -498,18 +615,6 @@ final class DifferentialRevision extends DifferentialDAO
         'DELETE FROM %T WHERE revisionID = %d',
         self::TABLE_COMMIT,
         $this->getID());
-
-      try {
-        $inlines = id(new DifferentialInlineCommentQuery())
-          ->withRevisionIDs(array($this->getID()))
-          ->execute();
-        foreach ($inlines as $inline) {
-          $inline->delete();
-        }
-      } catch (PhabricatorEmptyQueryException $ex) {
-        // TODO: There's still some funky legacy wrapping going on here, and
-        // we might catch a raw query exception.
-      }
 
       // we have to do paths a little differentally as they do not have
       // an id or phid column for delete() to act on

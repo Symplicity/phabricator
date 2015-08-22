@@ -5,13 +5,13 @@ final class PhrictionDocumentController
 
   private $slug;
 
-  public function willProcessRequest(array $data) {
-    $this->slug = $data['slug'];
+  public function shouldAllowPublic() {
+    return true;
   }
 
-  public function processRequest() {
-    $request = $this->getRequest();
-    $user = $request->getUser();
+  public function handleRequest(AphrontRequest $request) {
+    $viewer = $request->getViewer();
+    $this->slug = $request->getURIData('slug');
 
     $slug = PhabricatorSlug::normalize($this->slug);
     if ($slug != $this->slug) {
@@ -23,7 +23,7 @@ final class PhrictionDocumentController
     require_celerity_resource('phriction-document-css');
 
     $document = id(new PhrictionDocumentQuery())
-      ->setViewer($user)
+      ->setViewer($viewer)
       ->withSlugs(array($slug))
       ->executeOne();
 
@@ -31,26 +31,16 @@ final class PhrictionDocumentController
     $core_content = '';
     $move_notice = '';
     $properties = null;
+    $content = null;
 
     if (!$document) {
 
-      $document = new PhrictionDocument();
+      $document = PhrictionDocument::initializeNewDocument($viewer, $slug);
 
-      if (PhrictionDocument::isProjectSlug($slug)) {
-        $project = id(new PhabricatorProjectQuery())
-          ->setViewer($user)
-          ->withPhrictionSlugs(array(
-            PhrictionDocument::getProjectSlugIdentifier($slug),
-          ))
-          ->executeOne();
-        if (!$project) {
-          return new Aphront404Response();
-        }
-      }
       $create_uri = '/phriction/edit/?slug='.$slug;
 
-      $notice = new AphrontErrorView();
-      $notice->setSeverity(AphrontErrorView::SEVERITY_NODATA);
+      $notice = new PHUIInfoView();
+      $notice->setSeverity(PHUIInfoView::SEVERITY_WARNING);
       $notice->setTitle(pht('No content here!'));
       $notice->appendChild(
         pht(
@@ -73,9 +63,9 @@ final class PhrictionDocumentController
         }
 
         if ($content->getID() != $document->getContentID()) {
-          $vdate = phabricator_datetime($content->getDateCreated(), $user);
-          $version_note = new AphrontErrorView();
-          $version_note->setSeverity(AphrontErrorView::SEVERITY_NOTICE);
+          $vdate = phabricator_datetime($content->getDateCreated(), $viewer);
+          $version_note = new PHUIInfoView();
+          $version_note->setSeverity(PHUIInfoView::SEVERITY_NOTICE);
           $version_note->appendChild(
             pht('You are viewing an older version of this document, as it '.
             'appeared on %s.', $vdate));
@@ -93,18 +83,18 @@ final class PhrictionDocumentController
       if ($current_status == PhrictionChangeType::CHANGE_EDIT ||
         $current_status == PhrictionChangeType::CHANGE_MOVE_HERE) {
 
-        $core_content = $content->renderContent($user);
+        $core_content = $content->renderContent($viewer);
       } else if ($current_status == PhrictionChangeType::CHANGE_DELETE) {
-        $notice = new AphrontErrorView();
-        $notice->setSeverity(AphrontErrorView::SEVERITY_NOTICE);
+        $notice = new PHUIInfoView();
+        $notice->setSeverity(PHUIInfoView::SEVERITY_NOTICE);
         $notice->setTitle(pht('Document Deleted'));
         $notice->appendChild(
           pht('This document has been deleted. You can edit it to put new '.
           'content here, or use history to revert to an earlier version.'));
         $core_content = $notice->render();
       } else if ($current_status == PhrictionChangeType::CHANGE_STUB) {
-        $notice = new AphrontErrorView();
-        $notice->setSeverity(AphrontErrorView::SEVERITY_NOTICE);
+        $notice = new PHUIInfoView();
+        $notice->setSeverity(PHUIInfoView::SEVERITY_NOTICE);
         $notice->setTitle(pht('Empty Document'));
         $notice->appendChild(
           pht('This document is empty. You can edit it to put some proper '.
@@ -118,7 +108,7 @@ final class PhrictionDocumentController
         // If the new document exists and the viewer can see it, provide a link
         // to it. Otherwise, render a generic message.
         $new_docs = id(new PhrictionDocumentQuery())
-          ->setViewer($user)
+          ->setViewer($viewer)
           ->withIDs(array($new_doc_id))
           ->execute();
         if ($new_docs) {
@@ -126,8 +116,8 @@ final class PhrictionDocumentController
           $slug_uri = PhrictionDocument::getSlugURI($new_doc->getSlug());
         }
 
-        $notice = id(new AphrontErrorView())
-          ->setSeverity(AphrontErrorView::SEVERITY_NOTICE);
+        $notice = id(new PHUIInfoView())
+          ->setSeverity(PHUIInfoView::SEVERITY_NOTICE);
 
         if ($slug_uri) {
           $notice->appendChild(
@@ -152,7 +142,7 @@ final class PhrictionDocumentController
 
         $core_content = $notice->render();
       } else {
-        throw new Exception("Unknown document status '{$doc_status}'!");
+        throw new Exception(pht("Unknown document status '%s'!", $doc_status));
       }
 
       $move_notice = null;
@@ -163,7 +153,7 @@ final class PhrictionDocumentController
 
         // If the old document exists and is visible, provide a link to it.
         $from_docs = id(new PhrictionDocumentQuery())
-          ->setViewer($user)
+          ->setViewer($viewer)
           ->withIDs(array($from_doc_id))
           ->execute();
         if ($from_docs) {
@@ -171,8 +161,8 @@ final class PhrictionDocumentController
           $slug_uri = PhrictionDocument::getSlugURI($from_doc->getSlug());
         }
 
-        $move_notice = id(new AphrontErrorView())
-          ->setSeverity(AphrontErrorView::SEVERITY_NOTICE);
+        $move_notice = id(new PHUIInfoView())
+          ->setSeverity(PHUIInfoView::SEVERITY_NOTICE);
 
         if ($slug_uri) {
           $move_notice->appendChild(
@@ -189,17 +179,32 @@ final class PhrictionDocumentController
 
     $children = $this->renderDocumentChildren($slug);
 
-    $actions = $this->buildActionView($user, $document);
+    $actions = $this->buildActionView($viewer, $document);
 
     $crumbs = $this->buildApplicationCrumbs();
-    $crumbs->setActionList($actions);
+    $crumbs->setBorder(true);
     $crumb_views = $this->renderBreadcrumbs($slug);
     foreach ($crumb_views as $view) {
       $crumbs->addCrumb($view);
     }
 
+    $action_button = id(new PHUIButtonView())
+      ->setTag('a')
+      ->setText(pht('Actions'))
+      ->setHref('#')
+      ->setIconFont('fa-bars')
+      ->addClass('phui-mobile-menu')
+      ->setDropdownMenu($actions);
+
     $header = id(new PHUIHeaderView())
-      ->setHeader($page_title);
+      ->setUser($viewer)
+      ->setPolicyObject($document)
+      ->setHeader($page_title)
+      ->addActionLink($action_button);
+
+    if ($content) {
+      $header->setEpoch($content->getDateCreated());
+    }
 
     $prop_list = null;
     if ($properties) {
@@ -208,32 +213,20 @@ final class PhrictionDocumentController
     }
 
     $page_content = id(new PHUIDocumentView())
-      ->setOffset(true)
-      ->setFontKit(PHUIDocumentView::FONT_SOURCE_SANS)
       ->setHeader($header)
       ->appendChild(
         array(
-          $actions,
           $prop_list,
           $version_note,
           $move_notice,
           $core_content,
         ));
 
-    $core_page = phutil_tag(
-      'div',
-        array(
-          'class' => 'phriction-offset',
-        ),
-        array(
-          $page_content,
-          $children,
-        ));
-
     return $this->buildApplicationPage(
       array(
         $crumbs->render(),
-        $core_page,
+        $page_content,
+        $children,
       ),
       array(
         'pageObjects' => array($document->getPHID()),
@@ -252,64 +245,25 @@ final class PhrictionDocumentController
       ->setUser($viewer)
       ->setObject($document);
 
-    $project_phid = null;
-    if (PhrictionDocument::isProjectSlug($slug)) {
-      $project = id(new PhabricatorProjectQuery())
-        ->setViewer($viewer)
-        ->withPhrictionSlugs(array(
-          PhrictionDocument::getProjectSlugIdentifier($slug),
-        ))
-        ->executeOne();
-      if ($project) {
-        $project_phid = $project->getPHID();
-      }
-    }
-
-    $phids = array_filter(
-      array(
-        $content->getAuthorPHID(),
-        $project_phid,
-      ));
-
-    $this->loadHandles($phids);
-
-    $project_info = null;
-    if ($project_phid) {
-      $view->addProperty(
-        pht('Project Info'),
-        $this->getHandle($project_phid)->renderLink());
-    }
-
     $view->addProperty(
       pht('Last Author'),
-      $this->getHandle($content->getAuthorPHID())->renderLink());
-
-    $age = time() - $content->getDateCreated();
-    $age = floor($age / (60 * 60 * 24));
-    if ($age < 1) {
-      $when = pht('Today');
-    } else if ($age == 1) {
-      $when = pht('Yesterday');
-    } else {
-      $when = pht('%d Days Ago', $age);
-    }
-    $view->addProperty(pht('Last Updated'), $when);
+      $viewer->renderHandle($content->getAuthorPHID()));
 
     return $view;
   }
 
   private function buildActionView(
-    PhabricatorUser $user,
+    PhabricatorUser $viewer,
     PhrictionDocument $document) {
     $can_edit = PhabricatorPolicyFilter::hasCapability(
-      $user,
+      $viewer,
       $document,
       PhabricatorPolicyCapability::CAN_EDIT);
 
     $slug = PhabricatorSlug::normalize($this->slug);
 
     $action_view = id(new PhabricatorActionListView())
-      ->setUser($user)
+      ->setUser($viewer)
       ->setObjectURI($this->getRequest()->getRequestURI())
       ->setObject($document);
 
@@ -352,33 +306,24 @@ final class PhrictionDocumentController
   }
 
   private function renderDocumentChildren($slug) {
-    $document_dao = new PhrictionDocument();
-    $content_dao = new PhrictionContent();
-    $conn = $document_dao->establishConnection('r');
 
-    $limit = 250;
     $d_child = PhabricatorSlug::getDepth($slug) + 1;
     $d_grandchild = PhabricatorSlug::getDepth($slug) + 2;
+    $limit = 250;
 
-    // Select children and grandchildren.
-    $children = queryfx_all(
-      $conn,
-      'SELECT d.slug, d.depth, c.title FROM %T d JOIN %T c
-        ON d.contentID = c.id
-        WHERE d.slug LIKE %> AND d.depth IN (%d, %d)
-          AND d.status IN (%Ld)
-        ORDER BY d.depth, c.title LIMIT %d',
-      $document_dao->getTableName(),
-      $content_dao->getTableName(),
-      ($slug == '/' ? '' : $slug),
-      $d_child,
-      $d_grandchild,
-      array(
+    $query = id(new PhrictionDocumentQuery())
+      ->setViewer($this->getRequest()->getUser())
+      ->withDepths(array($d_child, $d_grandchild))
+      ->withSlugPrefix($slug == '/' ? '' : $slug)
+      ->withStatuses(array(
         PhrictionDocumentStatus::STATUS_EXISTS,
         PhrictionDocumentStatus::STATUS_STUB,
-      ),
-      $limit);
+      ))
+      ->setLimit($limit)
+      ->setOrder(PhrictionDocumentQuery::ORDER_HIERARCHY)
+      ->needContent(true);
 
+    $children = $query->execute();
     if (!$children) {
       return;
     }
@@ -399,7 +344,7 @@ final class PhrictionDocumentController
     if (count($children) == $limit) {
       $more_children = true;
       foreach ($children as $child) {
-        if ($child['depth'] == $d_grandchild) {
+        if ($child->getDepth() == $d_grandchild) {
           $more_children = false;
         }
       }
@@ -409,24 +354,31 @@ final class PhrictionDocumentController
       $more_children = false;
     }
 
-    $grandchildren = array();
+    $children_dicts = array();
+    $grandchildren_dicts = array();
     foreach ($children as $key => $child) {
-      if ($child['depth'] == $d_child) {
+      $child_dict = array(
+        'slug' => $child->getSlug(),
+        'depth' => $child->getDepth(),
+        'title' => $child->getContent()->getTitle(),
+      );
+      if ($child->getDepth() == $d_child) {
+        $children_dicts[] = $child_dict;
         continue;
       } else {
         unset($children[$key]);
         if ($show_grandchildren) {
-          $ancestors = PhabricatorSlug::getAncestry($child['slug']);
-          $grandchildren[end($ancestors)][] = $child;
+          $ancestors = PhabricatorSlug::getAncestry($child->getSlug());
+          $grandchildren_dicts[end($ancestors)][] = $child_dict;
         }
       }
     }
 
     // Fill in any missing children.
-    $known_slugs = ipull($children, null, 'slug');
-    foreach ($grandchildren as $slug => $ignored) {
+    $known_slugs = mpull($children, null, 'getSlug');
+    foreach ($grandchildren_dicts as $slug => $ignored) {
       if (empty($known_slugs[$slug])) {
-        $children[] = array(
+        $children_dicts[] = array(
           'slug'    => $slug,
           'depth'   => $d_child,
           'title'   => PhabricatorSlug::getDefaultTitle($slug),
@@ -435,17 +387,17 @@ final class PhrictionDocumentController
       }
     }
 
-    $children = isort($children, 'title');
+    $children_dicts = isort($children_dicts, 'title');
 
     $list = array();
-    foreach ($children as $child) {
-      $list[] = hsprintf('<li>');
+    foreach ($children_dicts as $child) {
+      $list[] = hsprintf('<li class="remarkup-list-item">');
       $list[] = $this->renderChildDocumentLink($child);
-      $grand = idx($grandchildren, $child['slug'], array());
+      $grand = idx($grandchildren_dicts, $child['slug'], array());
       if ($grand) {
-        $list[] = hsprintf('<ul>');
+        $list[] = hsprintf('<ul class="remarkup-list">');
         foreach ($grand as $grandchild) {
-          $list[] = hsprintf('<li>');
+          $list[] = hsprintf('<li class="remarkup-list-item">');
           $list[] = $this->renderChildDocumentLink($grandchild);
           $list[] = hsprintf('</li>');
         }
@@ -454,28 +406,32 @@ final class PhrictionDocumentController
       $list[] = hsprintf('</li>');
     }
     if ($more_children) {
-      $list[] = phutil_tag('li', array(), pht('More...'));
+      $list[] = phutil_tag(
+        'li',
+        array(
+          'class' => 'remarkup-list-item',
+        ),
+        pht('More...'));
     }
 
-    $content = array(
-      phutil_tag(
-        'div',
-        array(
-          'class' => 'phriction-children-header '.
-            'sprite-gradient gradient-lightblue-header',
-        ),
-        pht('Document Hierarchy')),
-      phutil_tag(
-        'div',
-        array(
-          'class' => 'phriction-children',
-        ),
-        phutil_tag('ul', array(), $list)),
-    );
+    $header = id(new PHUIHeaderView())
+      ->setHeader(pht('Document Hierarchy'));
 
-    return id(new PHUIDocumentView())
-      ->setOffset(true)
-      ->appendChild($content);
+    $box = id(new PHUIObjectBoxView())
+      ->setHeader($header)
+      ->appendChild(phutil_tag(
+        'div',
+        array(
+          'class' => 'phabricator-remarkup mlt mlb',
+        ),
+        phutil_tag(
+          'ul',
+          array(
+            'class' => 'remarkup-list',
+          ),
+          $list)));
+
+     return phutil_tag_div('phui-document-box', $box);
   }
 
   private function renderChildDocumentLink(array $info) {

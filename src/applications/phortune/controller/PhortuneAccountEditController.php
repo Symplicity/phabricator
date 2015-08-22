@@ -2,20 +2,14 @@
 
 final class PhortuneAccountEditController extends PhortuneController {
 
-  private $id;
+  public function handleRequest(AphrontRequest $request) {
+    $viewer = $request->getViewer();
+    $id = $request->getURIData('id');
 
-  public function willProcessRequest(array $data) {
-    $this->id = idx($data, 'id');
-  }
-
-  public function processRequest() {
-    $request = $this->getRequest();
-    $viewer = $request->getUser();
-
-    if ($this->id) {
+    if ($id) {
       $account = id(new PhortuneAccountQuery())
         ->setViewer($viewer)
-        ->withIDs(array($this->id))
+        ->withIDs(array($id))
         ->requireCapabilities(
           array(
             PhabricatorPolicyCapability::CAN_VIEW,
@@ -97,8 +91,6 @@ final class PhortuneAccountEditController extends PhortuneController {
       $submit_button = pht('Save Changes');
     }
 
-    $member_handles = $this->loadViewerHandles($v_members);
-
     $form = id(new AphrontFormView())
       ->setUser($viewer)
       ->appendChild(
@@ -107,12 +99,12 @@ final class PhortuneAccountEditController extends PhortuneController {
           ->setLabel(pht('Name'))
           ->setValue($v_name)
           ->setError($e_name))
-      ->appendChild(
+      ->appendControl(
         id(new AphrontFormTokenizerControl())
           ->setDatasource(new PhabricatorPeopleDatasource())
           ->setLabel(pht('Members'))
           ->setName('memberPHIDs')
-          ->setValue($member_handles)
+          ->setValue($v_members)
           ->setError($e_members))
       ->appendChild(
         id(new AphrontFormSubmitControl())
@@ -122,7 +114,7 @@ final class PhortuneAccountEditController extends PhortuneController {
     $box = id(new PHUIObjectBoxView())
       ->setHeaderText($title)
       ->setValidationException($validation_exception)
-      ->appendChild($form);
+      ->setForm($form);
 
     return $this->buildApplicationPage(
       array(

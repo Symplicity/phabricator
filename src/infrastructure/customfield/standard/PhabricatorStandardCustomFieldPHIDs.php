@@ -42,6 +42,7 @@ abstract class PhabricatorStandardCustomFieldPHIDs
       }
     }
     $this->setFieldValue($value);
+    return $this;
   }
 
   public function readApplicationSearchValueFromRequest(
@@ -59,13 +60,6 @@ abstract class PhabricatorStandardCustomFieldPHIDs
         $this->newStringIndex(null),
         $value);
     }
-  }
-
-  public function getRequiredHandlePHIDsForApplicationSearch($value) {
-    if ($value) {
-      return $value;
-    }
-    return array();
   }
 
   public function getRequiredHandlePHIDsForPropertyView() {

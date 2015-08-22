@@ -3,21 +3,14 @@
 final class PhabricatorProjectWatchController
   extends PhabricatorProjectController {
 
-  private $id;
-  private $action;
-
-  public function willProcessRequest(array $data) {
-    $this->id = $data['id'];
-    $this->action = $data['action'];
-  }
-
-  public function processRequest() {
-    $request = $this->getRequest();
-    $viewer = $request->getUser();
+  public function handleRequest(AphrontRequest $request) {
+    $viewer = $request->getViewer();
+    $id = $request->getURIData('id');
+    $action = $request->getURIData('action');
 
     $project = id(new PhabricatorProjectQuery())
       ->setViewer($viewer)
-      ->withIDs(array($this->id))
+      ->withIDs(array($id))
       ->needMembers(true)
       ->needWatchers(true)
       ->executeOne();
@@ -25,7 +18,7 @@ final class PhabricatorProjectWatchController
       return new Aphront404Response();
     }
 
-    $project_uri = '/project/view/'.$project->getID().'/';
+    $project_uri = $this->getApplicationURI('profile/'.$project->getID().'/');
 
     // You must be a member of a project to
     if (!$project->isUserMember($viewer->getPHID())) {
@@ -34,7 +27,7 @@ final class PhabricatorProjectWatchController
 
     if ($request->isDialogFormPost()) {
       $edge_action = null;
-      switch ($this->action) {
+      switch ($action) {
         case 'watch':
           $edge_action = '+';
           $force_subscribe = true;
@@ -45,7 +38,7 @@ final class PhabricatorProjectWatchController
           break;
       }
 
-      $type_member = PhabricatorEdgeConfig::TYPE_OBJECT_HAS_WATCHER;
+      $type_member = PhabricatorObjectHasWatcherEdgeType::EDGECONST;
       $member_spec = array(
         $edge_action => array($viewer->getPHID() => $viewer->getPHID()),
       );
@@ -67,7 +60,7 @@ final class PhabricatorProjectWatchController
     }
 
     $dialog = null;
-    switch ($this->action) {
+    switch ($action) {
       case 'watch':
         $title = pht('Watch Project?');
         $body = pht(

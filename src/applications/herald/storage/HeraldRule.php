@@ -2,6 +2,7 @@
 
 final class HeraldRule extends HeraldDAO
   implements
+    PhabricatorApplicationTransactionInterface,
     PhabricatorFlaggableInterface,
     PhabricatorPolicyInterface,
     PhabricatorDestructibleInterface {
@@ -18,7 +19,7 @@ final class HeraldRule extends HeraldDAO
   protected $isDisabled = 0;
   protected $triggerObjectPHID;
 
-  protected $configVersion = 37;
+  protected $configVersion = 38;
 
   // PHIDs for which this rule has been applied
   private $ruleApplied = self::ATTACHABLE;
@@ -28,7 +29,7 @@ final class HeraldRule extends HeraldDAO
   private $actions;
   private $triggerObject = self::ATTACHABLE;
 
-  public function getConfiguration() {
+  protected function getConfiguration() {
     return array(
       self::CONFIG_AUX_PHID => true,
       self::CONFIG_COLUMN_SCHEMA => array(
@@ -98,40 +99,20 @@ final class HeraldRule extends HeraldDAO
     if (!$this->getID()) {
       return array();
     }
-    return id(new HeraldAction())->loadAllWhere(
+    return id(new HeraldActionRecord())->loadAllWhere(
       'ruleID = %d',
       $this->getID());
   }
 
   public function attachActions(array $actions) {
     // TODO: validate actions have been attached.
-    assert_instances_of($actions, 'HeraldAction');
+    assert_instances_of($actions, 'HeraldActionRecord');
     $this->actions = $actions;
     return $this;
   }
 
   public function getActions() {
     return $this->actions;
-  }
-
-  public function loadEdits() {
-    if (!$this->getID()) {
-      return array();
-    }
-    $edits = id(new HeraldRuleEdit())->loadAllWhere(
-      'ruleID = %d ORDER BY dateCreated DESC',
-      $this->getID());
-
-    return $edits;
-  }
-
-  public function logEdit($editor_phid, $action) {
-    id(new HeraldRuleEdit())
-      ->setRuleID($this->getID())
-      ->setRuleName($this->getName())
-      ->setEditorPHID($editor_phid)
-      ->setAction($action)
-      ->save();
   }
 
   public function saveConditions(array $conditions) {
@@ -142,9 +123,9 @@ final class HeraldRule extends HeraldDAO
   }
 
   public function saveActions(array $actions) {
-    assert_instances_of($actions, 'HeraldAction');
+    assert_instances_of($actions, 'HeraldActionRecord');
     return $this->saveChildren(
-      id(new HeraldAction())->getTableName(),
+      id(new HeraldActionRecord())->getTableName(),
       $actions);
   }
 
@@ -152,7 +133,7 @@ final class HeraldRule extends HeraldDAO
     assert_instances_of($children, 'HeraldDAO');
 
     if (!$this->getID()) {
-      throw new Exception('Save rule before saving children.');
+      throw new PhutilInvalidStateException('save');
     }
 
     foreach ($children as $child) {
@@ -181,7 +162,7 @@ final class HeraldRule extends HeraldDAO
       queryfx(
         $this->establishConnection('w'),
         'DELETE FROM %T WHERE ruleID = %d',
-        id(new HeraldAction())->getTableName(),
+        id(new HeraldActionRecord())->getTableName(),
         $this->getID());
       $result = parent::delete();
     $this->saveTransaction();
@@ -262,6 +243,33 @@ final class HeraldRule extends HeraldDAO
     }
 
     return sprintf('~%d%010d', $type_order, $this->getID());
+  }
+
+  public function getMonogram() {
+    return 'H'.$this->getID();
+  }
+
+
+/* -(  PhabricatorApplicationTransactionInterface  )------------------------- */
+
+
+  public function getApplicationTransactionEditor() {
+    return new HeraldRuleEditor();
+  }
+
+  public function getApplicationTransactionObject() {
+    return $this;
+  }
+
+  public function getApplicationTransactionTemplate() {
+    return new HeraldRuleTransaction();
+  }
+
+  public function willRenderTimeline(
+    PhabricatorApplicationTransactionView $timeline,
+    AphrontRequest $request) {
+
+    return $timeline;
   }
 
 

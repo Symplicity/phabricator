@@ -3,23 +3,18 @@
 final class FundInitiativeViewController
   extends FundController {
 
-  private $id;
-
   public function shouldAllowPublic() {
     return true;
   }
 
-  public function willProcessRequest(array $data) {
-    $this->id = $data['id'];
-  }
 
-  public function processRequest() {
-    $request = $this->getRequest();
-    $viewer = $request->getUser();
+  public function handleRequest(AphrontRequest $request) {
+    $viewer = $request->getViewer();
+    $id = $request->getURIData('id');
 
     $initiative = id(new FundInitiativeQuery())
       ->setViewer($viewer)
-      ->withIDs(array($this->id))
+      ->withIDs(array($id))
       ->executeOne();
     if (!$initiative) {
       return new Aphront404Response();
@@ -45,7 +40,6 @@ final class FundInitiativeViewController
       $initiative->getStatus());
 
     $header = id(new PHUIHeaderView())
-      ->setObjectName($initiative->getMonogram())
       ->setHeader($initiative->getName())
       ->setUser($viewer)
       ->setPolicyObject($initiative)
@@ -54,21 +48,16 @@ final class FundInitiativeViewController
     $properties = $this->buildPropertyListView($initiative);
     $actions = $this->buildActionListView($initiative);
     $properties->setActionList($actions);
-    $crumbs->setActionList($actions);
 
     $box = id(new PHUIObjectBoxView())
       ->setHeader($header)
-      ->appendChild($properties);
+      ->addPropertyList($properties);
 
-    $xactions = id(new FundInitiativeTransactionQuery())
-      ->setViewer($viewer)
-      ->withObjectPHIDs(array($initiative->getPHID()))
-      ->execute();
 
-    $timeline = id(new PhabricatorApplicationTransactionView())
-      ->setUser($viewer)
-      ->setObjectPHID($initiative->getPHID())
-      ->setTransactions($xactions)
+    $timeline = $this->buildTransactionTimeline(
+      $initiative,
+      new FundInitiativeTransactionQuery());
+    $timeline
       ->setShouldTerminate(true);
 
     return $this->buildApplicationPage(
@@ -92,19 +81,14 @@ final class FundInitiativeViewController
 
     $owner_phid = $initiative->getOwnerPHID();
     $merchant_phid = $initiative->getMerchantPHID();
-    $this->loadHandles(
-      array(
-        $owner_phid,
-        $merchant_phid,
-      ));
 
     $view->addProperty(
       pht('Owner'),
-      $this->getHandle($owner_phid)->renderLink());
+      $viewer->renderHandle($owner_phid));
 
     $view->addProperty(
       pht('Payable to Merchant'),
-      $this->getHandle($merchant_phid)->renderLink());
+      $viewer->renderHandle($merchant_phid));
 
     $view->addProperty(
       pht('Total Funding'),

@@ -13,8 +13,7 @@ final class PhrictionRemarkupRule extends PhutilRemarkupRule {
       $text);
   }
 
-  public function markupDocumentLink($matches) {
-
+  public function markupDocumentLink(array $matches) {
     $link = trim($matches[1]);
     $name = trim(idx($matches, 2, $link));
     if (empty($matches[2])) {
@@ -29,9 +28,12 @@ final class PhrictionRemarkupRule extends PhutilRemarkupRule {
     $slug     = PhrictionDocument::getSlugURI($slug);
     $href     = (string)id(new PhutilURI($slug))->setFragment($fragment);
 
+    $text_mode = $this->getEngine()->isTextMode();
+    $mail_mode = $this->getEngine()->isHTMLMailMode();
+
     if ($this->getEngine()->getState('toc')) {
       $text = $name;
-    } else if ($this->getEngine()->isTextMode()) {
+    } else if ($text_mode || $mail_mode) {
       return PhabricatorEnv::getProductionURI($href);
     } else {
       $text = $this->newTag(

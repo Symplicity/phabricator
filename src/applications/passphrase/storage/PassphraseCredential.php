@@ -1,8 +1,13 @@
 <?php
 
 final class PassphraseCredential extends PassphraseDAO
-  implements PhabricatorPolicyInterface,
-  PhabricatorDestructibleInterface {
+  implements
+    PhabricatorApplicationTransactionInterface,
+    PhabricatorPolicyInterface,
+    PhabricatorFlaggableInterface,
+    PhabricatorSubscribableInterface,
+    PhabricatorDestructibleInterface,
+    PhabricatorSpacesInterface {
 
   protected $name;
   protected $credentialType;
@@ -15,24 +20,36 @@ final class PassphraseCredential extends PassphraseDAO
   protected $isDestroyed;
   protected $isLocked = 0;
   protected $allowConduit = 0;
+  protected $authorPHID;
+  protected $spacePHID;
 
   private $secret = self::ATTACHABLE;
 
   public static function initializeNewCredential(PhabricatorUser $actor) {
+    $app = id(new PhabricatorApplicationQuery())
+      ->setViewer($actor)
+      ->withClasses(array('PhabricatorPassphraseApplication'))
+      ->executeOne();
+
+    $view_policy = $app->getPolicy(PassphraseDefaultViewCapability::CAPABILITY);
+    $edit_policy = $app->getPolicy(PassphraseDefaultEditCapability::CAPABILITY);
+
     return id(new PassphraseCredential())
       ->setName('')
       ->setUsername('')
       ->setDescription('')
       ->setIsDestroyed(0)
-      ->setViewPolicy($actor->getPHID())
-      ->setEditPolicy($actor->getPHID());
+      ->setAuthorPHID($actor->getPHID())
+      ->setViewPolicy($view_policy)
+      ->setEditPolicy($edit_policy)
+      ->setSpacePHID($actor->getDefaultSpacePHID());
   }
 
   public function getMonogram() {
     return 'K'.$this->getID();
   }
 
-  public function getConfiguration() {
+  protected function getConfiguration() {
     return array(
       self::CONFIG_AUX_PHID => true,
       self::CONFIG_COLUMN_SCHEMA => array(
@@ -81,6 +98,29 @@ final class PassphraseCredential extends PassphraseDAO
   }
 
 
+/* -(  PhabricatorApplicationTransactionInterface  )------------------------- */
+
+
+  public function getApplicationTransactionEditor() {
+    return new PassphraseCredentialTransactionEditor();
+  }
+
+  public function getApplicationTransactionObject() {
+    return $this;
+  }
+
+  public function getApplicationTransactionTemplate() {
+    return new PassphraseCredentialTransaction();
+  }
+
+  public function willRenderTimeline(
+    PhabricatorApplicationTransactionView $timeline,
+    AphrontRequest $request) {
+
+    return $timeline;
+  }
+
+
 /* -(  PhabricatorPolicyInterface  )----------------------------------------- */
 
 
@@ -108,6 +148,23 @@ final class PassphraseCredential extends PassphraseDAO
     return null;
   }
 
+
+/* -(  PhabricatorSubscribableInterface  )----------------------------------- */
+
+
+  public function isAutomaticallySubscribed($phid) {
+    return false;
+  }
+
+  public function shouldShowSubscribersProperty() {
+    return true;
+  }
+
+  public function shouldAllowSubscription($phid) {
+    return true;
+  }
+
+
 /* -(  PhabricatorDestructibleInterface  )----------------------------------- */
 
   public function destroyObjectPermanently(
@@ -123,4 +180,13 @@ final class PassphraseCredential extends PassphraseDAO
       $this->delete();
     $this->saveTransaction();
   }
+
+
+/* -(  PhabricatorSpacesInterface  )----------------------------------------- */
+
+
+  public function getSpacePHID() {
+    return $this->spacePHID;
+  }
+
 }

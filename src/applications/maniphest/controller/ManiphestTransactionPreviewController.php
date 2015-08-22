@@ -2,29 +2,22 @@
 
 final class ManiphestTransactionPreviewController extends ManiphestController {
 
-  private $id;
-
-  public function willProcessRequest(array $data) {
-    $this->id = $data['id'];
-  }
-
-  public function processRequest() {
-
-    $request = $this->getRequest();
-    $user = $request->getUser();
+  public function handleRequest(AphrontRequest $request) {
+    $viewer = $this->getViewer();
+    $id = $request->getURIData('id');
 
     $comments = $request->getStr('comments');
 
     $task = id(new ManiphestTaskQuery())
-      ->setViewer($user)
-      ->withIDs(array($this->id))
+      ->setViewer($viewer)
+      ->withIDs(array($id))
       ->executeOne();
     if (!$task) {
       return new Aphront404Response();
     }
 
     id(new PhabricatorDraft())
-      ->setAuthorPHID($user->getPHID())
+      ->setAuthorPHID($viewer->getPHID())
       ->setDraftKey($task->getPHID())
       ->setDraft($comments)
       ->replaceOrDelete();
@@ -32,7 +25,7 @@ final class ManiphestTransactionPreviewController extends ManiphestController {
     $action = $request->getStr('action');
 
     $transaction = new ManiphestTransaction();
-    $transaction->setAuthorPHID($user->getPHID());
+    $transaction->setAuthorPHID($viewer->getPHID());
     $transaction->setTransactionType($action);
 
     // This should really be split into a separate transaction, but it should
@@ -58,26 +51,23 @@ final class ManiphestTransactionPreviewController extends ManiphestController {
         }
         $transaction->setNewValue($value);
         break;
-      case ManiphestTransaction::TYPE_CCS:
+      case PhabricatorTransactions::TYPE_SUBSCRIBERS:
         if ($value) {
           $value = json_decode($value);
         }
         if (!$value) {
           $value = array();
         }
-        $phids = $value;
-
-        foreach ($task->getCCPHIDs() as $cc_phid) {
+        $phids = array();
+        foreach ($value as $cc_phid) {
           $phids[] = $cc_phid;
-          $value[] = $cc_phid;
         }
-
-        $transaction->setOldValue($task->getCCPHIDs());
-        $transaction->setNewValue($value);
+        $transaction->setOldValue(array());
+        $transaction->setNewValue($phids);
         break;
-      case ManiphestTransaction::TYPE_PROJECTS:
+      case PhabricatorTransactions::TYPE_EDGE:
         if ($value) {
-          $value = json_decode($value);
+          $value = phutil_json_decode($value);
         }
         if (!$value) {
           $value = array();
@@ -107,7 +97,7 @@ final class ManiphestTransactionPreviewController extends ManiphestController {
         $transaction->setNewValue($value);
         break;
     }
-    $phids[] = $user->getPHID();
+    $phids[] = $viewer->getPHID();
 
     $handles = $this->loadViewerHandles($phids);
 
@@ -115,7 +105,8 @@ final class ManiphestTransactionPreviewController extends ManiphestController {
     $transactions[] = $transaction;
 
     $engine = new PhabricatorMarkupEngine();
-    $engine->setViewer($user);
+    $engine->setViewer($viewer);
+    $engine->setContextObject($task);
     if ($transaction->hasComment()) {
       $engine->addObject(
         $transaction->getComment(),
@@ -126,7 +117,7 @@ final class ManiphestTransactionPreviewController extends ManiphestController {
     $transaction->setHandles($handles);
 
     $view = id(new PhabricatorApplicationTransactionView())
-      ->setUser($user)
+      ->setUser($viewer)
       ->setTransactions($transactions)
       ->setIsPreview(true);
 

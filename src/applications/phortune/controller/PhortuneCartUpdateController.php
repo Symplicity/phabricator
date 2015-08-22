@@ -3,21 +3,22 @@
 final class PhortuneCartUpdateController
   extends PhortuneCartController {
 
-  private $id;
+  public function handleRequest(AphrontRequest $request) {
+    $viewer = $request->getViewer();
+    $id = $request->getURIData('id');
 
-  public function willProcessRequest(array $data) {
-    $this->id = $data['id'];
-  }
+    $authority = $this->loadMerchantAuthority();
 
-  public function processRequest() {
-    $request = $this->getRequest();
-    $viewer = $request->getUser();
-
-    $cart = id(new PhortuneCartQuery())
+    $cart_query = id(new PhortuneCartQuery())
       ->setViewer($viewer)
-      ->withIDs(array($this->id))
-      ->needPurchases(true)
-      ->executeOne();
+      ->withIDs(array($id))
+      ->needPurchases(true);
+
+    if ($authority) {
+      $cart_query->withMerchantPHIDs(array($authority->getPHID()));
+    }
+
+    $cart = $cart_query->executeOne();
     if (!$cart) {
       return new Aphront404Response();
     }
@@ -59,7 +60,7 @@ final class PhortuneCartUpdateController
     }
 
     return id(new AphrontRedirectResponse())
-      ->setURI($cart->getDetailURI());
+      ->setURI($cart->getDetailURI($authority));
   }
 
 }

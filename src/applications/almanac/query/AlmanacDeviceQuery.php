@@ -1,11 +1,13 @@
 <?php
 
 final class AlmanacDeviceQuery
-  extends PhabricatorCursorPagedPolicyAwareQuery {
+  extends AlmanacQuery {
 
   private $ids;
   private $phids;
   private $names;
+  private $namePrefix;
+  private $nameSuffix;
 
   public function withIDs(array $ids) {
     $this->ids = $ids;
@@ -19,6 +21,16 @@ final class AlmanacDeviceQuery
 
   public function withNames(array $names) {
     $this->names = $names;
+    return $this;
+  }
+
+  public function withNamePrefix($prefix) {
+    $this->namePrefix = $prefix;
+    return $this;
+  }
+
+  public function withNameSuffix($suffix) {
+    $this->nameSuffix = $suffix;
     return $this;
   }
 
@@ -37,7 +49,7 @@ final class AlmanacDeviceQuery
     return $table->loadAllFromArray($data);
   }
 
-  protected function buildWhereClause($conn_r) {
+  protected function buildWhereClause(AphrontDatabaseConnection $conn_r) {
     $where = array();
 
     if ($this->ids !== null) {
@@ -63,6 +75,20 @@ final class AlmanacDeviceQuery
         $conn_r,
         'nameIndex IN (%Ls)',
         $hashes);
+    }
+
+    if ($this->namePrefix !== null) {
+      $where[] = qsprintf(
+        $conn_r,
+        'name LIKE %>',
+        $this->namePrefix);
+    }
+
+    if ($this->nameSuffix !== null) {
+      $where[] = qsprintf(
+        $conn_r,
+        'name LIKE %<',
+        $this->nameSuffix);
     }
 
     $where[] = $this->buildPagingClause($conn_r);

@@ -3,26 +3,15 @@
 final class PhabricatorCountdownEditController
   extends PhabricatorCountdownController {
 
-  private $id;
-  public function willProcessRequest(array $data) {
-    $this->id = idx($data, 'id');
-  }
+  public function handleRequest(AphrontRequest $request) {
+    $viewer = $request->getViewer();
+    $id = $request->getURIData('id');
 
-  public function processRequest() {
-
-    $request = $this->getRequest();
-    $user = $request->getUser();
-    $epoch_control = id(new AphrontFormDateControl())
-      ->setUser($user)
-      ->setName('epoch')
-      ->setLabel(pht('End Date'))
-      ->setInitialTime(AphrontFormDateControl::TIME_END_OF_DAY);
-
-    if ($this->id) {
+    if ($id) {
       $page_title = pht('Edit Countdown');
       $countdown = id(new PhabricatorCountdownQuery())
-        ->setViewer($user)
-        ->withIDs(array($this->id))
+        ->setViewer($viewer)
+        ->withIDs(array($id))
         ->requireCapabilities(
           array(
             PhabricatorPolicyCapability::CAN_VIEW,
@@ -32,42 +21,98 @@ final class PhabricatorCountdownEditController
       if (!$countdown) {
         return new Aphront404Response();
       }
+      $date_value = AphrontFormDateControlValue::newFromEpoch(
+        $viewer,
+        $countdown->getEpoch());
+      $v_projects = PhabricatorEdgeQuery::loadDestinationPHIDs(
+        $countdown->getPHID(),
+        PhabricatorProjectObjectHasProjectEdgeType::EDGECONST);
+      $v_projects = array_reverse($v_projects);
     } else {
       $page_title = pht('Create Countdown');
-      $countdown = PhabricatorCountdown::initializeNewCountdown($user);
+      $countdown = PhabricatorCountdown::initializeNewCountdown($viewer);
+      $date_value = AphrontFormDateControlValue::newFromEpoch(
+        $viewer, PhabricatorTime::getNow());
+      $v_projects = array();
     }
-    $epoch_control->setValue($countdown->getEpoch());
 
-    $e_text = true;
     $errors = array();
+    $e_text = true;
+    $e_epoch = null;
+
+    $v_text = $countdown->getTitle();
+    $v_desc = $countdown->getDescription();
+    $v_space = $countdown->getSpacePHID();
+    $v_view = $countdown->getViewPolicy();
+    $v_edit = $countdown->getEditPolicy();
+
     if ($request->isFormPost()) {
-      $title = $request->getStr('title');
-      $epoch = $epoch_control->readValueFromRequest($request);
-      $view_policy = $request->getStr('viewPolicy');
+      $v_text = $request->getStr('title');
+      $v_desc = $request->getStr('description');
+      $v_space = $request->getStr('spacePHID');
+      $date_value = AphrontFormDateControlValue::newFromRequest(
+        $request,
+        'epoch');
+      $v_view = $request->getStr('viewPolicy');
+      $v_edit = $request->getStr('editPolicy');
+      $v_projects = $request->getArr('projects');
 
-      $e_text = null;
-      if (!strlen($title)) {
-        $e_text = pht('Required');
-        $errors[] = pht('You must give the countdown a name.');
-      }
-      if (!$epoch) {
-        $errors[] = pht('You must give the countdown a valid end date.');
-      }
+      $type_title = PhabricatorCountdownTransaction::TYPE_TITLE;
+      $type_epoch = PhabricatorCountdownTransaction::TYPE_EPOCH;
+      $type_description = PhabricatorCountdownTransaction::TYPE_DESCRIPTION;
+      $type_space = PhabricatorTransactions::TYPE_SPACE;
+      $type_view = PhabricatorTransactions::TYPE_VIEW_POLICY;
+      $type_edit = PhabricatorTransactions::TYPE_EDIT_POLICY;
 
-      if (!count($errors)) {
-        $countdown->setTitle($title);
-        $countdown->setEpoch($epoch);
-        $countdown->setViewPolicy($view_policy);
-        $countdown->save();
+      $xactions = array();
+
+      $xactions[] = id(new PhabricatorCountdownTransaction())
+        ->setTransactionType($type_title)
+        ->setNewValue($v_text);
+
+      $xactions[] = id(new PhabricatorCountdownTransaction())
+        ->setTransactionType($type_epoch)
+        ->setNewValue($date_value);
+
+      $xactions[] = id(new PhabricatorCountdownTransaction())
+        ->setTransactionType($type_description)
+        ->setNewValue($v_desc);
+
+      $xactions[] = id(new PhabricatorCountdownTransaction())
+        ->setTransactionType($type_space)
+        ->setNewValue($v_space);
+
+      $xactions[] = id(new PhabricatorCountdownTransaction())
+        ->setTransactionType($type_view)
+        ->setNewValue($v_view);
+
+      $xactions[] = id(new PhabricatorCountdownTransaction())
+        ->setTransactionType($type_edit)
+        ->setNewValue($v_edit);
+
+      $proj_edge_type = PhabricatorProjectObjectHasProjectEdgeType::EDGECONST;
+      $xactions[] = id(new PhabricatorCountdownTransaction())
+        ->setTransactionType(PhabricatorTransactions::TYPE_EDGE)
+        ->setMetadataValue('edge:type', $proj_edge_type)
+        ->setNewValue(array('=' => array_fuse($v_projects)));
+
+      $editor = id(new PhabricatorCountdownEditor())
+        ->setActor($viewer)
+        ->setContentSourceFromRequest($request)
+        ->setContinueOnNoEffect(true);
+
+      try {
+        $editor->applyTransactions($countdown, $xactions);
+
         return id(new AphrontRedirectResponse())
-          ->setURI('/countdown/'.$countdown->getID().'/');
-      }
-    }
+          ->setURI('/'.$countdown->getMonogram());
+      } catch (PhabricatorApplicationTransactionValidationException $ex) {
+        $validation_exception = $ex;
 
-    if ($countdown->getEpoch()) {
-      $display_epoch = phabricator_datetime($countdown->getEpoch(), $user);
-    } else {
-      $display_epoch = $request->getStr('epoch');
+        $e_title = $ex->getShortMessage($type_title);
+        $e_epoch = $ex->getShortMessage($type_epoch);
+      }
+
     }
 
     $crumbs = $this->buildApplicationCrumbs();
@@ -84,27 +129,51 @@ final class PhabricatorCountdownEditController
     }
 
     $policies = id(new PhabricatorPolicyQuery())
-      ->setViewer($user)
+      ->setViewer($viewer)
       ->setObject($countdown)
       ->execute();
 
     $form = id(new AphrontFormView())
-      ->setUser($user)
+      ->setUser($viewer)
       ->setAction($request->getRequestURI()->getPath())
       ->appendChild(
         id(new AphrontFormTextControl())
           ->setLabel(pht('Title'))
-          ->setValue($countdown->getTitle())
+          ->setValue($v_text)
           ->setName('title')
           ->setError($e_text))
-      ->appendChild($epoch_control)
-      ->appendChild(
+      ->appendControl(
+        id(new AphrontFormDateControl())
+          ->setName('epoch')
+          ->setLabel(pht('End Date'))
+          ->setError($e_epoch)
+          ->setValue($date_value))
+      ->appendControl(
+        id(new PhabricatorRemarkupControl())
+          ->setName('description')
+          ->setLabel(pht('Description'))
+          ->setValue($v_desc))
+      ->appendControl(
         id(new AphrontFormPolicyControl())
-          ->setUser($user)
           ->setName('viewPolicy')
           ->setPolicyObject($countdown)
           ->setPolicies($policies)
+          ->setSpacePHID($v_space)
+          ->setValue($v_view)
           ->setCapability(PhabricatorPolicyCapability::CAN_VIEW))
+      ->appendControl(
+        id(new AphrontFormPolicyControl())
+          ->setName('editPolicy')
+          ->setPolicyObject($countdown)
+          ->setPolicies($policies)
+          ->setValue($v_edit)
+          ->setCapability(PhabricatorPolicyCapability::CAN_EDIT))
+      ->appendControl(
+        id(new AphrontFormTokenizerControl())
+          ->setLabel(pht('Projects'))
+          ->setName('projects')
+          ->setValue($v_projects)
+          ->setDatasource(new PhabricatorProjectDatasource()))
       ->appendChild(
         id(new AphrontFormSubmitControl())
           ->addCancelButton($cancel_uri)

@@ -2,19 +2,13 @@
 
 final class DrydockBlueprintViewController extends DrydockBlueprintController {
 
-  private $id;
-
-  public function willProcessRequest(array $data) {
-    $this->id = $data['id'];
-  }
-
-  public function processRequest() {
-    $request = $this->getRequest();
-    $viewer = $request->getUser();
+  public function handleRequest(AphrontRequest $request) {
+    $viewer = $request->getViewer();
+    $id = $request->getURIData('id');
 
     $blueprint = id(new DrydockBlueprintQuery())
       ->setViewer($viewer)
-      ->withIDs(array($this->id))
+      ->withIDs(array($id))
       ->executeOne();
     if (!$blueprint) {
       return new Aphront404Response();
@@ -44,22 +38,16 @@ final class DrydockBlueprintViewController extends DrydockBlueprintController {
       ->render();
     $resource_list->setNoDataString(pht('This blueprint has no resources.'));
 
-    $pager = new AphrontPagerView();
+    $pager = new PHUIPagerView();
     $pager->setURI(new PhutilURI($blueprint_uri), 'offset');
     $pager->setOffset($request->getInt('offset'));
 
     $crumbs = $this->buildApplicationCrumbs();
-    $crumbs->setActionList($actions);
     $crumbs->addTextCrumb(pht('Blueprint %d', $blueprint->getID()));
 
     $object_box = id(new PHUIObjectBoxView())
       ->setHeader($header)
       ->addPropertyList($properties);
-
-    $xactions = id(new DrydockBlueprintTransactionQuery())
-      ->setViewer($viewer)
-      ->withObjectPHIDs(array($blueprint->getPHID()))
-      ->execute();
 
     $field_list = PhabricatorCustomField::getObjectFields(
       $blueprint,
@@ -73,14 +61,10 @@ final class DrydockBlueprintViewController extends DrydockBlueprintController {
       $viewer,
       $properties);
 
-    $engine = id(new PhabricatorMarkupEngine())
-      ->setViewer($viewer);
-
-    $timeline = id(new PhabricatorApplicationTransactionView())
-      ->setUser($viewer)
-      ->setObjectPHID($blueprint->getPHID())
-      ->setTransactions($xactions)
-      ->setMarkupEngine($engine);
+    $timeline = $this->buildTransactionTimeline(
+      $blueprint,
+      new DrydockBlueprintTransactionQuery());
+    $timeline->setShouldTerminate(true);
 
     return $this->buildApplicationPage(
       array(

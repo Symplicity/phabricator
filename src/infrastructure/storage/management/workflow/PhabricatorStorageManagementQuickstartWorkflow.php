@@ -3,7 +3,7 @@
 final class PhabricatorStorageManagementQuickstartWorkflow
   extends PhabricatorStorageManagementWorkflow {
 
-  public function didConstruct() {
+  protected function didConstruct() {
     $this
       ->setName('quickstart')
       ->setExamples('**quickstart** [__options__]')
@@ -26,12 +26,21 @@ final class PhabricatorStorageManagementQuickstartWorkflow
     if (!$output) {
       throw new PhutilArgumentUsageException(
         pht(
-          'Specify a file to write with `--output`.'));
+          'Specify a file to write with `%s`.',
+          '--output'));
     }
 
     $namespace = 'phabricator_quickstart_'.Filesystem::readRandomCharacters(8);
 
     $bin = dirname(phutil_get_library_root('phabricator')).'/bin/storage';
+
+    if (!$this->getAPI()->isCharacterSetAvailable('utf8mb4')) {
+      throw new PhutilArgumentUsageException(
+        pht(
+          'You can only generate a new quickstart file if MySQL supports '.
+          'the utf8mb4 character set (available in MySQL 5.5 and newer). The '.
+          'configured server does not support utf8mb4.'));
+    }
 
     $err = phutil_passthru(
       '%s upgrade --force --no-quickstart --namespace %s',
@@ -74,6 +83,24 @@ final class PhabricatorStorageManagementQuickstartWorkflow
       '{$NAMESPACE}',
       $dump);
 
+    // NOTE: This is a hack. We can not use `binary` for these columns, because
+    // they are a part of a fulltext index. This regex is avoiding matching a
+    // possible NOT NULL at the end of the line.
+    $old = $dump;
+    $dump = preg_replace(
+      '/`corpus` longtext CHARACTER SET .*? COLLATE [^\s,]+/mi',
+      '`corpus` longtext CHARACTER SET {$CHARSET_FULLTEXT} '.
+        'COLLATE {$COLLATE_FULLTEXT}',
+      $dump);
+    if ($dump == $old) {
+      // If we didn't make any changes, yell about it. We'll produce an invalid
+      // dump otherwise.
+      throw new PhutilArgumentUsageException(
+        pht(
+          'Failed to apply hack to adjust %s search column!',
+          'FULLTEXT'));
+    }
+
     $dump = str_replace(
       'utf8mb4_bin',
       '{$COLLATE_TEXT}',
@@ -88,6 +115,16 @@ final class PhabricatorStorageManagementQuickstartWorkflow
       'utf8mb4',
       '{$CHARSET}',
       $dump);
+
+    $old = $dump;
+    $dump = preg_replace(
+      '/CHARACTER SET {\$CHARSET} COLLATE {\$COLLATE_SORT}/mi',
+      'CHARACTER SET {$CHARSET_SORT} COLLATE {$COLLATE_SORT}',
+      $dump);
+    if ($dump == $old) {
+      throw new PhutilArgumentUsageException(
+        pht('Failed to adjust SORT columns!'));
+    }
 
     // Strip out a bunch of unnecessary commands which make the dump harder
     // to handle and slower to import.
@@ -115,6 +152,12 @@ final class PhabricatorStorageManagementQuickstartWorkflow
     $dump = trim($dump)."\n";
 
     Filesystem::writeFile($output, $dump);
+
+    $console = PhutilConsole::getConsole();
+    $console->writeOut(
+      "**<bg:green> %s </bg>** %s\n",
+      pht('SUCCESS'),
+      pht('Wrote fresh quickstart SQL.'));
 
     return 0;
   }

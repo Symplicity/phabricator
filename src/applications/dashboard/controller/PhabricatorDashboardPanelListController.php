@@ -9,13 +9,11 @@ final class PhabricatorDashboardPanelListController
     return true;
   }
 
-  public function willProcessRequest(array $data) {
-    $this->queryKey = idx($data, 'queryKey');
-  }
+  public function handleRequest(AphrontRequest $request) {
+    $query_key = $request->getURIData('queryKey');
 
-  public function processRequest() {
     $controller = id(new PhabricatorApplicationSearchController())
-      ->setQueryKey($this->queryKey)
+      ->setQueryKey($query_key)
       ->setSearchEngine(new PhabricatorDashboardPanelSearchEngine())
       ->setNavigation($this->buildSideNavView());
     return $this->delegateToController($controller);
@@ -36,7 +34,7 @@ final class PhabricatorDashboardPanelListController
     return $nav;
   }
 
-  public function buildApplicationCrumbs() {
+  protected function buildApplicationCrumbs() {
     $crumbs = parent::buildApplicationCrumbs();
 
     $crumbs->addTextCrumb(pht('Panels'), $this->getApplicationURI().'panel/');

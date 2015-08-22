@@ -48,6 +48,10 @@ abstract class DiffusionBrowseController extends DiffusionController {
         '#');
     }
 
+    $filter = id(new PHUIBoxView())
+      ->addClass('mlt mlb')
+      ->appendChild($filter);
+
     return $filter;
   }
 
@@ -107,25 +111,6 @@ abstract class DiffusionBrowseController extends DiffusionController {
         ->setIcon('fa-home')
         ->setDisabled(!$behind_head));
 
-    // TODO: Ideally, this should live in Owners and be event-triggered, but
-    // there's no reasonable object for it to react to right now.
-
-    $owners = 'PhabricatorOwnersApplication';
-    if (PhabricatorApplication::isClassInstalled($owners)) {
-      $owners_uri = id(new PhutilURI('/owners/view/search/'))
-        ->setQueryParams(
-          array(
-            'repository' => $drequest->getCallsign(),
-            'path' => '/'.$drequest->getPath(),
-          ));
-
-      $view->addAction(
-        id(new PhabricatorActionView())
-          ->setName(pht('Find Owners'))
-          ->setHref((string)$owners_uri)
-          ->setIcon('fa-users'));
-    }
-
     return $view;
   }
 
@@ -133,7 +118,7 @@ abstract class DiffusionBrowseController extends DiffusionController {
     DiffusionRequest $drequest,
     PhabricatorActionListView $actions) {
 
-    $viewer = $this->getRequest()->getUser();
+    $viewer = $this->getViewer();
 
     $view = id(new PHUIPropertyListView())
       ->setUser($viewer)
@@ -176,6 +161,46 @@ abstract class DiffusionBrowseController extends DiffusionController {
       }
     }
 
+    $repository = $drequest->getRepository();
+
+    $owners = 'PhabricatorOwnersApplication';
+    if (PhabricatorApplication::isClassInstalled($owners)) {
+      $package_query = id(new PhabricatorOwnersPackageQuery())
+        ->setViewer($viewer)
+        ->withStatuses(array(PhabricatorOwnersPackage::STATUS_ACTIVE))
+        ->withControl(
+          $repository->getPHID(),
+          array(
+            $drequest->getPath(),
+          ));
+
+      $package_query->execute();
+
+      $packages = $package_query->getControllingPackagesForPath(
+        $repository->getPHID(),
+        $drequest->getPath());
+
+      if ($packages) {
+        $ownership = id(new PHUIStatusListView())
+          ->setUser($viewer);
+
+        foreach ($packages as $package) {
+          $icon = 'fa-list-alt';
+          $color = 'grey';
+
+          $item = id(new PHUIStatusItemView())
+            ->setIcon($icon, $color)
+            ->setTarget($viewer->renderHandle($package->getPHID()));
+
+          $ownership->addItem($item);
+        }
+      } else {
+        $ownership = phutil_tag('em', array(), pht('None'));
+      }
+
+      $view->addProperty(pht('Packages'), $ownership);
+    }
+
     return $view;
   }
 
@@ -192,11 +217,14 @@ abstract class DiffusionBrowseController extends DiffusionController {
       return null;
     }
 
+    $recent = (PhabricatorTime::getNow() - phutil_units('30 days in seconds'));
+
     $revisions = id(new DifferentialRevisionQuery())
       ->setViewer($user)
       ->withPath($repository->getID(), $path_id)
       ->withStatus(DifferentialRevisionQuery::STATUS_OPEN)
-      ->setOrder(DifferentialRevisionQuery::ORDER_PATH_MODIFIED)
+      ->withUpdatedEpochBetween($recent, null)
+      ->setOrder(DifferentialRevisionQuery::ORDER_MODIFIED)
       ->setLimit(10)
       ->needRelationships(true)
       ->needFlags(true)
@@ -207,7 +235,13 @@ abstract class DiffusionBrowseController extends DiffusionController {
       return null;
     }
 
+    $header = id(new PHUIHeaderView())
+      ->setHeader(pht('Open Revisions'))
+      ->setSubheader(
+        pht('Recently updated open revisions affecting this file.'));
+
     $view = id(new DifferentialRevisionListView())
+      ->setHeader($header)
       ->setRevisions($revisions)
       ->setUser($user);
 
@@ -215,9 +249,7 @@ abstract class DiffusionBrowseController extends DiffusionController {
     $handles = $this->loadViewerHandles($phids);
     $view->setHandles($handles);
 
-    return id(new PHUIObjectBoxView())
-      ->setHeaderText(pht('Pending Differential Revisions'))
-      ->appendChild($view);
+    return $view;
   }
 
 }

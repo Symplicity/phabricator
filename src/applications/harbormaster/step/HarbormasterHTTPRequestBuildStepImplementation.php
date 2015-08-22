@@ -11,6 +11,10 @@ final class HarbormasterHTTPRequestBuildStepImplementation
     return pht('Make an HTTP request.');
   }
 
+  public function getBuildStepGroupKey() {
+    return HarbormasterExternalBuildStepGroup::GROUPKEY;
+  }
+
   public function getDescription() {
     $domain = null;
     $uri = $this->getSetting('uri');
@@ -95,9 +99,9 @@ final class HarbormasterHTTPRequestBuildStepImplementation
         'name' => pht('Credentials'),
         'type' => 'credential',
         'credential.type'
-          => PassphraseCredentialTypePassword::CREDENTIAL_TYPE,
+          => PassphrasePasswordCredentialType::CREDENTIAL_TYPE,
         'credential.provides'
-          => PassphraseCredentialTypePassword::PROVIDES_TYPE,
+          => PassphrasePasswordCredentialType::PROVIDES_TYPE,
       ),
     );
   }

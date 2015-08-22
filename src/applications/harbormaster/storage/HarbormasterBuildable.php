@@ -2,6 +2,7 @@
 
 final class HarbormasterBuildable extends HarbormasterDAO
   implements
+    PhabricatorApplicationTransactionInterface,
     PhabricatorPolicyInterface,
     HarbormasterBuildableInterface {
 
@@ -87,7 +88,7 @@ final class HarbormasterBuildable extends HarbormasterDAO
     if ($buildable) {
       return $buildable;
     }
-    $buildable = HarbormasterBuildable::initializeNewBuildable($actor)
+    $buildable = self::initializeNewBuildable($actor)
       ->setBuildablePHID($buildable_object_phid)
       ->setContainerPHID($container_object_phid);
     $buildable->save();
@@ -103,7 +104,7 @@ final class HarbormasterBuildable extends HarbormasterDAO
     $container_phid,
     array $plan_phids) {
 
-    if (count($plan_phids) === 0) {
+    if (!$plan_phids) {
       return;
     }
 
@@ -115,7 +116,7 @@ final class HarbormasterBuildable extends HarbormasterDAO
       return;
     }
 
-    $buildable = HarbormasterBuildable::createOrLoadExisting(
+    $buildable = self::createOrLoadExisting(
       PhabricatorUser::getOmnipotentUser(),
       $phid,
       $container_phid);
@@ -140,8 +141,14 @@ final class HarbormasterBuildable extends HarbormasterDAO
     $build = HarbormasterBuild::initializeNewBuild($viewer)
       ->setBuildablePHID($this->getPHID())
       ->setBuildPlanPHID($plan->getPHID())
-      ->setBuildStatus(HarbormasterBuild::STATUS_PENDING)
-      ->save();
+      ->setBuildStatus(HarbormasterBuild::STATUS_PENDING);
+
+    $auto_key = $plan->getPlanAutoKey();
+    if ($auto_key) {
+      $build->setPlanAutoKey($auto_key);
+    }
+
+    $build->save();
 
     PhabricatorWorker::scheduleTask(
       'HarbormasterBuildWorker',
@@ -152,7 +159,7 @@ final class HarbormasterBuildable extends HarbormasterDAO
     return $build;
   }
 
-  public function getConfiguration() {
+  protected function getConfiguration() {
     return array(
       self::CONFIG_AUX_PHID => true,
       self::CONFIG_COLUMN_SCHEMA => array(
@@ -223,6 +230,29 @@ final class HarbormasterBuildable extends HarbormasterDAO
 
   public function getBuilds() {
     return $this->assertAttached($this->builds);
+  }
+
+
+/* -(  PhabricatorApplicationTransactionInterface  )------------------------- */
+
+
+  public function getApplicationTransactionEditor() {
+    return new HarbormasterBuildableTransactionEditor();
+  }
+
+  public function getApplicationTransactionObject() {
+    return $this;
+  }
+
+  public function getApplicationTransactionTemplate() {
+    return new HarbormasterBuildableTransaction();
+  }
+
+  public function willRenderTimeline(
+    PhabricatorApplicationTransactionView $timeline,
+    AphrontRequest $request) {
+
+    return $timeline;
   }
 
 

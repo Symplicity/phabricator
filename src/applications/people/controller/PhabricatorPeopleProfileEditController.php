@@ -20,6 +20,7 @@ final class PhabricatorPeopleProfileEditController
     $user = id(new PhabricatorPeopleQuery())
       ->setViewer($viewer)
       ->withIDs(array($this->id))
+      ->needProfileImage(true)
       ->requireCapabilities(
         array(
           PhabricatorPolicyCapability::CAN_VIEW,
@@ -60,31 +61,42 @@ final class PhabricatorPeopleProfileEditController
     }
 
     $title = pht('Edit Profile');
-    $crumbs = $this->buildApplicationCrumbs();
-    $crumbs->addTextCrumb($user->getUsername(), $profile_uri);
-    $crumbs->addTextCrumb($title);
 
     $form = id(new AphrontFormView())
       ->setUser($viewer);
 
     $field_list->appendFieldsToForm($form);
-
     $form
       ->appendChild(
         id(new AphrontFormSubmitControl())
           ->addCancelButton($profile_uri)
           ->setValue(pht('Save Profile')));
 
+    $allow_public = PhabricatorEnv::getEnvConfig('policy.allow-public');
+    $note = null;
+    if ($allow_public) {
+      $note = id(new PHUIInfoView())
+        ->setSeverity(PHUIInfoView::SEVERITY_WARNING)
+        ->appendChild(pht(
+          'Information on user profiles on this install is publicly '.
+          'visible.'));
+    }
+
     $form_box = id(new PHUIObjectBoxView())
       ->setHeaderText(pht('Edit Profile'))
       ->setValidationException($validation_exception)
       ->setForm($form);
 
+    if ($note) {
+      $form_box->setInfoView($note);
+    }
+
+    $nav = $this->buildIconNavView($user);
+    $nav->selectFilter('/');
+    $nav->appendChild($form_box);
+
     return $this->buildApplicationPage(
-      array(
-        $crumbs,
-        $form_box,
-      ),
+      $nav,
       array(
         'title' => $title,
       ));

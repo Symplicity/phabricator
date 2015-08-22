@@ -3,19 +3,13 @@
 final class PhabricatorSlowvotePollController
   extends PhabricatorSlowvoteController {
 
-  private $id;
-
-  public function willProcessRequest(array $data) {
-    $this->id = $data['id'];
-  }
-
-  public function processRequest() {
-    $request = $this->getRequest();
-    $user = $request->getUser();
+  public function handleRequest(AphrontRequest $request) {
+    $viewer = $request->getViewer();
+    $id = $request->getURIData('id');
 
     $poll = id(new PhabricatorSlowvoteQuery())
-      ->setViewer($user)
-      ->withIDs(array($this->id))
+      ->setViewer($viewer)
+      ->withIDs(array($id))
       ->needOptions(true)
       ->needChoices(true)
       ->needViewerChoices(true)
@@ -26,7 +20,7 @@ final class PhabricatorSlowvotePollController
 
     $poll_view = id(new SlowvoteEmbedView())
       ->setHeadless(true)
-      ->setUser($user)
+      ->setUser($viewer)
       ->setPoll($poll);
 
     if ($request->isAjax()) {
@@ -44,7 +38,7 @@ final class PhabricatorSlowvotePollController
 
     $header = id(new PHUIHeaderView())
       ->setHeader($poll->getQuestion())
-      ->setUser($user)
+      ->setUser($viewer)
       ->setStatus($header_icon, $header_color, $header_name)
       ->setPolicyObject($poll);
 
@@ -54,7 +48,9 @@ final class PhabricatorSlowvotePollController
     $crumbs = $this->buildApplicationCrumbs();
     $crumbs->addTextCrumb('V'.$poll->getID());
 
-    $xactions = $this->buildTransactions($poll);
+    $timeline = $this->buildTransactionTimeline(
+      $poll,
+      new PhabricatorSlowvoteTransactionQuery());
     $add_comment = $this->buildCommentForm($poll);
 
     $object_box = id(new PHUIObjectBoxView())
@@ -65,13 +61,8 @@ final class PhabricatorSlowvotePollController
       array(
         $crumbs,
         $object_box,
-        phutil_tag(
-          'div',
-          array(
-            'class' => 'mlt mml mmr',
-          ),
-          $poll_view),
-        $xactions,
+        $poll_view,
+        $timeline,
         $add_comment,
       ),
       array(
@@ -138,34 +129,6 @@ final class PhabricatorSlowvotePollController
     }
 
     return $view;
-  }
-
-  private function buildTransactions(PhabricatorSlowvotePoll $poll) {
-    $viewer = $this->getRequest()->getUser();
-
-    $xactions = id(new PhabricatorSlowvoteTransactionQuery())
-      ->setViewer($viewer)
-      ->withObjectPHIDs(array($poll->getPHID()))
-      ->execute();
-
-    $engine = id(new PhabricatorMarkupEngine())
-      ->setViewer($viewer);
-    foreach ($xactions as $xaction) {
-      if ($xaction->getComment()) {
-        $engine->addObject(
-          $xaction->getComment(),
-          PhabricatorApplicationTransactionComment::MARKUP_FIELD_COMMENT);
-      }
-    }
-    $engine->process();
-
-    $timeline = id(new PhabricatorApplicationTransactionView())
-      ->setUser($viewer)
-      ->setObjectPHID($poll->getPHID())
-      ->setTransactions($xactions)
-      ->setMarkupEngine($engine);
-
-    return $timeline;
   }
 
   private function buildCommentForm(PhabricatorSlowvotePoll $poll) {

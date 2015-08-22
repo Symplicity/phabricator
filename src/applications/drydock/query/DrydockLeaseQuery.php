@@ -27,22 +27,15 @@ final class DrydockLeaseQuery extends DrydockQuery {
     return $this;
   }
 
-  public function loadPage() {
-    $table = new DrydockLease();
-    $conn_r = $table->establishConnection('r');
-
-    $data = queryfx_all(
-      $conn_r,
-      'SELECT lease.* FROM %T lease %Q %Q %Q',
-      $table->getTableName(),
-      $this->buildWhereClause($conn_r),
-      $this->buildOrderClause($conn_r),
-      $this->buildLimitClause($conn_r));
-
-    return $table->loadAllFromArray($data);
+  public function newResultObject() {
+    return new DrydockLease();
   }
 
-  public function willFilterPage(array $leases) {
+  protected function loadPage() {
+    return $this->loadStandardPage($this->newResultObject());
+  }
+
+  protected function willFilterPage(array $leases) {
     $resource_ids = array_filter(mpull($leases, 'getResourceID'));
     if ($resource_ids) {
       $resources = id(new DrydockResourceQuery())
@@ -69,40 +62,38 @@ final class DrydockLeaseQuery extends DrydockQuery {
     return $leases;
   }
 
-  private function buildWhereClause(AphrontDatabaseConnection $conn_r) {
-    $where = array();
+  protected function buildWhereClauseParts(AphrontDatabaseConnection $conn) {
+    $where = parent::buildWhereClauseParts($conn);
 
-    if ($this->resourceIDs) {
+    if ($this->resourceIDs !== null) {
       $where[] = qsprintf(
-        $conn_r,
+        $conn,
         'resourceID IN (%Ld)',
         $this->resourceIDs);
     }
 
-    if ($this->ids) {
+    if ($this->ids !== null) {
       $where[] = qsprintf(
-        $conn_r,
+        $conn,
         'id IN (%Ld)',
         $this->ids);
     }
 
-    if ($this->phids) {
+    if ($this->phids !== null) {
       $where[] = qsprintf(
-        $conn_r,
+        $conn,
         'phid IN (%Ls)',
         $this->phids);
     }
 
-    if ($this->statuses) {
+    if ($this->statuses !== null) {
       $where[] = qsprintf(
-        $conn_r,
+        $conn,
         'status IN (%Ld)',
         $this->statuses);
     }
 
-    $where[] = $this->buildPagingClause($conn_r);
-
-    return $this->formatWhereClause($where);
+    return $where;
   }
 
 }

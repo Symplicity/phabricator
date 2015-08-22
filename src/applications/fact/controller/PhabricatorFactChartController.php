@@ -2,9 +2,8 @@
 
 final class PhabricatorFactChartController extends PhabricatorFactController {
 
-  public function processRequest() {
-    $request = $this->getRequest();
-    $user = $request->getUser();
+  public function handleRequest(AphrontRequest $request) {
+    $viewer = $request->getViewer();
 
     $table = new PhabricatorFactRaw();
     $conn_r = $table->establishConnection('r');
@@ -32,7 +31,7 @@ final class PhabricatorFactChartController extends PhabricatorFactController {
 
     if (!$points) {
       // NOTE: Raphael crashes Safari if you hand it series with no points.
-      throw new Exception('No data to show!');
+      throw new Exception(pht('No data to show!'));
     }
 
     // Limit amount of data passed to browser.
@@ -76,8 +75,8 @@ final class PhabricatorFactChartController extends PhabricatorFactController {
       'colors' => array('#0000ff'),
     ));
 
-    $panel = new AphrontPanelView();
-    $panel->setHeader('Count of '.$spec->getName());
+    $panel = new PHUIObjectBoxView();
+    $panel->setHeaderText(pht('Count of %s', $spec->getName()));
     $panel->appendChild($chart);
 
     $crumbs = $this->buildApplicationCrumbs();
@@ -89,8 +88,7 @@ final class PhabricatorFactChartController extends PhabricatorFactController {
         $panel,
       ),
       array(
-        'title' => 'Chart',
-        'device' => false,
+        'title' => pht('Chart'),
       ));
   }
 

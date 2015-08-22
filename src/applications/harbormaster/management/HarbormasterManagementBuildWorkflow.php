@@ -3,7 +3,7 @@
 final class HarbormasterManagementBuildWorkflow
   extends HarbormasterManagementWorkflow {
 
-  public function didConstruct() {
+  protected function didConstruct() {
     $this
       ->setName('build')
       ->setExamples('**build** [__options__] __buildable__ --plan __id__')
@@ -11,9 +11,9 @@ final class HarbormasterManagementBuildWorkflow
       ->setArguments(
         array(
           array(
-            'name' => 'plan',
-            'param' => 'id',
-            'help' => pht('ID of build plan to run.'),
+            'name'        => 'plan',
+            'param'       => 'id',
+            'help'        => pht('ID of build plan to run.'),
           ),
           array(
             'name'        => 'buildable',
@@ -50,7 +50,9 @@ final class HarbormasterManagementBuildWorkflow
     $plan_id = $args->getArg('plan');
     if (!$plan_id) {
       throw new PhutilArgumentUsageException(
-        pht('Use --plan to specify a build plan to run.'));
+        pht(
+          'Use %s to specify a build plan to run.',
+          '--plan'));
     }
 
     $plan = id(new HarbormasterBuildPlanQuery())
@@ -60,6 +62,11 @@ final class HarbormasterManagementBuildWorkflow
     if (!$plan) {
       throw new PhutilArgumentUsageException(
         pht('Build plan "%s" does not exist.', $plan_id));
+    }
+
+    if (!$plan->canRunManually()) {
+      throw new PhutilArgumentUsageException(
+        pht('This build plan can not be run manually.'));
     }
 
     $console = PhutilConsole::getConsole();

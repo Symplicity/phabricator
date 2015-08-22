@@ -1,6 +1,17 @@
 <?php
 
-abstract class PhabricatorSearchDocumentIndexer {
+abstract class PhabricatorSearchDocumentIndexer extends Phobject {
+
+  private $context;
+
+  protected function setContext($context) {
+    $this->context = $context;
+    return $this;
+  }
+
+  protected function getContext() {
+    return $this->context;
+  }
 
   abstract public function getIndexableObject();
   abstract protected function buildAbstractDocumentByPHID($phid);
@@ -25,14 +36,20 @@ abstract class PhabricatorSearchDocumentIndexer {
       ->withPHIDs(array($phid))
       ->executeOne();
     if (!$object) {
-      throw new Exception("Unable to load object by phid '{$phid}'!");
+      throw new Exception(pht("Unable to load object by PHID '%s'!", $phid));
     }
     return $object;
   }
 
-  public function indexDocumentByPHID($phid) {
+  public function indexDocumentByPHID($phid, $context) {
     try {
+      $this->setContext($context);
+
       $document = $this->buildAbstractDocumentByPHID($phid);
+      if ($document === null) {
+        // This indexer doesn't build a document index, so we're done.
+        return $this;
+      }
 
       $object = $this->loadDocumentByPHID($phid);
 
@@ -47,21 +64,30 @@ abstract class PhabricatorSearchDocumentIndexer {
         $this->indexSubscribers($document);
       }
 
-      $engine = PhabricatorSearchEngineSelector::newSelector()->newEngine();
+      // Automatically build project relationships
+      if ($object instanceof PhabricatorProjectInterface) {
+        $this->indexProjects($document, $object);
+      }
+
+      $engine = PhabricatorSearchEngine::loadEngine();
       try {
         $engine->reindexAbstractDocument($document);
       } catch (Exception $ex) {
-        $phid = $document->getPHID();
-        $class = get_class($engine);
-
-        phlog("Unable to index document {$phid} with engine {$class}.");
+        phlog(
+          pht(
+            'Unable to index document %s with engine %s.',
+            $document->getPHID(),
+            get_class($engine)));
         phlog($ex);
       }
 
       $this->dispatchDidUpdateIndexEvent($phid, $document);
     } catch (Exception $ex) {
-      $class = get_class($this);
-      phlog("Unable to build document {$phid} with indexer {$class}.");
+      phlog(
+        pht(
+          'Unable to build document %s with indexer %s.',
+          $phid,
+          get_class($this)));
       phlog($ex);
     }
 
@@ -93,6 +119,24 @@ abstract class PhabricatorSearchDocumentIndexer {
     }
   }
 
+  protected function indexProjects(
+    PhabricatorSearchAbstractDocument $doc,
+    PhabricatorProjectInterface $object) {
+
+    $project_phids = PhabricatorEdgeQuery::loadDestinationPHIDs(
+      $object->getPHID(),
+      PhabricatorProjectObjectHasProjectEdgeType::EDGECONST);
+    if ($project_phids) {
+      foreach ($project_phids as $project_phid) {
+        $doc->addRelationship(
+          PhabricatorSearchRelationship::RELATIONSHIP_PROJECT,
+          $project_phid,
+          PhabricatorProjectProjectPHIDType::TYPECONST,
+          $doc->getDocumentModified()); // Bogus timestamp.
+      }
+    }
+  }
+
   protected function indexTransactions(
     PhabricatorSearchAbstractDocument $doc,
     PhabricatorApplicationTransactionQuery $query,
@@ -110,7 +154,7 @@ abstract class PhabricatorSearchDocumentIndexer {
 
       $comment = $xaction->getComment();
       $doc->addField(
-        PhabricatorSearchField::FIELD_COMMENT,
+        PhabricatorSearchDocumentFieldType::FIELD_COMMENT,
         $comment->getContent());
     }
   }

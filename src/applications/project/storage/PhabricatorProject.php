@@ -2,6 +2,7 @@
 
 final class PhabricatorProject extends PhabricatorProjectDAO
   implements
+    PhabricatorApplicationTransactionInterface,
     PhabricatorFlaggableInterface,
     PhabricatorPolicyInterface,
     PhabricatorSubscribableInterface,
@@ -16,6 +17,7 @@ final class PhabricatorProject extends PhabricatorProjectDAO
   protected $profileImagePHID;
   protected $icon;
   protected $color;
+  protected $mailKey;
 
   protected $viewPolicy;
   protected $editPolicy;
@@ -36,14 +38,25 @@ final class PhabricatorProject extends PhabricatorProjectDAO
   const TABLE_DATASOURCE_TOKEN = 'project_datasourcetoken';
 
   public static function initializeNewProject(PhabricatorUser $actor) {
+    $app = id(new PhabricatorApplicationQuery())
+      ->setViewer(PhabricatorUser::getOmnipotentUser())
+      ->withClasses(array('PhabricatorProjectApplication'))
+      ->executeOne();
+
+    $view_policy = $app->getPolicy(
+      ProjectDefaultViewCapability::CAPABILITY);
+    $edit_policy = $app->getPolicy(
+      ProjectDefaultEditCapability::CAPABILITY);
+    $join_policy = $app->getPolicy(
+      ProjectDefaultJoinCapability::CAPABILITY);
+
     return id(new PhabricatorProject())
-      ->setName('')
       ->setAuthorPHID($actor->getPHID())
       ->setIcon(self::DEFAULT_ICON)
       ->setColor(self::DEFAULT_COLOR)
-      ->setViewPolicy(PhabricatorPolicies::POLICY_USER)
-      ->setEditPolicy(PhabricatorPolicies::POLICY_USER)
-      ->setJoinPolicy(PhabricatorPolicies::POLICY_USER)
+      ->setViewPolicy($view_policy)
+      ->setEditPolicy($edit_policy)
+      ->setJoinPolicy($join_policy)
       ->setIsMembershipLocked(0)
       ->attachMemberPHIDs(array())
       ->attachSlugs(array());
@@ -116,7 +129,7 @@ final class PhabricatorProject extends PhabricatorProjectDAO
     return $this;
   }
 
-  public function getConfiguration() {
+  protected function getConfiguration() {
     return array(
       self::CONFIG_AUX_PHID => true,
       self::CONFIG_SERIALIZATION => array(
@@ -130,6 +143,7 @@ final class PhabricatorProject extends PhabricatorProjectDAO
         'profileImagePHID' => 'phid?',
         'icon' => 'text32',
         'color' => 'text32',
+        'mailKey' => 'bytes20',
 
         // T6203/NULLABILITY
         // These are definitely wrong and should always exist.
@@ -261,6 +275,10 @@ final class PhabricatorProject extends PhabricatorProjectDAO
   }
 
   public function save() {
+    if (!$this->getMailKey()) {
+      $this->setMailKey(Filesystem::readRandomCharacters(20));
+    }
+
     $this->openTransaction();
       $result = parent::save();
       $this->updateDatasourceTokens();
@@ -344,6 +362,29 @@ final class PhabricatorProject extends PhabricatorProjectDAO
   public function attachCustomFields(PhabricatorCustomFieldAttachment $fields) {
     $this->customFields = $fields;
     return $this;
+  }
+
+
+/* -(  PhabricatorApplicationTransactionInterface  )------------------------- */
+
+
+  public function getApplicationTransactionEditor() {
+    return new PhabricatorProjectTransactionEditor();
+  }
+
+  public function getApplicationTransactionObject() {
+    return $this;
+  }
+
+  public function getApplicationTransactionTemplate() {
+    return new PhabricatorProjectTransaction();
+  }
+
+  public function willRenderTimeline(
+    PhabricatorApplicationTransactionView $timeline,
+    AphrontRequest $request) {
+
+    return $timeline;
   }
 
 

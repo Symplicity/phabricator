@@ -2,17 +2,10 @@
 
 final class HarbormasterPlanViewController extends HarbormasterPlanController {
 
-  private $id;
+  public function handleRequest(AphrontRequest $request) {
+    $viewer = $this->getviewer();
 
-  public function willProcessRequest(array $data) {
-    $this->id = $data['id'];
-  }
-
-  public function processRequest() {
-    $request = $this->getRequest();
-    $viewer = $request->getUser();
-
-    $id = $this->id;
+    $id = $request->getURIData('id');
 
     $plan = id(new HarbormasterBuildPlanQuery())
       ->setViewer($viewer)
@@ -22,21 +15,15 @@ final class HarbormasterPlanViewController extends HarbormasterPlanController {
       return new Aphront404Response();
     }
 
-    $xactions = id(new HarbormasterBuildPlanTransactionQuery())
-      ->setViewer($viewer)
-      ->withObjectPHIDs(array($plan->getPHID()))
-      ->execute();
+    $timeline = $this->buildTransactionTimeline(
+      $plan,
+      new HarbormasterBuildPlanTransactionQuery());
+    $timeline->setShouldTerminate(true);
 
-    $xaction_view = id(new PhabricatorApplicationTransactionView())
-      ->setUser($viewer)
-      ->setObjectPHID($plan->getPHID())
-      ->setTransactions($xactions)
-      ->setShouldTerminate(true);
-
-    $title = pht('Plan %d', $id);
+    $title = $plan->getName();
 
     $header = id(new PHUIHeaderView())
-      ->setHeader($title)
+      ->setHeader($plan->getName())
       ->setUser($viewer)
       ->setPolicyObject($plan);
 
@@ -77,7 +64,7 @@ final class HarbormasterPlanViewController extends HarbormasterPlanController {
         $crumbs,
         $box,
         $step_list,
-        $xaction_view,
+        $timeline,
       ),
       array(
         'title' => $title,
@@ -85,11 +72,9 @@ final class HarbormasterPlanViewController extends HarbormasterPlanController {
   }
 
   private function buildStepList(HarbormasterBuildPlan $plan) {
-    $request = $this->getRequest();
-    $viewer = $request->getUser();
+    $viewer = $this->getViewer();
 
-    $run_order =
-      HarbormasterBuildGraph::determineDependencyExecution($plan);
+    $run_order = HarbormasterBuildGraph::determineDependencyExecution($plan);
 
     $steps = id(new HarbormasterBuildStepQuery())
       ->setViewer($viewer)
@@ -97,8 +82,15 @@ final class HarbormasterPlanViewController extends HarbormasterPlanController {
       ->execute();
     $steps = mpull($steps, null, 'getPHID');
 
-    $can_edit = $this->hasApplicationCapability(
+    $has_manage = $this->hasApplicationCapability(
       HarbormasterManagePlansCapability::CAPABILITY);
+
+    $has_edit = PhabricatorPolicyFilter::hasCapability(
+      $viewer,
+      $plan,
+      PhabricatorPolicyCapability::CAN_EDIT);
+
+    $can_edit = ($has_manage && $has_edit);
 
     $step_list = id(new PHUIObjectItemListView())
       ->setUser($viewer)
@@ -128,7 +120,7 @@ final class HarbormasterPlanViewController extends HarbormasterPlanController {
         $item = id(new PHUIObjectItemView())
           ->setObjectName(pht('Step %d.%d', $depth, $i))
           ->setHeader(pht('Unknown Implementation'))
-          ->setBarColor('red')
+          ->setStatusIcon('fa-warning red')
           ->addAttribute(pht(
             'This step has an invalid implementation (%s).',
             $step->getClassName()))
@@ -214,7 +206,7 @@ final class HarbormasterPlanViewController extends HarbormasterPlanController {
 
       if ($has_conflicts) {
         $has_any_conflicts = true;
-        $item->setBarColor('red');
+        $item->setStatusIcon('fa-warning red');
       }
 
       if ($run_ref['cycle']) {
@@ -222,18 +214,38 @@ final class HarbormasterPlanViewController extends HarbormasterPlanController {
       }
 
       if ($is_deadlocking) {
-        $item->setBarColor('red');
+        $item->setStatusIcon('fa-warning red');
       }
 
       $step_list->addItem($item);
     }
 
-    return array($step_list, $has_any_conflicts, $is_deadlocking);
+    $step_list->setFlush(true);
+
+    $plan_id = $plan->getID();
+
+    $header = id(new PHUIHeaderView())
+      ->setHeader(pht('Build Steps'))
+      ->addActionLink(
+        id(new PHUIButtonView())
+          ->setText(pht('Add Build Step'))
+          ->setHref($this->getApplicationURI("step/add/{$plan_id}/"))
+          ->setTag('a')
+          ->setIcon(
+            id(new PHUIIconView())
+              ->setIconFont('fa-plus'))
+          ->setDisabled(!$can_edit)
+          ->setWorkflow(!$can_edit));
+
+    $step_box = id(new PHUIObjectBoxView())
+      ->setHeader($header)
+      ->appendChild($step_list);
+
+    return array($step_box, $has_any_conflicts, $is_deadlocking);
   }
 
   private function buildActionList(HarbormasterBuildPlan $plan) {
-    $request = $this->getRequest();
-    $viewer = $request->getUser();
+    $viewer = $this->getViewer();
     $id = $plan->getID();
 
     $list = id(new PhabricatorActionListView())
@@ -241,8 +253,15 @@ final class HarbormasterPlanViewController extends HarbormasterPlanController {
       ->setObject($plan)
       ->setObjectURI($this->getApplicationURI("plan/{$id}/"));
 
-    $can_edit = $this->hasApplicationCapability(
+    $has_manage = $this->hasApplicationCapability(
       HarbormasterManagePlansCapability::CAPABILITY);
+
+    $has_edit = PhabricatorPolicyFilter::hasCapability(
+      $viewer,
+      $plan,
+      PhabricatorPolicyCapability::CAN_EDIT);
+
+    $can_edit = ($has_manage && $has_edit);
 
     $list->addAction(
       id(new PhabricatorActionView())
@@ -270,20 +289,14 @@ final class HarbormasterPlanViewController extends HarbormasterPlanController {
           ->setIcon('fa-ban'));
     }
 
-    $list->addAction(
-      id(new PhabricatorActionView())
-        ->setName(pht('Add Build Step'))
-        ->setHref($this->getApplicationURI("step/add/{$id}/"))
-        ->setWorkflow(true)
-        ->setDisabled(!$can_edit)
-        ->setIcon('fa-plus'));
+    $can_run = ($has_manage && $plan->canRunManually());
 
     $list->addAction(
       id(new PhabricatorActionView())
         ->setName(pht('Run Plan Manually'))
         ->setHref($this->getApplicationURI("plan/run/{$id}/"))
         ->setWorkflow(true)
-        ->setDisabled(!$can_edit)
+        ->setDisabled(!$can_run)
         ->setIcon('fa-play-circle'));
 
     return $list;
@@ -443,7 +456,7 @@ final class HarbormasterPlanViewController extends HarbormasterPlanController {
         $icon_label = pht('Missing Dependency');
         $has_conflicts = true;
         $error = pht(
-          'This dependency specifies a build step which doesn\'t exist.');
+          "This dependency specifies a build step which doesn't exist.");
       } else {
         $bound = phutil_tag(
           'strong',

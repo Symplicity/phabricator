@@ -35,25 +35,34 @@ final class AlmanacServiceViewController
       ->setHeader($header)
       ->addPropertyList($property_list);
 
+    $messages = $service->getServiceType()->getStatusMessages($service);
+    if ($messages) {
+      $box->setFormErrors($messages);
+    }
+
+    if ($service->getIsLocked()) {
+      $this->addLockMessage(
+        $box,
+        pht('This service is locked, and can not be edited.'));
+    }
+
+    $bindings = $this->buildBindingList($service);
+
     $crumbs = $this->buildApplicationCrumbs();
     $crumbs->addTextCrumb($service->getName());
 
-    $xactions = id(new AlmanacServiceTransactionQuery())
-      ->setViewer($viewer)
-      ->withObjectPHIDs(array($service->getPHID()))
-      ->execute();
-
-    $xaction_view = id(new PhabricatorApplicationTransactionView())
-      ->setUser($viewer)
-      ->setObjectPHID($service->getPHID())
-      ->setTransactions($xactions)
-      ->setShouldTerminate(true);
+    $timeline = $this->buildTransactionTimeline(
+      $service,
+      new AlmanacServiceTransactionQuery());
+    $timeline->setShouldTerminate(true);
 
     return $this->buildApplicationPage(
       array(
         $crumbs,
         $box,
-        $xaction_view,
+        $bindings,
+        $this->buildAlmanacPropertiesTable($service),
+        $timeline,
       ),
       array(
         'title' => $title,
@@ -64,7 +73,12 @@ final class AlmanacServiceViewController
     $viewer = $this->getViewer();
 
     $properties = id(new PHUIPropertyListView())
-      ->setUser($viewer);
+      ->setUser($viewer)
+      ->setObject($service);
+
+    $properties->addProperty(
+      pht('Service Type'),
+      $service->getServiceType()->getServiceTypeShortName());
 
     return $properties;
   }
@@ -90,6 +104,44 @@ final class AlmanacServiceViewController
         ->setDisabled(!$can_edit));
 
     return $actions;
+  }
+
+  private function buildBindingList(AlmanacService $service) {
+    $viewer = $this->getViewer();
+    $id = $service->getID();
+
+    $can_edit = PhabricatorPolicyFilter::hasCapability(
+      $viewer,
+      $service,
+      PhabricatorPolicyCapability::CAN_EDIT);
+
+    $bindings = id(new AlmanacBindingQuery())
+      ->setViewer($viewer)
+      ->withServicePHIDs(array($service->getPHID()))
+      ->execute();
+
+    $table = id(new AlmanacBindingTableView())
+      ->setNoDataString(
+        pht('This service has not been bound to any device interfaces yet.'))
+      ->setUser($viewer)
+      ->setBindings($bindings);
+
+    $header = id(new PHUIHeaderView())
+      ->setHeader(pht('Service Bindings'))
+      ->addActionLink(
+        id(new PHUIButtonView())
+          ->setTag('a')
+          ->setHref($this->getApplicationURI("binding/edit/?serviceID={$id}"))
+          ->setWorkflow(!$can_edit)
+          ->setDisabled(!$can_edit)
+          ->setText(pht('Add Binding'))
+          ->setIcon(
+            id(new PHUIIconView())
+              ->setIconFont('fa-plus')));
+
+    return id(new PHUIObjectBoxView())
+      ->setHeader($header)
+      ->setTable($table);
   }
 
 }

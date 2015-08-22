@@ -36,51 +36,42 @@ final class PonderAnswerQuery
     return $this;
   }
 
-  private function buildWhereClause($conn_r) {
-    $where = array();
+  protected function buildWhereClauseParts(AphrontDatabaseConnection $conn) {
+    $where = parent::buildWhereClauseParts($conn);
 
-    if ($this->ids) {
+    if ($this->ids !== null) {
       $where[] = qsprintf(
-        $conn_r,
+        $conn,
         'id IN (%Ld)',
         $this->ids);
     }
 
-    if ($this->phids) {
+    if ($this->phids !== null) {
       $where[] = qsprintf(
-        $conn_r,
+        $conn,
         'phid IN (%Ls)',
         $this->phids);
     }
 
-    if ($this->authorPHIDs) {
+    if ($this->authorPHIDs !== null) {
       $where[] = qsprintf(
-        $conn_r,
+        $conn,
         'authorPHID IN (%Ls)',
         $this->authorPHIDs);
     }
 
-    $where[] = $this->buildPagingClause($conn_r);
-
-    return $this->formatWhereClause($where);
+    return $where;
   }
 
-  public function loadPage() {
-    $answer = new PonderAnswer();
-    $conn_r = $answer->establishConnection('r');
-
-    $data = queryfx_all(
-      $conn_r,
-      'SELECT a.* FROM %T a %Q %Q %Q',
-      $answer->getTableName(),
-      $this->buildWhereClause($conn_r),
-      $this->buildOrderClause($conn_r),
-      $this->buildLimitClause($conn_r));
-
-    return $answer->loadAllFromArray($data);
+  public function newResultObject() {
+    return new PonderAnswer();
   }
 
-  public function willFilterPage(array $answers) {
+  protected function loadPage() {
+    return $this->loadStandardPage(new PonderAnswer());
+  }
+
+  protected function willFilterPage(array $answers) {
     $questions = id(new PonderQuestionQuery())
       ->setViewer($this->getViewer())
       ->withIDs(mpull($answers, 'getQuestionID'))
@@ -98,7 +89,7 @@ final class PonderAnswerQuery
     if ($this->needViewerVotes) {
       $viewer_phid = $this->getViewer()->getPHID();
 
-      $etype = PhabricatorEdgeConfig::TYPE_ANSWER_HAS_VOTING_USER;
+      $etype = PonderAnswerHasVotingUserEdgeType::EDGECONST;
       $edges = id(new PhabricatorEdgeQuery())
         ->withSourcePHIDs(mpull($answers, 'getPHID'))
         ->withDestinationPHIDs(array($viewer_phid))
@@ -110,16 +101,11 @@ final class PonderAnswerQuery
           $edges[$answer->getPHID()][$etype],
           $viewer_phid,
           array());
-
         $answer->attachUserVote($viewer_phid, idx($user_edge, 'data', 0));
       }
     }
 
     return $answers;
-  }
-
-  protected function getReversePaging() {
-    return true;
   }
 
   public function getQueryApplicationClass() {

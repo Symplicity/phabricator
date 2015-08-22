@@ -2,19 +2,13 @@
 
 final class PhabricatorFileDeleteController extends PhabricatorFileController {
 
-  private $id;
-
-  public function willProcessRequest(array $data) {
-    $this->id = $data['id'];
-  }
-
-  public function processRequest() {
-    $request = $this->getRequest();
-    $user = $request->getUser();
+  public function handleRequest(AphrontRequest $request) {
+    $viewer = $request->getViewer();
+    $id = $request->getURIData('id');
 
     $file = id(new PhabricatorFileQuery())
-      ->setViewer($user)
-      ->withIDs(array($this->id))
+      ->setViewer($viewer)
+      ->withIDs(array($id))
       ->requireCapabilities(
         array(
           PhabricatorPolicyCapability::CAN_VIEW,
@@ -25,8 +19,8 @@ final class PhabricatorFileDeleteController extends PhabricatorFileController {
       return new Aphront404Response();
     }
 
-    if (($user->getPHID() != $file->getAuthorPHID()) &&
-        (!$user->getIsAdmin())) {
+    if (($viewer->getPHID() != $file->getAuthorPHID()) &&
+        (!$viewer->getIsAdmin())) {
       return new Aphront403Response();
     }
 
@@ -36,12 +30,14 @@ final class PhabricatorFileDeleteController extends PhabricatorFileController {
     }
 
     $dialog = new AphrontDialogView();
-    $dialog->setUser($user);
-    $dialog->setTitle('Really delete file?');
+    $dialog->setUser($viewer);
+    $dialog->setTitle(pht('Really delete file?'));
     $dialog->appendChild(hsprintf(
-      "<p>Permanently delete '%s'? This action can not be undone.</p>",
-      $file->getName()));
-    $dialog->addSubmitButton('Delete');
+      '<p>%s</p>',
+      pht(
+        "Permanently delete '%s'? This action can not be undone.",
+        $file->getName())));
+    $dialog->addSubmitButton(pht('Delete'));
     $dialog->addCancelButton($file->getInfoURI());
 
     return id(new AphrontDialogResponse())->setDialog($dialog);

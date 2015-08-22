@@ -3,19 +3,13 @@
 final class PhabricatorProjectMembersRemoveController
   extends PhabricatorProjectController {
 
-  private $id;
-
-  public function willProcessRequest(array $data) {
-    $this->id = $data['id'];
-  }
-
-  public function processRequest() {
-    $request = $this->getRequest();
-    $viewer = $request->getUser();
+  public function handleRequest(AphrontRequest $request) {
+    $viewer = $request->getViewer();
+    $id = $request->getURIData('id');
 
     $project = id(new PhabricatorProjectQuery())
       ->setViewer($viewer)
-      ->withIDs(array($this->id))
+      ->withIDs(array($id))
       ->needMembers(true)
       ->requireCapabilities(
         array(
@@ -40,7 +34,7 @@ final class PhabricatorProjectMembersRemoveController
       $member_spec = array();
       $member_spec['-'] = array($remove_phid => $remove_phid);
 
-      $type_member = PhabricatorEdgeConfig::TYPE_PROJ_MEMBER;
+      $type_member = PhabricatorProjectProjectHasMemberEdgeType::EDGECONST;
 
       $xactions = array();
 

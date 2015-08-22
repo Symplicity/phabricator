@@ -9,6 +9,7 @@ final class PhabricatorStandardCustomFieldRemarkup
 
   public function renderEditControl(array $handles) {
     return id(new PhabricatorRemarkupControl())
+      ->setUser($this->getViewer())
       ->setLabel($this->getFieldName())
       ->setName($this->getFieldKey())
       ->setCaption($this->getCaption())
@@ -49,13 +50,35 @@ final class PhabricatorStandardCustomFieldRemarkup
   public function getApplicationTransactionTitle(
     PhabricatorApplicationTransaction $xaction) {
     $author_phid = $xaction->getAuthorPHID();
-
-    // TODO: Expose fancy transactions.
-
     return pht(
       '%s edited %s.',
       $xaction->renderHandleLink($author_phid),
       $this->getFieldName());
+  }
+
+  public function getApplicationTransactionTitleForFeed(
+    PhabricatorApplicationTransaction $xaction) {
+    $author_phid = $xaction->getAuthorPHID();
+    $object_phid = $xaction->getObjectPHID();
+    return pht(
+      '%s edited %s on %s.',
+      $xaction->renderHandleLink($author_phid),
+      $this->getFieldName(),
+      $xaction->renderHandleLink($object_phid));
+  }
+
+  public function getApplicationTransactionHasChangeDetails(
+    PhabricatorApplicationTransaction $xaction) {
+    return true;
+  }
+
+  public function getApplicationTransactionChangeDetails(
+    PhabricatorApplicationTransaction $xaction,
+    PhabricatorUser $viewer) {
+    return $xaction->renderTextCorpusChangeDetails(
+      $viewer,
+      $xaction->getOldValue(),
+      $xaction->getNewValue());
   }
 
   public function shouldAppearInHerald() {

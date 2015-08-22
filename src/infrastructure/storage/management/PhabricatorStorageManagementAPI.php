@@ -1,6 +1,6 @@
 <?php
 
-final class PhabricatorStorageManagementAPI {
+final class PhabricatorStorageManagementAPI extends Phobject {
 
   private $host;
   private $user;
@@ -8,6 +8,23 @@ final class PhabricatorStorageManagementAPI {
   private $password;
   private $namespace;
   private $conns = array();
+  private $disableUTF8MB4;
+
+  const CHARSET_DEFAULT = 'CHARSET';
+  const CHARSET_SORT = 'CHARSET_SORT';
+  const CHARSET_FULLTEXT = 'CHARSET_FULLTEXT';
+  const COLLATE_TEXT = 'COLLATE_TEXT';
+  const COLLATE_SORT = 'COLLATE_SORT';
+  const COLLATE_FULLTEXT = 'COLLATE_FULLTEXT';
+
+  public function setDisableUTF8MB4($disable_utf8_mb4) {
+    $this->disableUTF8MB4 = $disable_utf8_mb4;
+    return $this;
+  }
+
+  public function getDisableUTF8MB4() {
+    return $this->disableUTF8MB4;
+  }
 
   public function setNamespace($namespace) {
     $this->namespace = $namespace;
@@ -110,13 +127,12 @@ final class PhabricatorStorageManagementAPI {
 
   public function createDatabase($fragment) {
     $info = $this->getCharsetInfo();
-    list($charset, $collate_text, $collate_sort) = $info;
 
     queryfx(
       $this->getConn(null),
       'CREATE DATABASE IF NOT EXISTS %T COLLATE %T',
       $this->getDatabaseName($fragment),
-      $collate_text);
+      $info[self::COLLATE_TEXT]);
   }
 
   public function createTable($fragment, $table, array $cols) {
@@ -175,7 +191,7 @@ final class PhabricatorStorageManagementAPI {
         $this->applyPatchPHP($name);
         break;
       default:
-        throw new Exception("Unable to apply patch of type '{$type}'.");
+        throw new Exception(pht("Unable to apply patch of type '%s'.", $type));
     }
   }
 
@@ -187,15 +203,17 @@ final class PhabricatorStorageManagementAPI {
     $conn = $this->getConn(null);
 
     $charset_info = $this->getCharsetInfo();
-    list($charset, $collate_text, $collate_sort) = $charset_info;
+    foreach ($charset_info as $key => $value) {
+      $charset_info[$key] = qsprintf($conn, '%T', $value);
+    }
 
     foreach ($queries as $query) {
       $query = str_replace('{$NAMESPACE}', $this->namespace, $query);
-      $query = str_replace('{$CHARSET}', $charset, $query);
-      $escaped_text = qsprintf($conn, '%T', $collate_text);
-      $query = str_replace('{$COLLATE_TEXT}', $escaped_text, $query);
-      $escaped_text = qsprintf($conn, '%T', $collate_sort);
-      $query = str_replace('{$COLLATE_SORT}', $escaped_text, $query);
+
+      foreach ($charset_info as $key => $value) {
+        $query = str_replace('{$'.$key.'}', $value, $query);
+      }
+
       queryfx(
         $conn,
         '%Q',
@@ -209,8 +227,19 @@ final class PhabricatorStorageManagementAPI {
   }
 
   public function isCharacterSetAvailable($character_set) {
-    $conn = $this->getConn(null);
+    if ($character_set == 'utf8mb4') {
+      if ($this->getDisableUTF8MB4()) {
+        return false;
+      }
+    }
 
+    $conn = $this->getConn(null);
+    return self::isCharacterSetAvailableOnConnection($character_set, $conn);
+  }
+
+  public static function isCharacterSetAvailableOnConnection(
+    $character_set,
+    AphrontDatabaseConnection $conn) {
     $result = queryfx_one(
       $conn,
       'SELECT CHARACTER_SET_NAME FROM INFORMATION_SCHEMA.CHARACTER_SETS
@@ -226,25 +255,50 @@ final class PhabricatorStorageManagementAPI {
       // collation. This is most correct, and will sort properly.
 
       $charset = 'utf8mb4';
+      $charset_sort = 'utf8mb4';
+      $charset_full = 'utf8mb4';
       $collate_text = 'utf8mb4_bin';
       $collate_sort = 'utf8mb4_unicode_ci';
+      $collate_full = 'utf8mb4_unicode_ci';
     } else {
-      // If utf8mb4 is not available, we use binary. This allows us to store
-      // 4-byte unicode characters. This has some tradeoffs:
-      //
-      // Unicode characters won't sort correctly. There's nothing we can do
-      // about this while still supporting 4-byte characters.
+      // If utf8mb4 is not available, we use binary for most data. This allows
+      // us to store 4-byte unicode characters.
       //
       // It's possible that strings will be truncated in the middle of a
       // character on insert. We encourage users to set STRICT_ALL_TABLES
       // to prevent this.
+      //
+      // For "fulltext" and "sort" columns, we don't use binary.
+      //
+      // With "fulltext", we can not use binary because MySQL won't let us.
+      // We use 3-byte utf8 instead and accept being unable to index 4-byte
+      // characters.
+      //
+      // With "sort", if we use binary we lose case insensitivity (for
+      // example, "ALincoln@logcabin.com" and "alincoln@logcabin.com" would no
+      // longer be identified as the same email address). This can be very
+      // confusing and is far worse overall than not supporting 4-byte unicode
+      // characters, so we use 3-byte utf8 and accept limited 4-byte support as
+      // a tradeoff to get sensible collation behavior. Many columns where
+      // collation is important rarely contain 4-byte characters anyway, so we
+      // are not giving up too much.
 
       $charset = 'binary';
+      $charset_sort = 'utf8';
+      $charset_full = 'utf8';
       $collate_text = 'binary';
-      $collate_sort = 'binary';
+      $collate_sort = 'utf8_general_ci';
+      $collate_full = 'utf8_general_ci';
     }
 
-    return array($charset, $collate_text, $collate_sort);
+    return array(
+      self::CHARSET_DEFAULT => $charset,
+      self::CHARSET_SORT => $charset_sort,
+      self::CHARSET_FULLTEXT => $charset_full,
+      self::COLLATE_TEXT => $collate_text,
+      self::COLLATE_SORT => $collate_sort,
+      self::COLLATE_FULLTEXT => $collate_full,
+    );
   }
 
 }

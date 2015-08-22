@@ -159,7 +159,7 @@ final class HarbormasterBuildableSearchEngine
     return '/harbormaster/'.$path;
   }
 
-  public function getBuiltinQueryNames() {
+  protected function getBuiltinQueryNames() {
     return array(
       'all' => pht('All Buildables'),
     );
@@ -206,7 +206,8 @@ final class HarbormasterBuildableSearchEngine
         $item->addIcon('fa-wrench grey', pht('Manual'));
       }
 
-      $item->setBarColor(HarbormasterBuildable::getBuildableStatusColor(
+      $item->setStatusIcon('fa-wrench '.
+        HarbormasterBuildable::getBuildableStatusColor(
         $buildable->getBuildableStatus()));
       $item->addByline(HarbormasterBuildable::getBuildableStatusName(
         $buildable->getBuildableStatus()));
@@ -215,7 +216,11 @@ final class HarbormasterBuildableSearchEngine
 
     }
 
-    return $list;
+    $result = new PhabricatorApplicationSearchResultView();
+    $result->setObjectList($list);
+    $result->setNoDataString(pht('No buildables found.'));
+
+    return $result;
   }
 
 }

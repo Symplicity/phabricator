@@ -11,49 +11,44 @@ final class PassphraseCredentialSearchEngine
     return 'PhabricatorPassphraseApplication';
   }
 
-  public function buildSavedQueryFromRequest(AphrontRequest $request) {
-    $saved = new PhabricatorSavedQuery();
-
-    $saved->setParameter(
-      'isDestroyed',
-      $this->readBoolFromRequest($request, 'isDestroyed'));
-
-    return $saved;
+  public function newQuery() {
+    return new PassphraseCredentialQuery();
   }
 
-  public function buildQueryFromSavedQuery(PhabricatorSavedQuery $saved) {
-    $query = id(new PassphraseCredentialQuery());
+  protected function buildCustomSearchFields() {
+    return array(
+      id(new PhabricatorSearchThreeStateField())
+        ->setLabel(pht('Status'))
+        ->setKey('isDestroyed')
+        ->setOptions(
+          pht('Show All'),
+          pht('Show Only Destroyed Credentials'),
+          pht('Show Only Active Credentials')),
+      id(new PhabricatorSearchTextField())
+        ->setLabel(pht('Name Contains'))
+        ->setKey('name'),
+    );
+  }
 
-    $destroyed = $saved->getParameter('isDestroyed');
-    if ($destroyed !== null) {
-      $query->withIsDestroyed($destroyed);
+  protected function buildQueryFromParameters(array $map) {
+    $query = $this->newQuery();
+
+    if ($map['isDestroyed'] !== null) {
+      $query->withIsDestroyed($map['isDestroyed']);
+    }
+
+    if (strlen($map['name'])) {
+      $query->withNameContains($map['name']);
     }
 
     return $query;
-  }
-
-  public function buildSearchForm(
-    AphrontFormView $form,
-    PhabricatorSavedQuery $saved_query) {
-
-    $form->appendChild(
-      id(new AphrontFormSelectControl())
-        ->setName('isDestroyed')
-        ->setLabel(pht('Status'))
-        ->setValue($this->getBoolFromQuery($saved_query, 'isDestroyed'))
-        ->setOptions(
-          array(
-            '' => pht('Show All Credentials'),
-            'false' => pht('Show Only Active Credentials'),
-            'true' => pht('Show Only Destroyed Credentials'),
-          )));
   }
 
   protected function getURI($path) {
     return '/passphrase/'.$path;
   }
 
-  public function getBuiltinQueryNames() {
+  protected function getBuiltinQueryNames() {
     return array(
       'active' => pht('Active Credentials'),
       'all' => pht('All Credentials'),
@@ -109,7 +104,11 @@ final class PassphraseCredentialSearchEngine
       $list->addItem($item);
     }
 
-    return $list;
+    $result = new PhabricatorApplicationSearchResultView();
+    $result->setObjectList($list);
+    $result->setNoDataString(pht('No credentials found.'));
+
+    return $result;
   }
 
 }
