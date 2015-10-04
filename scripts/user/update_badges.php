@@ -74,4 +74,5 @@ if (count($bodies)) {
     $mailer->send();
   }
 }
+
 echo "Done.\n";
